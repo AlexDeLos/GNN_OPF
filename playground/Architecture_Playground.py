@@ -16,7 +16,7 @@ with open('Training_dataset_WDS.p', 'rb') as handle:
     tra_dataset_pyg = pickle.load(handle)
 with open('Validation_dataset_WDS.p', 'rb') as handle:
     val_dataset_pyg = pickle.load(handle)
-with open('Test_dataset_WDS.p', 'rb') as handle:
+with open('toy_dataset.p', 'rb') as handle:
     tst_dataset_pyg = pickle.load(handle)
 
 print('Number of training examples:',   len(tra_dataset_pyg))
