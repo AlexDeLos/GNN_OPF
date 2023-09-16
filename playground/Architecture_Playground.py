@@ -12,11 +12,11 @@ from torch_geometric.loader import DataLoader as pyg_DataLoader
 
 
 #Importing Data
-with open('Training_dataset_WDS.p', 'rb') as handle:
+with open('Data/toy_train_dataset.p', 'rb') as handle:
     tra_dataset_pyg = pickle.load(handle)
-with open('Validation_dataset_WDS.p', 'rb') as handle:
+with open('Data/toy_validation_dataset.p', 'rb') as handle:
     val_dataset_pyg = pickle.load(handle)
-with open('toy_dataset.p', 'rb') as handle:
+with open('Data/toy_test_dataset.p', 'rb') as handle:
     tst_dataset_pyg = pickle.load(handle)
 
 print('Number of training examples:',   len(tra_dataset_pyg))
@@ -156,6 +156,32 @@ def train_epoch(model, loader, optimizer, device='cpu'):
 
   
   return total_loss / len(loader)
+
+
+def evaluate_epoch(model, loader, device='cpu'):
+    """
+    Evaluates the performance of a trained neural network model on a dataset using the specified data loader.
+
+    Args:
+        model (nn.Module): The trained neural network model to be evaluated.
+        loader (DataLoader): The PyTorch Geometric DataLoader containing the evaluation data.
+        device (str): The device used for evaluating the model (default: 'cpu').
+
+    Returns:
+        float: The mean loss value over all the batches in the DataLoader.
+
+    """
+    model.eval()
+    model.to(device)
+
+    total_loss = 0.0
+    for batch in loader:
+        batch = batch.to(device)
+        output = model(batch)
+        loss = nn.MSELoss()(output, batch.y)
+        total_loss += loss.item()
+
+    return total_loss / len(loader)
 
 # Optimize the model
 
