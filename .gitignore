@@ -168,3 +168,6 @@ cython_debug/
 __MACOSX/
 
 .vscode/
+
+# data folder
+Data/
