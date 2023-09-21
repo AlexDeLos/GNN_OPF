@@ -82,7 +82,8 @@ class GNN_Example(nn.Module):
       x = data.x
       edge_index = data.edge_index
       edge_attr = data.edge_attr
-      
+      print(x.shape)
+      print(self.convs[0])
       for i in range(len(self.convs)-1):
           #TODO: Fix the dimensions so that we do not get an error?
           x = self.convs[i](x=x, edge_index=edge_index, edge_weight=edge_attr)

@@ -1,10 +1,12 @@
 import pandapower as pp
+import pandapower.plotting as ppl
 import pandapower.networks as pn
 import pandapower.toolbox as tb
 import numpy as np
 import string
 import random
 import argparse
+from collections import Counter
 import time
 from pathlib import Path
 
@@ -88,16 +90,28 @@ def get_network(network_name):
 def create_networks(arguments):
     start = time.perf_counter()
     net = get_network(arguments.network)
+    starting_points = net.gen.bus
     i = 0
     while i < arguments.num_subgraphs:
+        print(f"generating network {i + 1}")
         length = np.random.randint(arguments.min_size, min(arguments.max_size, len(net.bus)))
-        busses = np.random.randint(0, len(net.bus), length)
+        starting_point = starting_points[np.random.randint(0, len(starting_points))]
+        busses = [starting_point]
+        while len(busses) < length:
+            s = busses[np.random.randint(0, len(busses))]
+            f = net.line.to_bus[np.where(np.array(net.line.from_bus) == s)[0]]
+            t = net.line.from_bus[np.where(np.array(net.line.to_bus) == s)[0]]
+            connected = np.concatenate((f, t))
+            new_busses = np.setdiff1d(connected, busses)
+            if len(new_busses) == 0:
+                continue
+            busses.append(new_busses[np.random.randint(0, len(new_busses))])
         new_net = tb.select_subnet(net, busses)
 
         try:
             pp.runpp(new_net)
         except:
-            print(f"Network not solvable\n Busses: {busses}")
+            print(f"Network not solvable trying a new one")
             continue
 
         uid = ''.join([random.choice(string.ascii_letters
@@ -105,7 +119,7 @@ def create_networks(arguments):
         
         Path(f"{arguments.save_dir}/x").mkdir(parents=True, exist_ok=True)
         Path(f"{arguments.save_dir}/y").mkdir(parents=True, exist_ok=True)
-
+        
         pp.to_json(new_net, f"{arguments.save_dir}/x/{arguments.network}_{length}_{uid}.json")
         new_net.res_gen.to_csv(f"{arguments.save_dir}/y/{arguments.network}_{length}_{uid}_gen.csv")
         new_net.res_line.to_csv(f"{arguments.save_dir}/y/{arguments.network}_{length}_{uid}_line.csv")
@@ -113,7 +127,7 @@ def create_networks(arguments):
 
         i += 1
     end = time.perf_counter()
-    return i + 1, end - start
+    return i, end - start
 
 
 if __name__ == "__main__":
