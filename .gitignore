@@ -169,5 +169,4 @@ __MACOSX/
 
 .vscode/
 
-# data folder
-Data/
+Data/data/
