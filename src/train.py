@@ -1,6 +1,7 @@
 import torch
 from utils import train_single_graph, evaluate_single_graph, test_single_graph, train_epoch, evaluate_epoch, test_epoch
-from GAT import GAT
+from models.GAT import GAT
+from models.GraphSAGE import GraphSAGE
 from torch_geometric.datasets import Planetoid
 from torch_geometric.datasets import PPI
 from torch_geometric.transforms import NormalizeFeatures
@@ -15,8 +16,8 @@ data = dataset[0]
 #     tra_dataset_pyg = pickle.load(handle)
 # data = tra_dataset_pyg[0]
 # instantiate model
-model = GAT(dim_input=data.num_features, dim_hidden=[5, 3], dim_output=7, num_layers=2, heads=[1,1])
-
+model = GAT(in_dim=data.num_features, hidden_dim=[5, 3], out_dim=7, num_layers=2, heads=[1,1])
+#model = GraphSAGE(in_dim=data.num_features, hidden_dim=5, out_dim=7, num_layers=2, dropout=0.2)
 # setup training
 optimizer = torch.optim.Adam(model.parameters(), lr=0.005, weight_decay=5e-4)
 criterion = torch.nn.CrossEntropyLoss()
