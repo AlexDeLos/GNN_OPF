@@ -26,6 +26,8 @@ def get_arguments():
     parser = argparse.ArgumentParser(prog="GNN script",
                                      description="Run a GNN to solve an inductive power system problem (power flow only for now)")
     parser.add_argument("gnn", choices=["GCN"])
+    parser.add_argument("-o", "--optimizer", default="Adam")
+    parser.add_argument("-c", "--criterion", default="MSELoss")
     parser.add_argument("-b", "--batch_size", default=16)
     parser.add_argument("-n", "--n_epochs", default=11)
     parser.add_argument("-l", "--learning_rate", default=1e-3)
@@ -55,7 +57,7 @@ def create_data_instance(graph, y_bus, y_gen, y_line):
     g = ppl.create_nxgraph(graph)
     for node in graph.bus.itertuples():
         g.nodes[node.Index]['x'] = [node.vn_kv,node.max_vm_pu,node.min_vm_pu]
-        g.nodes[node.Index]['y'] = [node.vn_kv]
+        g.nodes[node.Index]['y'] = [node.vn_kv, node.va_degree]
     
     for edges in graph.line.itertuples():
         g.edges[edges.from_bus, edges.to_bus, ('line', edges.Index)]['edge_attr'] = [edges.r_ohm_per_km, edges.length_km]
@@ -67,19 +69,28 @@ def get_gnn(gnn_name):
     if gnn_name == "GCN":
         return GCN
     
+def get_optim(optim_name):
+    if optim_name == "Adam":
+        return th.optim.Adam
+    
+def get_criterion(criterion_name):
+    if criterion_name == "MSELoss":
+        return nn.MSELoss()
+    
 def train_model(arguments, data):
     input_dim = data[0].x.shape[1]
     edge_attr_shape = data[0].edge_attr.shape
     output_dim = data[0].y.shape[1]
 
-    batch_size = 1
+    batch_size = arguments.batch_size
     dataloader = pyg_DataLoader(data, batch_size=batch_size, shuffle=True) # args batch size
     gnn_class = get_gnn(arguments.gnn)
     gnn = gnn_class(input_dim, output_dim)
     print(f"GNN: \n{gnn}")
 
-    optimizer = th.optim.Adam(gnn.parameters(), lr=0.01, weight_decay=5e-4) # args optim, lr, weight_decay
-    criterion = nn.MSELoss() # args criterion
+    optimizer_class = get_optim(arguments.optimizer)
+    optimizer = optimizer_class(gnn.parameters(), lr=arguments.learning_rate, weight_decay=arguments.weight_decay) # args optim, lr, weight_decay
+    criterion = get_criterion(arguments.criterion)
 
     losses = []
     val_losses = []
