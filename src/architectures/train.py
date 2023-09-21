@@ -8,6 +8,9 @@ from torch_geometric.transforms import NormalizeFeatures
 dataset = Planetoid(root='data/Planetoid', name='Cora', transform=NormalizeFeatures())
 data = dataset[0]
 
+# with open('Data/test.p', 'rb') as handle:
+#     tra_dataset_pyg = pickle.load(handle)
+# data = tra_dataset_pyg[0]
 # instantiate model
 model = GAT(dim_input=data.num_features, dim_hidden=[5, 3], dim_output=7, num_layers=2, heads=[1,1])
 

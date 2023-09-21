@@ -2,6 +2,7 @@ import pickle
 import pandapower.networks as pn
 import pandapower.plotting as ppl
 import pandapower as pp
+import numpy as np
 
 import networkx as nx
 
@@ -15,13 +16,15 @@ G = ppl.create_nxgraph(net, respect_switches = False)
 # Add node attributes
 for node in net.bus.itertuples():
     
-    G.nodes[node.Index]['x'] = [node.vn_kv,node.max_vm_pu,node.min_vm_pu]
+    G.nodes[node.Index]['x'] = [float(node.vn_kv),float(node.max_vm_pu),float(node.min_vm_pu), float(node.zone)]
+
     
-    G.nodes[node.Index]['y'] = [0] #TODO: What on earth is the label?
+    
+    G.nodes[node.Index]['y'] = [float(0)] #TODO: What on earth is the label?
 
 # Add edge attributes
 for edges in net.line.itertuples():
-    G.edges[edges.from_bus, edges.to_bus, ('line', edges.Index)]['edge_attr'] = [edges.r_ohm_per_km, edges.length_km]
+    G.edges[edges.from_bus, edges.to_bus, ('line', edges.Index)]['edge_attr'] = [float(edges.r_ohm_per_km * edges.length_km)]
 
 #turn the networkx graph into a pytorch geometric graph
 pyg_graph = from_networkx(G)

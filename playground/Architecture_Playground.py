@@ -85,6 +85,17 @@ class GNN_Example(nn.Module):
       
       for i in range(len(self.convs)-1):
           #TODO: Fix the dimensions so that we do not get an error?
+          print(x.shape)
+          print(x[0])
+          print(edge_attr.shape)
+          print(edge_attr[0])
+          print
+          #torch.Size([5, 3])
+          # tensor([230.0000,   1.1000,   0.9000])
+
+          # When it runs:
+        #   torch.Size([592, 4])
+        #   tensor([0.7714, 0.9595, 0.0000, 0.0000])
           x = self.convs[i](x=x, edge_index=edge_index, edge_weight=edge_attr)
           x = nn.Dropout(self.dropout_rate, inplace=False)(x)
           x = nn.PReLU()(x)
@@ -104,7 +115,7 @@ node_dim =   tra_dataset_pyg[0].x.shape[1]
 edge_dim =   tra_dataset_pyg[0].edge_attr.shape[1]
 output_dim = tra_dataset_pyg[0].y.shape[1]
 hidden_dim = 16
-n_gnn_layers = 3
+n_gnn_layers = 3 # used to be 3
 K=1
 dropout_rate = 0
 
