@@ -12,7 +12,7 @@ from torch_geometric.loader import DataLoader as pyg_DataLoader
 
 
 #Importing Data
-with open('Data/toy_train_dataset.p', 'rb') as handle:
+with open('Data/test.p', 'rb') as handle:
     tra_dataset_pyg = pickle.load(handle)
 with open('Data/toy_validation_dataset.p', 'rb') as handle:
     val_dataset_pyg = pickle.load(handle)
@@ -24,8 +24,11 @@ print('Number of validation examples:', len(val_dataset_pyg))
 print('Number of test examples:',       len(tst_dataset_pyg))
 
 # Check one example to see what the data looks like
-tra_dataset_pyg[0]
-
+print(tra_dataset_pyg[0])
+#tra_dataset_pyg[0]
+# OutPut: Data(x=[37, 4], edge_attr=[116, 1], edge_index=[2, 116], y=[37, 1])
+# Our "OLD" Output: Data(x=[5, 3], edge_index=[2, 12], edge_attr=[12, 2], y=[5, 1], weight=[12], path=[12])
+# Our NEW output: Data(x=[5, 3], edge_index=[2, 12], edge_attr=[12, 2], y=[5, 1])
 
 # Define the GNNs
 class GNN_Example(nn.Module):
@@ -81,6 +84,7 @@ class GNN_Example(nn.Module):
       edge_attr = data.edge_attr
       
       for i in range(len(self.convs)-1):
+          #TODO: Fix the dimensions so that we do not get an error?
           x = self.convs[i](x=x, edge_index=edge_index, edge_weight=edge_attr)
           x = nn.Dropout(self.dropout_rate, inplace=False)(x)
           x = nn.PReLU()(x)
