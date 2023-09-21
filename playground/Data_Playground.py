@@ -16,7 +16,7 @@ G = ppl.create_nxgraph(net, respect_switches = False)
 # Add node attributes
 for node in net.bus.itertuples():
     
-    G.nodes[node.Index]['x'] = [float(node.vn_kv),float(node.max_vm_pu),float(node.min_vm_pu), float(node.zone)]
+    G.nodes[node.Index]['x'] = [float(node.vn_kv),float(node.max_vm_pu),float(node.min_vm_pu)]
 
     
     

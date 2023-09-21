@@ -14,9 +14,9 @@ from torch_geometric.loader import DataLoader as pyg_DataLoader
 #Importing Data
 with open('Data/test.p', 'rb') as handle:
     tra_dataset_pyg = pickle.load(handle)
-with open('Data/toy_validation_dataset.p', 'rb') as handle:
+with open('Data/test.p', 'rb') as handle:
     val_dataset_pyg = pickle.load(handle)
-with open('Data/toy_test_dataset.p', 'rb') as handle:
+with open('Data/test.p', 'rb') as handle:
     tst_dataset_pyg = pickle.load(handle)
 
 print('Number of training examples:',   len(tra_dataset_pyg))
