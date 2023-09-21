@@ -5,24 +5,25 @@ from torch.nn import Linear
 
 
 class GAT(torch.nn.Module):
-
-    def __init__(self, dim_input, dim_hidden, dim_output, num_layers, heads):
+    # dim_output is the number of classes for classifcation, for regression its the number of nodes
+    # hidden_dim and heads are lists of length num_layers
+    def __init__(self, in_dim, hidden_dim, out_dim, num_layers, heads):
         super().__init__()
         self.convs = torch.nn.ModuleList()
 
         if num_layers == 1:
-            self.convs.append(GATv2Conv(dim_input, dim_hidden[-1], heads=heads[0]))
+            self.convs.append(GATv2Conv(in_dim, hidden_dim[-1], heads=heads[0]))
         else:
             index = 0
-            self.convs.append(GATv2Conv(dim_input, dim_hidden[0], heads=heads[0]))
+            self.convs.append(GATv2Conv(in_dim, hidden_dim[0], heads=heads[0]))
             for i in range(num_layers - 2):
                 index = i
-                self.convs.append(GATv2Conv(dim_hidden[index], dim_hidden[index+1], heads=heads[index]))
-            self.convs.append(GATv2Conv(dim_hidden[num_layers - 2], dim_hidden[-1], heads=heads[index+1]))
+                self.convs.append(GATv2Conv(hidden_dim[index], hidden_dim[index+1], heads=heads[index]))
+            self.convs.append(GATv2Conv(hidden_dim[num_layers - 2], hidden_dim[-1], heads=heads[index+1]))
 
         self.dropout_rate = 0.6
         self.optimizer = torch.optim.Adam(self.parameters(), lr=0.01, weight_decay=5e-4)
-        self.linear = Linear(dim_hidden[-1], dim_output)
+        self.linear = Linear(hidden_dim[-1], out_dim)
 
 
     def forward(self, data):
