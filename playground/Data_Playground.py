@@ -30,9 +30,9 @@ for edge in net.line.itertuples():
 #turn the networkx graph into a pytorch geometric graph
 pyg_graph = from_networkx(G)
 
-del pyg_graph['weight']
+# del pyg_graph['weight']
 
-del pyg_graph['path']
+# del pyg_graph['path']
 
 # make it into an array TODO: Change to the actual network array that we use, for now we only have one test example.
 graph_array = [pyg_graph]
