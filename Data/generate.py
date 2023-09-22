@@ -101,7 +101,9 @@ def create_networks(arguments):
             s = busses[np.random.randint(0, len(busses))]
             f = net.line.to_bus[np.where(np.array(net.line.from_bus) == s)[0]]
             t = net.line.from_bus[np.where(np.array(net.line.to_bus) == s)[0]]
-            connected = np.concatenate((f, t))
+            f_trafo = net.trafo.hv_bus[np.where(np.array(net.trafo.lv_bus) == s)[0]]
+            t_trafo = net.trafo.lv_bus[np.where(np.array(net.trafo.hv_bus) == s)[0]]
+            connected = np.concatenate((f, t, f_trafo, t_trafo))
             new_busses = np.setdiff1d(connected, busses)
             if len(new_busses) == 0:
                 continue
