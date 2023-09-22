@@ -38,11 +38,10 @@ def get_arguments():
 
 def load_data():
     data_dir = './Data/data'
-    graph_path = f"{data_dir}/x/"
-    sol_path = f"{data_dir}/y/"
-    graph_paths = os.listdir(f"{data_dir}/x/")
-    sol_paths = os.listdir(f"{data_dir}/y/")
-
+    graph_path = f"{data_dir}/x"
+    sol_path = f"{data_dir}/y"
+    graph_paths = sorted(os.listdir(graph_path))
+    sol_paths = sorted(os.listdir(sol_path))
     data = []
     for i, g in enumerate(graph_paths):
         graph = pp.from_json(f"{graph_path}/{g}")
@@ -55,13 +54,12 @@ def load_data():
 
 def create_data_instance(graph, y_bus, y_gen, y_line):
     g = ppl.create_nxgraph(graph)
-    for node in graph.bus.itertuples():
+    for i, node in enumerate(graph.bus.itertuples()):
         g.nodes[node.Index]['x'] = [node.vn_kv,node.max_vm_pu,node.min_vm_pu]
-        g.nodes[node.Index]['y'] = [node.vn_kv, node.va_degree]
+        g.nodes[node.Index]['y'] = [float(y_bus['p_mw'][i]), float(y_bus['va_degree'][i])]
     
     for edges in graph.line.itertuples():
         g.edges[edges.from_bus, edges.to_bus, ('line', edges.Index)]['edge_attr'] = [edges.r_ohm_per_km, edges.length_km]
-
 
     return from_networkx(g)
 
@@ -95,7 +93,7 @@ def train_model(arguments, data):
     losses = []
     val_losses = []
 
-    for epoch in tqdm.tqdm(range(11)): #args epochs
+    for epoch in tqdm.tqdm(range(arguments.n_epochs)): #args epochs
         epoch_loss = 0.0
         epoch_val_loss = 0.0
 
