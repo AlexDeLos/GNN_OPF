@@ -19,13 +19,14 @@ def generate():
 def get_arguments():
     parser = argparse.ArgumentParser(
         prog="power network subgraph generator",
-        description="Generates a specified number of subnetworks from a power network"
+        description="Generates a specified number of subnetworks from a power network",
     )
     parser.add_argument("network", choices=['case4gs', 'case5', 'case6ww', 'case9', 'case14', 'case24_ieee_rts', 'case30', 'case_ieee30', 'case33bw', 'case39', 'case57', 'case89pegase', 'case118', 'case145', 'case_illinois200', 'case300', 'case1354pegase', 'case1888rte', 'case2848rte', 'case2869pegase', 'case3120sp', 'case6470rte', 'case6495rte', 'case6515rte', 'case9241', 'GBnetwork', 'GBreducednetwork', 'iceland'])
     parser.add_argument("-n", "--num_subgraphs", type=int, default=10)
     parser.add_argument("-s", "--save_dir", default="./data")
     parser.add_argument("--min_size", type=int, default=5)
     parser.add_argument("--max_size", type=int, default=30)
+    parser.add_argument("--n_1", type=bool, default=False)
     args = parser.parse_args()
     print(args)
     return args
@@ -97,7 +98,9 @@ def create_networks(arguments):
         length = np.random.randint(arguments.min_size, min(arguments.max_size, len(net.bus)))
         starting_point = starting_points[np.random.randint(0, len(starting_points))]
         busses = [starting_point]
+        downed_bus = np.random.randint(0, length)
         while len(busses) < length:
+            
             s = busses[np.random.randint(0, len(busses))]
             f = net.line.to_bus[np.where(np.array(net.line.from_bus) == s)[0]]
             t = net.line.from_bus[np.where(np.array(net.line.to_bus) == s)[0]]
@@ -106,6 +109,9 @@ def create_networks(arguments):
             if len(new_busses) == 0:
                 continue
             busses.append(new_busses[np.random.randint(0, len(new_busses))])
+        
+        if arguments.n_1:
+            busses[downed_bus] = 0
         new_net = tb.select_subnet(net, busses)
 
         try:
