@@ -26,6 +26,7 @@ def get_arguments():
     parser.add_argument("-s", "--save_dir", default="./data")
     parser.add_argument("--min_size", type=int, default=5)
     parser.add_argument("--max_size", type=int, default=30)
+    parser.add_argument("--subgraphing_method", choices=['rnd_neighbor', 'bfs', 'rnd_walk'], default='rnd_neighbor')
     args = parser.parse_args()
     print(args)
     return args
@@ -87,31 +88,33 @@ def get_network(network_name):
         network = pn.iceland()
     return network
 
+
+def get_subgraphing_method(method_name):
+    if method_name == 'rnd_neighbor':
+        return random_neighbor_selection
+    elif method_name == 'bfs':
+        return bfs_neighbor_selection
+    elif method_name == 'rnd_walk':
+        return random_walk_neighbor_selection
+
+
 def create_networks(arguments):
     start = time.perf_counter()
-    net = get_network(arguments.network)
-    starting_points = net.gen.bus
+    full_net = get_network(arguments.network)
+    subgraphing_method = get_subgraphing_method(arguments.subgraphing_method)
+    # A starting point is any bus that is connected to a generator to ensure that subgraphs contain at least one generator
+    starting_points = full_net.gen.bus
     i = 0
     while i < arguments.num_subgraphs:
         print(f"generating network {i + 1}")
-        length = np.random.randint(arguments.min_size, min(arguments.max_size, len(net.bus)))
+        subgraph_length = np.random.randint(arguments.min_size, min(arguments.max_size, len(full_net.bus)))
         starting_point = starting_points[np.random.randint(0, len(starting_points))]
-        busses = [starting_point]
-        while len(busses) < length:
-            s = busses[np.random.randint(0, len(busses))]
-            f = net.line.to_bus[np.where(np.array(net.line.from_bus) == s)[0]]
-            t = net.line.from_bus[np.where(np.array(net.line.to_bus) == s)[0]]
-            f_trafo = net.trafo.hv_bus[np.where(np.array(net.trafo.lv_bus) == s)[0]]
-            t_trafo = net.trafo.lv_bus[np.where(np.array(net.trafo.hv_bus) == s)[0]]
-            connected = np.concatenate((f, t, f_trafo, t_trafo))
-            new_busses = np.setdiff1d(connected, busses)
-            if len(new_busses) == 0:
-                continue
-            busses.append(new_busses[np.random.randint(0, len(new_busses))])
-        new_net = tb.select_subnet(net, busses)
+        initial_bus = [starting_point]
+        subgraph_busses = subgraphing_method(full_net, initial_bus, subgraph_length)
+        subgraph_net = tb.select_subnet(full_net, subgraph_busses)
 
         try:
-            pp.runpp(new_net)
+            pp.runpp(subgraph_net)
         except:
             print(f"Network not solvable trying a new one")
             continue
@@ -122,15 +125,69 @@ def create_networks(arguments):
         Path(f"{arguments.save_dir}/x").mkdir(parents=True, exist_ok=True)
         Path(f"{arguments.save_dir}/y").mkdir(parents=True, exist_ok=True)
         
-        pp.to_json(new_net, f"{arguments.save_dir}/x/{arguments.network}_{length}_{uid}.json")
-        new_net.res_gen.to_csv(f"{arguments.save_dir}/y/{arguments.network}_{length}_{uid}_gen.csv")
-        new_net.res_line.to_csv(f"{arguments.save_dir}/y/{arguments.network}_{length}_{uid}_line.csv")
-        new_net.res_bus.to_csv(f"{arguments.save_dir}/y/{arguments.network}_{length}_{uid}_bus.csv")
+        pp.to_json(subgraph_net, f"{arguments.save_dir}/x/{arguments.network}_{subgraph_length}_{arguments.subgraphing_method}_{uid}.json")
+        subgraph_net.res_gen.to_csv(f"{arguments.save_dir}/y/{arguments.network}_{subgraph_length}_{arguments.subgraphing_method}_{uid}_gen.csv")
+        subgraph_net.res_line.to_csv(f"{arguments.save_dir}/y/{arguments.network}_{subgraph_length}_{arguments.subgraphing_method}_{uid}_line.csv")
+        subgraph_net.res_bus.to_csv(f"{arguments.save_dir}/y/{arguments.network}_{subgraph_length}_{arguments.subgraphing_method}_{uid}_bus.csv")
 
         i += 1
     end = time.perf_counter()
     return i, end - start
 
+
+def random_neighbor_selection(full_net, subgraph_busses, subgraph_length):
+    while len(subgraph_busses) < subgraph_length:
+        # Pick random bus in the current subgraph
+        s = subgraph_busses[np.random.randint(0, len(subgraph_busses))]
+        # Get all busses directly connected to the picked bus s (from/to)
+        f = full_net.line.to_bus[np.where(np.array(full_net.line.from_bus) == s)[0]]
+        t = full_net.line.from_bus[np.where(np.array(full_net.line.to_bus) == s)[0]]
+        # Get all busses connected to the picked bus s via a transformer (trafo) either high voltage (hv) or low voltage (lv)
+        f_trafo = full_net.trafo.hv_bus[np.where(np.array(full_net.trafo.lv_bus) == s)[0]]
+        t_trafo = full_net.trafo.lv_bus[np.where(np.array(full_net.trafo.hv_bus) == s)[0]]
+        connected = np.concatenate((f, t, f_trafo, t_trafo))
+        # Remove all busses that are already in the subgraph
+        new_busses = np.setdiff1d(connected, subgraph_busses)
+        if len(new_busses) == 0:
+            continue
+        # Pick a random bus from the remaining busses in new_busses
+        subgraph_busses.append(new_busses[np.random.randint(0, len(new_busses))])
+    
+    return subgraph_busses
+
+
+def bfs_neighbor_selection(full_net, starting_bus, subgraph_length):
+    # Initialize a queue for BFS and a list to store visited buses
+    queue = [starting_bus[0]]
+    visited = [starting_bus[0]]
+
+    while len(visited) < subgraph_length and queue:
+        # Dequeue a bus from the front of the queue
+        current_bus = queue.pop(0)
+
+        # Get all busses directly connected to the current bus (from/to)
+        f = full_net.line.to_bus[np.where(np.array(full_net.line.from_bus) == current_bus)[0]]
+        t = full_net.line.from_bus[np.where(np.array(full_net.line.to_bus) == current_bus)[0]]
+
+        # Get all busses connected to the current bus via a transformer (trafo) either high voltage (hv) or low voltage (lv)
+        f_trafo = full_net.trafo.hv_bus[np.where(np.array(full_net.trafo.lv_bus) == current_bus)[0]]
+        t_trafo = full_net.trafo.lv_bus[np.where(np.array(full_net.trafo.hv_bus) == current_bus)[0]]
+
+        connected = np.concatenate((f, t, f_trafo, t_trafo))
+        
+        for neighbor in connected:
+        # If the neighbor has not been visited, enqueue it and mark it as visited
+            if neighbor not in visited and len(visited) < subgraph_length:
+                queue.append(neighbor)
+                visited.append(neighbor)
+
+    return visited
+
+
+def random_walk_neighbor_selection(full_net, starting_bus, subgraph_length):
+    return
+
+# other methods to try: k-hop neighborhood, Community Detection, random walk laplacian,graphSAINT partitioning, ...
 
 if __name__ == "__main__":
     generate()
