@@ -170,3 +170,5 @@ __MACOSX/
 .vscode/
 
 Data/data/
+*.json
+*.csv
