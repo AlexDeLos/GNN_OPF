@@ -172,3 +172,5 @@ __MACOSX/
 Data/data/
 *.json
 *.csv
+
+.idea/
