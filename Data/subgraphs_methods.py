@@ -97,6 +97,7 @@ def random_walk_neighbor_selection(full_net, starting_bus, subgraph_length):
         previous_step_bus = current_bus
         current_bus = next_bus
         subgraph_busses.append(current_bus)
+        stuck_iteration = 0
 
     return subgraph_busses
 
