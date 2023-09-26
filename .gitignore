@@ -173,3 +173,5 @@ models/
 trained_models/
 *.json
 *.csv
+
+.idea/
