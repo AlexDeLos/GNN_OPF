@@ -6,7 +6,7 @@ import tqdm
 import pandapower as pp
 import pandapower.plotting as ppl
 
-from architectures.GCN import GCN
+from models.GCN import GCN
 
 import torch as th
 import torch.nn as nn
