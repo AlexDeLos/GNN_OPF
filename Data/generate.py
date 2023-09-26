@@ -9,6 +9,7 @@ import argparse
 from collections import Counter
 import time
 from pathlib import Path
+import subgraphs_methods
 
 
 def generate():
@@ -91,11 +92,11 @@ def get_network(network_name):
 
 def get_subgraphing_method(method_name):
     if method_name == 'rnd_neighbor':
-        return random_neighbor_selection
+        return subgraphs_methods.random_neighbor_selection
     elif method_name == 'bfs':
-        return bfs_neighbor_selection
+        return subgraphs_methods.bfs_neighbor_selection
     elif method_name == 'rnd_walk':
-        return random_walk_neighbor_selection
+        return subgraphs_methods.random_walk_neighbor_selection
 
 
 def create_networks(arguments):
@@ -108,8 +109,7 @@ def create_networks(arguments):
     while i < arguments.num_subgraphs:
         print(f"generating network {i + 1}")
         subgraph_length = np.random.randint(arguments.min_size, min(arguments.max_size, len(full_net.bus)))
-        starting_point = starting_points[np.random.randint(0, len(starting_points))]
-        initial_bus = [starting_point]
+        initial_bus = starting_points[np.random.randint(0, len(starting_points))]
         subgraph_busses = subgraphing_method(full_net, initial_bus, subgraph_length)
         subgraph_net = tb.select_subnet(full_net, subgraph_busses)
 
@@ -134,60 +134,6 @@ def create_networks(arguments):
     end = time.perf_counter()
     return i, end - start
 
-
-def random_neighbor_selection(full_net, subgraph_busses, subgraph_length):
-    while len(subgraph_busses) < subgraph_length:
-        # Pick random bus in the current subgraph
-        s = subgraph_busses[np.random.randint(0, len(subgraph_busses))]
-        # Get all busses directly connected to the picked bus s (from/to)
-        f = full_net.line.to_bus[np.where(np.array(full_net.line.from_bus) == s)[0]]
-        t = full_net.line.from_bus[np.where(np.array(full_net.line.to_bus) == s)[0]]
-        # Get all busses connected to the picked bus s via a transformer (trafo) either high voltage (hv) or low voltage (lv)
-        f_trafo = full_net.trafo.hv_bus[np.where(np.array(full_net.trafo.lv_bus) == s)[0]]
-        t_trafo = full_net.trafo.lv_bus[np.where(np.array(full_net.trafo.hv_bus) == s)[0]]
-        connected = np.concatenate((f, t, f_trafo, t_trafo))
-        # Remove all busses that are already in the subgraph
-        new_busses = np.setdiff1d(connected, subgraph_busses)
-        if len(new_busses) == 0:
-            continue
-        # Pick a random bus from the remaining busses in new_busses
-        subgraph_busses.append(new_busses[np.random.randint(0, len(new_busses))])
-    
-    return subgraph_busses
-
-
-def bfs_neighbor_selection(full_net, starting_bus, subgraph_length):
-    # Initialize a queue for BFS and a list to store visited buses
-    queue = [starting_bus[0]]
-    visited = [starting_bus[0]]
-
-    while len(visited) < subgraph_length and queue:
-        # Dequeue a bus from the front of the queue
-        current_bus = queue.pop(0)
-
-        # Get all busses directly connected to the current bus (from/to)
-        f = full_net.line.to_bus[np.where(np.array(full_net.line.from_bus) == current_bus)[0]]
-        t = full_net.line.from_bus[np.where(np.array(full_net.line.to_bus) == current_bus)[0]]
-
-        # Get all busses connected to the current bus via a transformer (trafo) either high voltage (hv) or low voltage (lv)
-        f_trafo = full_net.trafo.hv_bus[np.where(np.array(full_net.trafo.lv_bus) == current_bus)[0]]
-        t_trafo = full_net.trafo.lv_bus[np.where(np.array(full_net.trafo.hv_bus) == current_bus)[0]]
-
-        connected = np.concatenate((f, t, f_trafo, t_trafo))
-        
-        for neighbor in connected:
-        # If the neighbor has not been visited, enqueue it and mark it as visited
-            if neighbor not in visited and len(visited) < subgraph_length:
-                queue.append(neighbor)
-                visited.append(neighbor)
-
-    return visited
-
-
-def random_walk_neighbor_selection(full_net, starting_bus, subgraph_length):
-    return
-
-# other methods to try: k-hop neighborhood, Community Detection, random walk laplacian,graphSAINT partitioning, ...
 
 if __name__ == "__main__":
     generate()
