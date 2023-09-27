@@ -12,7 +12,7 @@ import pandapower as pp
 import pandapower.plotting as ppl
 from architectures.GAT import GATNodeRegression
 
-from architectures.GATConv import GCN
+from models.GATConv import GATConv
 
 import torch as th
 import torch.nn as nn
@@ -48,7 +48,7 @@ def main():
 def get_arguments():
     parser = argparse.ArgumentParser(prog="GNN script",
                                      description="Run a GNN to solve an inductive power system problem (power flow only for now)")
-    parser.add_argument("gnn", choices=["GCN", "GAT"])
+    parser.add_argument("gnn", choices=["GATConv", "GAT"])
     parser.add_argument("--train", default="./Data/train")
     parser.add_argument("--val", default="./Data/val")
     parser.add_argument("--test", default="./Data/test")
@@ -102,8 +102,8 @@ def create_data_instance(graph, y_bus, y_gen, y_line):
     return from_networkx(g)
 
 def get_gnn(gnn_name):
-    if gnn_name == "GCN":
-        return GCN
+    if gnn_name == "GATConv":
+        return GATConv
     if gnn_name == "GAT":
         return GATNodeRegression
     
@@ -173,7 +173,7 @@ def evaluate_batch(data, model, criterion, device='cpu'):
     return loss
 
 def save_model(model, model_name):
-    th.save(model.state_dict(), f"./models/{model_name}")
+    th.save(model.state_dict(), f"./trained_models/{model_name}")
 
 def plot_losses(losses, val_losses):
     epochs = np.arange(len(losses))
