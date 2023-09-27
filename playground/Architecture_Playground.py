@@ -14,9 +14,9 @@ from torch_geometric.loader import DataLoader as pyg_DataLoader
 #Importing Data
 with open('Data/test.p', 'rb') as handle:
     tra_dataset_pyg = pickle.load(handle)
-with open('Data/toy_validation_dataset.p', 'rb') as handle:
+with open('Data/test.p', 'rb') as handle:
     val_dataset_pyg = pickle.load(handle)
-with open('Data/toy_test_dataset.p', 'rb') as handle:
+with open('Data/test.p', 'rb') as handle:
     tst_dataset_pyg = pickle.load(handle)
 
 print('Number of training examples:',   len(tra_dataset_pyg))
@@ -105,13 +105,13 @@ node_dim =   tra_dataset_pyg[0].x.shape[1]
 edge_dim =   tra_dataset_pyg[0].edge_attr.shape[1]
 output_dim = tra_dataset_pyg[0].y.shape[1]
 hidden_dim = 16
-n_gnn_layers = 3
+n_gnn_layers = 3 # used to be 3
 K=1
 dropout_rate = 0
 
 # Create model
 model = GNN_Example(node_dim, edge_dim, output_dim, hidden_dim, n_gnn_layers, K, dropout_rate)
-print(model)
+# print(model)
 
 
 # Set model parameters

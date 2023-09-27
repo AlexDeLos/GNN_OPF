@@ -170,5 +170,9 @@ __MACOSX/
 .vscode/
 
 Data/data/
+
+models/
+trained_models/
+
 *.json
 *.csv
