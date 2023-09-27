@@ -3,7 +3,7 @@ import torch.nn.functional as F
 from torch_geometric.nn import GATConv
 
 class GCN(nn.Module):
-    def __init__(self, input_dim, output_dim,
+    def __init__(self, input_dim, output_dim, edge_attr_dim,
                  n_hidden_gat=2, 
                  hidden_gat_dim=16, 
                  n_hidden_lin=2, 

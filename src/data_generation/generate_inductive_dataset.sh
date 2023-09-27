@@ -2,11 +2,18 @@
 
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 
-echo "running in " $SCRIPT_DIR
+if [ $# -eq 0 ]
+  then
+    echo "Supply data saving path"
+    exit
+fi
+
+echo "running script in " $SCRIPT_DIR
+echo "saving in " $1
 
 echo "Generating Training Set"
 echo "Generating from case24_ieee_rts"
-python $SCRIPT_DIR/generate.py case24_ieee_rts -n 15 -s $SCRIPT_DIR/train  >/dev/null
+python $SCRIPT_DIR/generate.py case24_ieee_rts -n 15 -s $1/train  >/dev/null
 echo "Generating from case30"
 python $SCRIPT_DIR/generate.py case30 -n 15 -s $SCRIPT_DIR/train  >/dev/null
 echo "Generating from case_ieee30"

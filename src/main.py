@@ -12,7 +12,7 @@ import pandapower as pp
 import pandapower.plotting as ppl
 from architectures.GAT import GATNodeRegression
 
-from architectures.GCN import GCN
+from architectures.GATConv import GCN
 
 import torch as th
 import torch.nn as nn
@@ -59,7 +59,7 @@ def get_arguments():
     parser.add_argument("-c", "--criterion", default="MSELoss")
     parser.add_argument("-b", "--batch_size", default=16)
     parser.add_argument("-n", "--n_epochs", default=150)
-    parser.add_argument("-l", "--learning_rate", default=1e-3)
+    parser.add_argument("-l", "--learning_rate", default=1e-5)
     parser.add_argument("-w", "--weight_decay", default=0.05)
     args = parser.parse_args()
     return args
@@ -72,7 +72,6 @@ def load_data(dir):
     sol_paths = sorted(os.listdir(sol_path))
     data = []
     for i, g in enumerate(graph_paths):
-        # print(f"{graph_path}/{g}")
         graph = pp.from_json(f"{graph_path}/{g}")
         y_bus = pd.read_csv(f"{sol_path}/{sol_paths[i * 3]}")
         y_gen = pd.read_csv(f"{sol_path}/{sol_paths[i * 3 + 1]}")
@@ -89,8 +88,6 @@ def create_data_instance(graph, y_bus, y_gen, y_line):
         g.nodes[node.Index]['x'] = [float(node.vn_kv), float(node.max_vm_pu), float(node.min_vm_pu)]
         g.nodes[node.Index]['y'] = [float(y_bus['vm_pu'][i]),
                                     float(y_bus['va_degree'][i])]
-                                    # float(y_bus['p_mw'][i]),
-                                    # float(y_bus['q_mvar'][i])]
         
     for edges in graph.line.itertuples():
         g.edges[edges.from_bus, edges.to_bus, ('line', edges.Index)]['edge_attr'] = [float(edges.r_ohm_per_km),
@@ -102,12 +99,6 @@ def create_data_instance(graph, y_bus, y_gen, y_line):
                                                                                      float(edges.df),
                                                                                      float(edges.length_km),]
 
-    # for trafos in graph.trafo.itertuples():
-    #     g.edges
-    # print(len(np.unique(np.array(list(nx.get_node_attributes(g, 'x').values())))))
-    # print(f"g edges {g.edges}")
-    # for edges in graph.line.itertuples():
-    #     print(g.edges[edges.from_bus, edges.to_bus, ('line', edges.Index)]['edge_attr'])
     return from_networkx(g)
 
 def get_gnn(gnn_name):
@@ -126,7 +117,7 @@ def get_criterion(criterion_name):
     
 def train_model(arguments, train, val, test):
     input_dim = train[0].x.shape[1]
-    # edge_attr_shape = train[0].edge_attr.shape
+    edge_attr_dim = train[0].edge_attr.shape
     output_dim = train[0].y.shape[1]
 
     print(f"Input shape: {input_dim}\nOutput shape: {output_dim}")
@@ -135,7 +126,7 @@ def train_model(arguments, train, val, test):
     train_dataloader = pyg_DataLoader(train, batch_size=batch_size, shuffle=True)
     val_dataloader = pyg_DataLoader(val, batch_size=batch_size, shuffle=True)
     gnn_class = get_gnn(arguments.gnn)
-    gnn = gnn_class(input_dim, output_dim)
+    gnn = gnn_class(input_dim, output_dim, edge_attr_dim)
     print(f"GNN: \n{gnn}")
 
     optimizer_class = get_optim(arguments.optimizer)
@@ -170,7 +161,6 @@ def train_batch(data, model, optimizer, criterion, device='cpu'):
     model.to(device)
     optimizer.zero_grad()
     out = model(data)
-    # print(out)
     loss = criterion(out, data.y)
     loss.backward()
     optimizer.step()
@@ -188,7 +178,13 @@ def save_model(model, model_name):
 def plot_losses(losses, val_losses):
     epochs = np.arange(len(losses))
     plt.title("GNN Power Flow Learning Curve")
-    # plt.plot(epochs, losses, label="Training Loss")
+    plt.plot(epochs, losses, label="Training Loss")
+    plt.legend()
+    plt.xlabel("Epochs")
+    plt.ylabel("MSE")
+    plt.show()
+
+    plt.title("GNN Power Flow Learning Curve")
     plt.plot(epochs, val_losses, label="Validation Loss")
     plt.legend()
     plt.xlabel("Epochs")
