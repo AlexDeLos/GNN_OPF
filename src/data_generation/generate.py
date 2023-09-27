@@ -97,23 +97,28 @@ def create_networks(arguments):
         print(f"generating network {i + 1}")
         length = np.random.randint(arguments.min_size, min(arguments.max_size, len(net.bus)))
         starting_point = starting_points[np.random.randint(0, len(starting_points))]
-        busses = [starting_point]
-        downed_bus = np.random.randint(0, length)
-        while len(busses) < length:
-            
-            s = busses[np.random.randint(0, len(busses))]
-            f = net.line.to_bus[np.where(np.array(net.line.from_bus) == s)[0]]
-            t = net.line.from_bus[np.where(np.array(net.line.to_bus) == s)[0]]
-            f_trafo = net.trafo.hv_bus[np.where(np.array(net.trafo.lv_bus) == s)[0]]
-            t_trafo = net.trafo.lv_bus[np.where(np.array(net.trafo.hv_bus) == s)[0]]
-            connected = np.concatenate((f, t, f_trafo, t_trafo))
-            new_busses = np.setdiff1d(connected, busses)
-            if len(new_busses) == 0:
-                continue
-            busses.append(new_busses[np.random.randint(0, len(new_busses))])
         
         if arguments.n_1:
-            busses[downed_bus] = 0
+            busses = list(net.bus.index)
+            downed_bus = np.random.randint(0, len(busses))
+            print(busses)
+            print(downed_bus)
+            del busses[downed_bus]
+        else:
+            busses = [starting_point]  
+
+            while len(busses) < length:
+                s = busses[np.random.randint(0, len(busses))]
+                f = net.line.to_bus[np.where(np.array(net.line.from_bus) == s)[0]]
+                t = net.line.from_bus[np.where(np.array(net.line.to_bus) == s)[0]]
+                f_trafo = net.trafo.hv_bus[np.where(np.array(net.trafo.lv_bus) == s)[0]]
+                t_trafo = net.trafo.lv_bus[np.where(np.array(net.trafo.hv_bus) == s)[0]]
+                connected = np.concatenate((f, t, f_trafo, t_trafo))
+                new_busses = np.setdiff1d(connected, busses)
+                if len(new_busses) == 0:
+                    continue
+                busses.append(new_busses[np.random.randint(0, len(new_busses))])
+                
         new_net = tb.select_subnet(net, busses)
 
         try:
