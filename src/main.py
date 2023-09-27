@@ -188,8 +188,8 @@ def save_model(model, model_name):
 def plot_losses(losses, val_losses):
     epochs = np.arange(len(losses))
     plt.title("GNN Power Flow Learning Curve")
-    plt.plot(epochs, losses, label="Training Loss")
-    # plt.plot(epochs, val_losses, label="Validation Loss")
+    # plt.plot(epochs, losses, label="Training Loss")
+    plt.plot(epochs, val_losses, label="Validation Loss")
     plt.legend()
     plt.xlabel("Epochs")
     plt.ylabel("MSE")
