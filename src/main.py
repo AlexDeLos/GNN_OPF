@@ -12,7 +12,7 @@ import pandapower as pp
 import pandapower.plotting as ppl
 from architectures.GAT import GATNodeRegression
 
-from models.GATConv import GATConv
+from models.GATConv import GATConvolution
 
 import torch as th
 import torch.nn as nn
@@ -72,23 +72,49 @@ def load_data(dir):
     sol_paths = sorted(os.listdir(sol_path))
     data = []
     for i, g in enumerate(graph_paths):
+        print(g)
+        print(sol_paths[3 * i])
         graph = pp.from_json(f"{graph_path}/{g}")
         y_bus = pd.read_csv(f"{sol_path}/{sol_paths[i * 3]}")
         y_gen = pd.read_csv(f"{sol_path}/{sol_paths[i * 3 + 1]}")
         y_line = pd.read_csv(f"{sol_path}/{sol_paths[i * 3 + 2]}")
 
-        instance = create_data_instance(graph, y_bus, y_gen, y_line)
+        instance = create_data_instance(graph, y_bus, y_gen, y_line, g == 'case118_12_eXGwM8p1.json')
         data.append(instance)
 
     return data
 
-def create_data_instance(graph, y_bus, y_gen, y_line):
+def create_data_instance(graph, y_bus, y_gen, y_line, p):
     g = ppl.create_nxgraph(graph, include_trafos=False)
-    for i, node in enumerate(graph.bus.itertuples()):
-        g.nodes[node.Index]['x'] = [float(node.vn_kv), float(node.max_vm_pu), float(node.min_vm_pu)]
-        g.nodes[node.Index]['y'] = [float(y_bus['vm_pu'][i]),
-                                    float(y_bus['va_degree'][i])]
+
+    gen = graph.gen[['bus', 'p_mw', 'vm_pu']]
+    gen.rename(columns={'p_mw': 'p_mw_gen'}, inplace=True)
+    gen.set_index('bus', inplace=True)
+
+    load = graph.load[['bus', 'p_mw', 'q_mvar']]
+    load.rename(columns={'p_mw': 'p_mw_load'}, inplace=True)
+    load.set_index('bus', inplace=True)
+
+    node_feat = graph.bus[['vn_kv', 'max_vm_pu', 'min_vm_pu']]
+
+    node_feat = node_feat.merge(gen, left_index=True, right_index=True, how='outer')
+    node_feat = node_feat.merge(load, left_index=True, right_index=True, how='outer')
+
+    node_feat.fillna(0.0, inplace=True)
+    node_feat = node_feat[~node_feat.index.duplicated(keep='first')]
+
+    for i, node in enumerate(node_feat.itertuples()):
+        # print("Indices")
+        # print(i, node.Index)
+        g.nodes[node.Index]['x'] = [float(node.vn_kv), 
+                                    float(node.max_vm_pu), 
+                                    float(node.min_vm_pu),
+                                    float(node.p_mw_gen),
+                                    float(node.vm_pu),
+                                    float(node.p_mw_load),
+                                    float(node.q_mvar)]
         
+        g.nodes[node.Index]['y'] = [float(y_bus['vm_pu'][i])]
     for edges in graph.line.itertuples():
         g.edges[edges.from_bus, edges.to_bus, ('line', edges.Index)]['edge_attr'] = [float(edges.r_ohm_per_km),
                                                                                      float(edges.x_ohm_per_km),
@@ -103,7 +129,7 @@ def create_data_instance(graph, y_bus, y_gen, y_line):
 
 def get_gnn(gnn_name):
     if gnn_name == "GATConv":
-        return GATConv
+        return GATConvolution
     if gnn_name == "GAT":
         return GATNodeRegression
     
@@ -177,18 +203,22 @@ def save_model(model, model_name):
 
 def plot_losses(losses, val_losses):
     epochs = np.arange(len(losses))
-    plt.title("GNN Power Flow Learning Curve")
+
+    plt.subplot(1, 2, 1)
+    plt.title("GNN Power Flow Training Learning Curve")
     plt.plot(epochs, losses, label="Training Loss")
     plt.legend()
     plt.xlabel("Epochs")
     plt.ylabel("MSE")
-    plt.show()
 
-    plt.title("GNN Power Flow Learning Curve")
+    plt.subplot(1, 2, 2)
+    plt.title("GNN Power Flow Validation Learning Curve")
     plt.plot(epochs, val_losses, label="Validation Loss")
     plt.legend()
     plt.xlabel("Epochs")
     plt.ylabel("MSE")
+
+    plt.tight_layout()
     plt.show()
 
 if __name__ == "__main__":
