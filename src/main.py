@@ -13,11 +13,18 @@ import pandapower.plotting as ppl
 from architectures.GAT import GATNodeRegression
 
 from models.GATConv import GATConvolution
+from models.MessagePassingConv import MessagePassingGNN
 
 import torch as th
 import torch.nn as nn
 from torch_geometric.utils.convert import from_networkx
 from torch_geometric.loader import DataLoader as pyg_DataLoader
+
+import warnings
+
+# Suppress FutureWarning
+warnings.filterwarnings("ignore", category=FutureWarning)
+
 
 def main():
     print("Parsing Arguments")
@@ -48,7 +55,7 @@ def main():
 def get_arguments():
     parser = argparse.ArgumentParser(prog="GNN script",
                                      description="Run a GNN to solve an inductive power system problem (power flow only for now)")
-    parser.add_argument("gnn", choices=["GATConv", "GAT"])
+    parser.add_argument("gnn", choices=["GATConv", "GAT", "MessagePassing"])
     parser.add_argument("--train", default="./Data/train")
     parser.add_argument("--val", default="./Data/val")
     parser.add_argument("--test", default="./Data/test")
@@ -72,8 +79,8 @@ def load_data(dir):
     sol_paths = sorted(os.listdir(sol_path))
     data = []
     for i, g in enumerate(graph_paths):
-        print(g)
-        print(sol_paths[3 * i])
+        #print(g)
+        #print(sol_paths[3 * i])
         graph = pp.from_json(f"{graph_path}/{g}")
         y_bus = pd.read_csv(f"{sol_path}/{sol_paths[i * 3]}")
         y_gen = pd.read_csv(f"{sol_path}/{sol_paths[i * 3 + 1]}")
@@ -84,6 +91,7 @@ def load_data(dir):
 
     return data
 
+# return a torch_geometric.data.Data object for each instance
 def create_data_instance(graph, y_bus, y_gen, y_line, p):
     g = ppl.create_nxgraph(graph, include_trafos=False)
 
@@ -96,16 +104,18 @@ def create_data_instance(graph, y_bus, y_gen, y_line, p):
     load.set_index('bus', inplace=True)
 
     node_feat = graph.bus[['vn_kv', 'max_vm_pu', 'min_vm_pu']]
-
+    # make sure all nodes have the same number of features
     node_feat = node_feat.merge(gen, left_index=True, right_index=True, how='outer')
     node_feat = node_feat.merge(load, left_index=True, right_index=True, how='outer')
-
+    # fill missing feature values with 0
     node_feat.fillna(0.0, inplace=True)
+    # remove duplicate columns/indices
     node_feat = node_feat[~node_feat.index.duplicated(keep='first')]
 
     for i, node in enumerate(node_feat.itertuples()):
         # print("Indices")
         # print(i, node.Index)
+        # set each node features
         g.nodes[node.Index]['x'] = [float(node.vn_kv), 
                                     float(node.max_vm_pu), 
                                     float(node.min_vm_pu),
@@ -113,7 +123,7 @@ def create_data_instance(graph, y_bus, y_gen, y_line, p):
                                     float(node.vm_pu),
                                     float(node.p_mw_load),
                                     float(node.q_mvar)]
-        
+        # set the nodes labels
         g.nodes[node.Index]['y'] = [float(y_bus['vm_pu'][i])]
     for edges in graph.line.itertuples():
         g.edges[edges.from_bus, edges.to_bus, ('line', edges.Index)]['edge_attr'] = [float(edges.r_ohm_per_km),
@@ -130,8 +140,9 @@ def create_data_instance(graph, y_bus, y_gen, y_line, p):
 def get_gnn(gnn_name):
     if gnn_name == "GATConv":
         return GATConvolution
-    if gnn_name == "GAT":
-        return GATNodeRegression
+    
+    if gnn_name == "MessagePassing":
+        return MessagePassingGNN
     
 def get_optim(optim_name):
     if optim_name == "Adam":
@@ -143,7 +154,7 @@ def get_criterion(criterion_name):
     
 def train_model(arguments, train, val, test):
     input_dim = train[0].x.shape[1]
-    edge_attr_dim = train[0].edge_attr.shape
+    edge_attr_dim = train[0].edge_attr.shape # why not [1]
     output_dim = train[0].y.shape[1]
 
     print(f"Input shape: {input_dim}\nOutput shape: {output_dim}")

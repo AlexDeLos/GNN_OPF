@@ -10,6 +10,10 @@ from collections import Counter
 import time
 from pathlib import Path
 
+import warnings
+
+# Suppress FutureWarning
+warnings.filterwarnings("ignore", category=FutureWarning)
 
 def generate():
     arguments = get_arguments()
