@@ -36,7 +36,7 @@ class MessagePassingGNN(MessagePassing):
         # define a mlp for message passing
         self.mlp_message = nn.Sequential(nn.Linear(hidden_dim * 2, 256), nn.ReLU(), nn.Linear(256, output_dim))
         # define a mlp for update
-        self.mlp_update = nn.Sequential(nn.Linear(output_dim, 64), nn.ReLU(), nn.Linear(64, output_dim))
+        self.mlp_update = nn.Sequential(nn.Linear(output_dim, 256), nn.ReLU(), nn.Linear(256, output_dim))
 
     def forward(self, data):
         # x has shape [num_nodes, input_dim]
@@ -75,6 +75,15 @@ class MessagePassingGNN(MessagePassing):
     # we are already including the node itself
     def update(self, aggr_out):
         #print("aggr_out", aggr_out.shape)
-        #aggr_out = self.mlp_update(aggr_out)
+        output = self.mlp_update(aggr_out)
         # Apply the final layer
-        return aggr_out
+        return output
+    
+
+    # experiments/ablations:
+    # add n of layers in the mlps for message function
+    # add biases
+    # add/remove layers to the whole model
+    # use attention layer not vanilla mlp
+    # add skip/residual connections in update function
+    # use only edge features and not node features
