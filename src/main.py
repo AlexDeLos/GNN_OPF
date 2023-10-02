@@ -72,8 +72,6 @@ def load_data(dir):
     sol_paths = sorted(os.listdir(sol_path))
     data = []
     for i, g in tqdm.tqdm(enumerate(graph_paths)):
-        # print(g)
-        # print(sol_paths[3 * i])
         graph = pp.from_json(f"{graph_path}/{g}")
         y_bus = pd.read_csv(f"{sol_path}/{sol_paths[i * 3]}", index_col=0)
         y_gen = pd.read_csv(f"{sol_path}/{sol_paths[i * 3 + 1]}", index_col=0)
@@ -102,13 +100,8 @@ def create_data_instance(graph, y_bus, y_gen, y_line):
 
     node_feat.fillna(0.0, inplace=True)
     node_feat = node_feat[~node_feat.index.duplicated(keep='first')]
-    # print(node_feat)
-    # print(y_bus)
-    for mode in node_feat.itertuples():
-        # print("Indices")
-        # print(i, node.Index)
+    for node in node_feat.itertuples():
         g.nodes[node.Index]['x'] = [float(node.vn_kv), #bus
-                                    # float(y_bus['va_degree'][node.Index]), #bus
                                     float(node.p_mw_gen), #gen
                                     float(node.vm_pu), #gen
                                     float(node.p_mw_load), #load
