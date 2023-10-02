@@ -55,7 +55,8 @@ def main():
 def get_arguments():
     parser = argparse.ArgumentParser(prog="GNN script",
                                      description="Run a GNN to solve an inductive power system problem (power flow only for now)")
-    parser.add_argument("gnn", choices=["GATConv", "GAT", "MessagePassing"])
+    
+    parser.add_argument("gnn", choices=["GATConv", "MessagePassing"], default="GATConv")
     parser.add_argument("--train", default="./Data/train")
     parser.add_argument("--val", default="./Data/val")
     parser.add_argument("--test", default="./Data/test")
@@ -65,8 +66,8 @@ def get_arguments():
     parser.add_argument("-o", "--optimizer", default="Adam")
     parser.add_argument("-c", "--criterion", default="MSELoss")
     parser.add_argument("-b", "--batch_size", default=16)
-    parser.add_argument("-n", "--n_epochs", default=150)
-    parser.add_argument("-l", "--learning_rate", default=1e-5)
+    parser.add_argument("-n", "--n_epochs", default=250)
+    parser.add_argument("-l", "--learning_rate", default=1e-4)
     parser.add_argument("-w", "--weight_decay", default=0.05)
     args = parser.parse_args()
     return args
@@ -78,21 +79,20 @@ def load_data(dir):
     graph_paths = sorted(os.listdir(graph_path))
     sol_paths = sorted(os.listdir(sol_path))
     data = []
-    for i, g in enumerate(graph_paths):
-        #print(g)
-        #print(sol_paths[3 * i])
-        graph = pp.from_json(f"{graph_path}/{g}")
-        y_bus = pd.read_csv(f"{sol_path}/{sol_paths[i * 3]}")
-        y_gen = pd.read_csv(f"{sol_path}/{sol_paths[i * 3 + 1]}")
-        y_line = pd.read_csv(f"{sol_path}/{sol_paths[i * 3 + 2]}")
 
-        instance = create_data_instance(graph, y_bus, y_gen, y_line, g == 'case118_12_eXGwM8p1.json')
+    for i, g in tqdm.tqdm(enumerate(graph_paths)):
+        graph = pp.from_json(f"{graph_path}/{g}")
+        y_bus = pd.read_csv(f"{sol_path}/{sol_paths[i * 3]}", index_col=0)
+        y_gen = pd.read_csv(f"{sol_path}/{sol_paths[i * 3 + 1]}", index_col=0)
+        y_line = pd.read_csv(f"{sol_path}/{sol_paths[i * 3 + 2]}", index_col=0)
+
+        instance = create_data_instance(graph, y_bus, y_gen, y_line)
         data.append(instance)
 
     return data
 
 # return a torch_geometric.data.Data object for each instance
-def create_data_instance(graph, y_bus, y_gen, y_line, p):
+def create_data_instance(graph, y_bus, y_gen, y_line):
     g = ppl.create_nxgraph(graph, include_trafos=False)
 
     gen = graph.gen[['bus', 'p_mw', 'vm_pu']]
@@ -112,19 +112,22 @@ def create_data_instance(graph, y_bus, y_gen, y_line, p):
     # remove duplicate columns/indices
     node_feat = node_feat[~node_feat.index.duplicated(keep='first')]
 
-    for i, node in enumerate(node_feat.itertuples()):
-        # print("Indices")
-        # print(i, node.Index)
+    for node in node_feat.itertuples():
         # set each node features
-        g.nodes[node.Index]['x'] = [float(node.vn_kv), 
-                                    float(node.max_vm_pu), 
-                                    float(node.min_vm_pu),
-                                    float(node.p_mw_gen),
-                                    float(node.vm_pu),
-                                    float(node.p_mw_load),
-                                    float(node.q_mvar)]
-        # set the nodes labels
-        g.nodes[node.Index]['y'] = [float(y_bus['vm_pu'][i])]
+        g.nodes[node.Index]['x'] = [float(node.vn_kv), #bus
+                                    float(node.p_mw_gen), #gen
+                                    float(node.vm_pu), #gen
+                                    float(node.p_mw_load), #load
+                                    float(node.q_mvar)] #load
+        
+        # set each node label
+        g.nodes[node.Index]['y'] = [# float(y_bus['p_mw'][node.Index])]
+                                    # float(y_bus['q_mvar'][node.Index])]
+                                    float(y_bus['va_degree'][node.Index])]
+                                    # float(y_bus['vm_pu'][node.Index])]
+        
+    # quit()
+
     for edges in graph.line.itertuples():
         g.edges[edges.from_bus, edges.to_bus, ('line', edges.Index)]['edge_attr'] = [float(edges.r_ohm_per_km),
                                                                                      float(edges.x_ohm_per_km),
@@ -151,6 +154,8 @@ def get_optim(optim_name):
 def get_criterion(criterion_name):
     if criterion_name == "MSELoss":
         return nn.MSELoss()
+    if criterion_name == "L1Loss":
+        return nn.L1Loss()
     
 def train_model(arguments, train, val, test):
     input_dim = train[0].x.shape[1]
@@ -172,7 +177,6 @@ def train_model(arguments, train, val, test):
 
     losses = []
     val_losses = []
-
     for epoch in tqdm.tqdm(range(arguments.n_epochs)): #args epochs
         epoch_loss = 0.0
         epoch_val_loss = 0.0
