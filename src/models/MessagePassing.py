@@ -6,6 +6,9 @@ from torch_geometric.utils import add_self_loops
 
 # https://pytorch-geometric.readthedocs.io/en/latest/tutorial/create_gnn.html#the-messagepassing-base-class
 class MessagePassingGNN(MessagePassing):
+
+    class_name = "MessagePassing"
+
     def __init__(self, input_dim, output_dim, edge_attr_dim, hidden_dim=64, aggr='mean', num_layers=5):
         super(MessagePassingGNN, self).__init__(aggr=aggr)
 

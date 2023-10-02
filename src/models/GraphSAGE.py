@@ -4,6 +4,9 @@ import torch
 from torch.nn import Linear
 
 class GraphSAGE(torch.nn.Module):
+
+    class_name = "GraphSAGE"
+
     def __init__(
             self, 
             input_dim, 
@@ -11,7 +14,7 @@ class GraphSAGE(torch.nn.Module):
             edge_attr_dim=0, 
             hidden_dim=64,
             num_layers=2, 
-            dropout=0.2
+            dropout=0.1
         ):
         super().__init__()
         self.convs = torch.nn.ModuleList()
@@ -34,7 +37,6 @@ class GraphSAGE(torch.nn.Module):
             x = self.convs[i](x=x, edge_index=edge_index)
             x = F.dropout(x, p=self.dropout_rate, training=self.training)
             x = F.elu(x)
-            x = F.dropout(x, p=self.dropout_rate, training=self.training)
         
         x = self.linear(x)
         return x

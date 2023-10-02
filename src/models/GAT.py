@@ -2,7 +2,10 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch_geometric.nn import GATConv
 
-class GATConvolution(nn.Module):
+class GAT(nn.Module):
+
+    class_name = "GAT"
+
     def __init__(self, input_dim, output_dim, edge_attr_dim,
                  n_hidden_gat=2, 
                  hidden_gat_dim=16, 
