@@ -4,19 +4,27 @@ import torch
 from torch.nn import Linear
 
 class GraphSAGE(torch.nn.Module):
-    def __init__(self, in_dim, hidden_dim, out_dim, num_layers=2, dropout=0.2):
+    def __init__(
+            self, 
+            input_dim, 
+            output_dim, 
+            edge_attr_dim=0, 
+            hidden_dim=64,
+            num_layers=2, 
+            dropout=0.2
+        ):
         super().__init__()
         self.convs = torch.nn.ModuleList()
 
         if num_layers == 1:
-            self.convs.append(SAGEConv(in_dim, hidden_dim))
+            self.convs.append(SAGEConv(input_dim, hidden_dim))
         else:
-            self.convs.append(SAGEConv(in_dim, hidden_dim))
+            self.convs.append(SAGEConv(input_dim, hidden_dim))
             for i in range(num_layers - 1):
                 self.convs.append(SAGEConv(hidden_dim, hidden_dim))
         
         self.dropout_rate = dropout
-        self.linear = Linear(hidden_dim, out_dim)
+        self.linear = Linear(hidden_dim, output_dim)
 
     # https://pytorch-geometric.readthedocs.io/en/latest/cheatsheet/gnn_cheatsheet.html
     # SAGEConv does not take edge attributes
