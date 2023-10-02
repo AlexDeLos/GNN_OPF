@@ -11,9 +11,10 @@ import networkx as nx
 import pandapower as pp
 import pandapower.plotting as ppl
 
-from models.GATConv import GATConvolution
-from models.MessagePassingConv import MessagePassingGNN
+from models.GAT import GAT
+from models.MessagePassing import MessagePassingGNN
 from models.GraphSAGE import GraphSAGE
+
 import torch as th
 import torch.nn as nn
 from torch_geometric.utils.convert import from_networkx
@@ -44,18 +45,20 @@ def main():
 
     print("Training Model")
     model, losses, val_losses = train_model(arguments, train, val, test)
+    model_class_name = model.class_name
     if arguments.save_model:
         print("Saving Model")
-        save_model(model, arguments.model_name)
+        save_model(model, arguments.model_name, model_class_name)
     if arguments.plot:
-        plot_losses(losses, val_losses)
+        plot_losses(losses, val_losses, model_class_name)
+    
     
 
 def get_arguments():
     parser = argparse.ArgumentParser(prog="GNN script",
                                      description="Run a GNN to solve an inductive power system problem (power flow only for now)")
     
-    parser.add_argument("gnn", choices=["GATConv", "MessagePassing", "GraphSAGE"], default="GATConv")
+    parser.add_argument("gnn", choices=["GAT", "MessagePassing", "GraphSAGE"], default="GAT")
     parser.add_argument("--train", default="./Data/train")
     parser.add_argument("--val", default="./Data/val")
     parser.add_argument("--test", default="./Data/test")
@@ -140,8 +143,8 @@ def create_data_instance(graph, y_bus, y_gen, y_line):
     return from_networkx(g)
 
 def get_gnn(gnn_name):
-    if gnn_name == "GATConv":
-        return GATConvolution
+    if gnn_name == "GAT":
+        return GAT
     
     if gnn_name == "MessagePassing":
         return MessagePassingGNN
@@ -215,21 +218,30 @@ def evaluate_batch(data, model, criterion, device='cpu'):
     loss = criterion(out, data.y)
     return loss
 
-def save_model(model, model_name):
-    th.save(model.state_dict(), f"./trained_models/{model_name}")
+def save_model(model, model_name, model_class_name):
+    state = {
+        'model': model, # save the model object with some of its parameters
+        'state_dict': model.state_dict(),
+    }
 
-def plot_losses(losses, val_losses):
+    timestamp = pd.Timestamp.now().strftime("%Y-%m-%d %H:%M")
+
+    model_name = model_name + "_" + model_class_name + "_" + str(timestamp)
+
+    th.save(state, f"./trained_models/{model_name}")
+
+def plot_losses(losses, val_losses, model_name):
     epochs = np.arange(len(losses))
 
     plt.subplot(1, 2, 1)
-    plt.title("GNN Power Flow Training Learning Curve")
+    plt.title(f"{model_name} - Power Flow Training Learning Curve")
     plt.plot(epochs, losses, label="Training Loss")
     plt.legend()
     plt.xlabel("Epochs")
     plt.ylabel("MSE")
 
     plt.subplot(1, 2, 2)
-    plt.title("GNN Power Flow Validation Learning Curve")
+    plt.title(f"{model_name} - Power Flow Validation Learning Curve")
     plt.plot(epochs, val_losses, label="Validation Loss")
     plt.legend()
     plt.xlabel("Epochs")
