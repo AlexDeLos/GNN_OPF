@@ -108,10 +108,10 @@ def create_data_instance(graph, y_bus, y_gen, y_line):
                                     float(node.p_mw_load), #load
                                     float(node.q_mvar)] #load
         
-        g.nodes[node.Index]['y'] = [# float(y_bus['p_mw'][node.Index])]
-                                    # float(y_bus['q_mvar'][node.Index])]
-                                    float(y_bus['va_degree'][node.Index])]
-                                    # float(y_bus['vm_pu'][node.Index])]
+        g.nodes[node.Index]['y'] = [float(y_bus['p_mw'][node.Index]),
+                                    float(y_bus['q_mvar'][node.Index]),
+                                    float(y_bus['va_degree'][node.Index]),
+                                    float(y_bus['vm_pu'][node.Index])]
         
     # quit()
     for edges in graph.line.itertuples():
@@ -194,7 +194,7 @@ def train_batch(data, model, optimizer, criterion, device='cpu'):
 
 #TODO:DELTE THIS EVENTUALLY
 
-def physics_loss(network, output_r, log_loss=False):
+def physics_loss(network, output, log_loss=False):
     """
     Calculates power imbalances at each node in the graph and sums results.
     Based on loss from https://arxiv.org/abs/2204.07000
@@ -216,10 +216,10 @@ def physics_loss(network, output_r, log_loss=False):
     # Get predicted power levels from the model outputs
     # active_imbalance = output.p_mw #output[:, 0]
     # reactive_imbalance = output.q_mvar #output[:, 1]
-    active_imbalance = th.zeros(output_r.shape[0])
-    reactive_imbalance = th.zeros(output_r.shape[0])
-    output = [[0,1,2,3]]*network.num_edges
-    output[:][2] = output_r
+    active_imbalance = output[:,0] # th.zeros(output_r.shape[0])
+    reactive_imbalance = output[:,1]#th.zeros(output_r.shape[0])
+    #output = [[0,1,2,3]]*network.num_edges
+    #output[:][2] = output_r
 
     # Calculate admittance values (conductance, susceptance) from impedance values (edges)
     # edge_att[:, 0] should contain resistances r, edge_att[:, 1] should contain reactances x,
@@ -232,12 +232,12 @@ def physics_loss(network, output_r, log_loss=False):
     # TODO: way to do this with tensors instead of loop?
     for i, x in enumerate(th.transpose(network.edge_index, 0, 1)):
         # x contains node indices [from, to]
-        angle_diff = output[x[0]][3] - output[x[1]][3]
+        angle_diff = output[x[0],3] - output[x[1],3]
 
-        active_imbalance[x[0]] -= np.abs(output[x[0]][2]) * np.abs(output[x[1]][2]) \
-                                    * (conductances[i] * np.cos(angle_diff) + susceptances[i] * np.sin(angle_diff))
-        reactive_imbalance[x[0]] -= np.abs(output[x[0]] [2]) * np.abs(output[x[1]][2]) \
-                                    * (conductances[i] * np.sin(angle_diff) - susceptances[i] * np.cos(angle_diff))
+        active_imbalance[x[0]] -= th.abs(output[x[0],2]).detach().numpy() * th.abs(output[x[1],2]).detach().numpy() \
+                                    * (conductances[i] * th.cos(angle_diff).detach().numpy() + susceptances[i] * th.sin(angle_diff)).detach().numpy()
+        reactive_imbalance[x[0]] -= th.abs(output[x[0],2]).detach().numpy() * th.abs(output[x[1],2]).detach().numpy() \
+                                    * (conductances[i] * th.sin(angle_diff).detach().numpy() - susceptances[i] * th.cos(angle_diff)).detach().numpy()
 
     # Use either sum of absolute imbalances or log of squared imbalances
     if log_loss:
