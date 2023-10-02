@@ -1,6 +1,5 @@
 import torch
 from utils import train_single_graph, evaluate_single_graph, test_single_graph, train_epoch, evaluate_epoch, test_epoch
-from models.GAT import GAT
 from models.GraphSAGE import GraphSAGE
 from torch_geometric.datasets import Planetoid
 from torch_geometric.datasets import PPI

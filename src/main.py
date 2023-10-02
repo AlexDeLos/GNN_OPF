@@ -10,7 +10,6 @@ import string
 import networkx as nx
 import pandapower as pp
 import pandapower.plotting as ppl
-from architectures.GAT import GATNodeRegression
 
 from models.GATConv import GATConvolution
 from models.MessagePassingConv import MessagePassingGNN
