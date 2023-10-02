@@ -195,7 +195,6 @@ def train_batch(data, model, optimizer, criterion, device='cpu'):
 
 #TODO:DELTE THIS EVENTUALLY
 
-
 def physics_loss(network, output_r, log_loss=False):
     """
     Calculates power imbalances at each node in the graph and sums results.
@@ -221,7 +220,7 @@ def physics_loss(network, output_r, log_loss=False):
     active_imbalance = th.zeros(output_r.shape[0])
     reactive_imbalance = th.zeros(output_r.shape[0])
     output = [[0,1,2,3]]*network.num_edges
-    output[:][3] = output_r
+    output[:][2] = output_r
 
     # Calculate admittance values (conductance, susceptance) from impedance values (edges)
     # edge_att[:, 0] should contain resistances r, edge_att[:, 1] should contain reactances x,
