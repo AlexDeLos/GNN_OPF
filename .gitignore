@@ -171,7 +171,6 @@ __MACOSX/
 
 Data/data/
 
-models/
 trained_models/
 
 *.json
