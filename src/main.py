@@ -13,7 +13,7 @@ import pandapower.plotting as ppl
 
 from models.GATConv import GATConvolution
 from models.MessagePassingConv import MessagePassingGNN
-
+from models.GraphSAGE import GraphSAGE
 import torch as th
 import torch.nn as nn
 from torch_geometric.utils.convert import from_networkx
@@ -55,7 +55,7 @@ def get_arguments():
     parser = argparse.ArgumentParser(prog="GNN script",
                                      description="Run a GNN to solve an inductive power system problem (power flow only for now)")
     
-    parser.add_argument("gnn", choices=["GATConv", "MessagePassing"], default="GATConv")
+    parser.add_argument("gnn", choices=["GATConv", "MessagePassing", "GraphSAGE"], default="GATConv")
     parser.add_argument("--train", default="./Data/train")
     parser.add_argument("--val", default="./Data/val")
     parser.add_argument("--test", default="./Data/test")
@@ -145,6 +145,9 @@ def get_gnn(gnn_name):
     
     if gnn_name == "MessagePassing":
         return MessagePassingGNN
+    
+    if gnn_name == "GraphSAGE":
+        return GraphSAGE
     
 def get_optim(optim_name):
     if optim_name == "Adam":
