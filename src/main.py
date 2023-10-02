@@ -12,7 +12,7 @@ import pandapower as pp
 import pandapower.plotting as ppl
 from architectures.GAT import GATNodeRegression
 
-from models.GATConv import GATConv
+from models.GATConv import GATConvolution
 
 import torch as th
 import torch.nn as nn
@@ -48,7 +48,7 @@ def main():
 def get_arguments():
     parser = argparse.ArgumentParser(prog="GNN script",
                                      description="Run a GNN to solve an inductive power system problem (power flow only for now)")
-    parser.add_argument("gnn", choices=["GATConv", "GAT"])
+    parser.add_argument("gnn", choices=["GATConv", "GAT"], default="GATConv")
     parser.add_argument("--train", default="./Data/train")
     parser.add_argument("--val", default="./Data/val")
     parser.add_argument("--test", default="./Data/test")
@@ -58,8 +58,8 @@ def get_arguments():
     parser.add_argument("-o", "--optimizer", default="Adam")
     parser.add_argument("-c", "--criterion", default="MSELoss")
     parser.add_argument("-b", "--batch_size", default=16)
-    parser.add_argument("-n", "--n_epochs", default=150)
-    parser.add_argument("-l", "--learning_rate", default=1e-5)
+    parser.add_argument("-n", "--n_epochs", default=250)
+    parser.add_argument("-l", "--learning_rate", default=1e-4)
     parser.add_argument("-w", "--weight_decay", default=0.05)
     args = parser.parse_args()
     return args
@@ -71,11 +71,11 @@ def load_data(dir):
     graph_paths = sorted(os.listdir(graph_path))
     sol_paths = sorted(os.listdir(sol_path))
     data = []
-    for i, g in enumerate(graph_paths):
+    for i, g in tqdm.tqdm(enumerate(graph_paths)):
         graph = pp.from_json(f"{graph_path}/{g}")
-        y_bus = pd.read_csv(f"{sol_path}/{sol_paths[i * 3]}")
-        y_gen = pd.read_csv(f"{sol_path}/{sol_paths[i * 3 + 1]}")
-        y_line = pd.read_csv(f"{sol_path}/{sol_paths[i * 3 + 2]}")
+        y_bus = pd.read_csv(f"{sol_path}/{sol_paths[i * 3]}", index_col=0)
+        y_gen = pd.read_csv(f"{sol_path}/{sol_paths[i * 3 + 1]}", index_col=0)
+        y_line = pd.read_csv(f"{sol_path}/{sol_paths[i * 3 + 2]}", index_col=0)
 
         instance = create_data_instance(graph, y_bus, y_gen, y_line)
         data.append(instance)
@@ -84,11 +84,35 @@ def load_data(dir):
 
 def create_data_instance(graph, y_bus, y_gen, y_line):
     g = ppl.create_nxgraph(graph, include_trafos=False)
-    for i, node in enumerate(graph.bus.itertuples()):
-        g.nodes[node.Index]['x'] = [float(node.vn_kv), float(node.max_vm_pu), float(node.min_vm_pu)]
-        g.nodes[node.Index]['y'] = [float(y_bus['vm_pu'][i]),
-                                    float(y_bus['va_degree'][i])]
+
+    gen = graph.gen[['bus', 'p_mw', 'vm_pu']]
+    gen.rename(columns={'p_mw': 'p_mw_gen'}, inplace=True)
+    gen.set_index('bus', inplace=True)
+
+    load = graph.load[['bus', 'p_mw', 'q_mvar']]
+    load.rename(columns={'p_mw': 'p_mw_load'}, inplace=True)
+    load.set_index('bus', inplace=True)
+
+    node_feat = graph.bus[['vn_kv', 'max_vm_pu', 'min_vm_pu']]
+
+    node_feat = node_feat.merge(gen, left_index=True, right_index=True, how='outer')
+    node_feat = node_feat.merge(load, left_index=True, right_index=True, how='outer')
+
+    node_feat.fillna(0.0, inplace=True)
+    node_feat = node_feat[~node_feat.index.duplicated(keep='first')]
+    for node in node_feat.itertuples():
+        g.nodes[node.Index]['x'] = [float(node.vn_kv), #bus
+                                    float(node.p_mw_gen), #gen
+                                    float(node.vm_pu), #gen
+                                    float(node.p_mw_load), #load
+                                    float(node.q_mvar)] #load
         
+        g.nodes[node.Index]['y'] = [# float(y_bus['p_mw'][node.Index])]
+                                    # float(y_bus['q_mvar'][node.Index])]
+                                    float(y_bus['va_degree'][node.Index])]
+                                    # float(y_bus['vm_pu'][node.Index])]
+        
+    # quit()
     for edges in graph.line.itertuples():
         g.edges[edges.from_bus, edges.to_bus, ('line', edges.Index)]['edge_attr'] = [float(edges.r_ohm_per_km),
                                                                                      float(edges.x_ohm_per_km),
@@ -103,7 +127,7 @@ def create_data_instance(graph, y_bus, y_gen, y_line):
 
 def get_gnn(gnn_name):
     if gnn_name == "GATConv":
-        return GATConv
+        return GATConvolution
     if gnn_name == "GAT":
         return GATNodeRegression
     
@@ -114,6 +138,8 @@ def get_optim(optim_name):
 def get_criterion(criterion_name):
     if criterion_name == "MSELoss":
         return nn.MSELoss()
+    if criterion_name == "L1Loss":
+        return nn.L1Loss()
     
 def train_model(arguments, train, val, test):
     input_dim = train[0].x.shape[1]
@@ -135,7 +161,6 @@ def train_model(arguments, train, val, test):
 
     losses = []
     val_losses = []
-
     for epoch in tqdm.tqdm(range(arguments.n_epochs)): #args epochs
         epoch_loss = 0.0
         epoch_val_loss = 0.0
@@ -177,18 +202,22 @@ def save_model(model, model_name):
 
 def plot_losses(losses, val_losses):
     epochs = np.arange(len(losses))
-    plt.title("GNN Power Flow Learning Curve")
+
+    plt.subplot(1, 2, 1)
+    plt.title("GNN Power Flow Training Learning Curve")
     plt.plot(epochs, losses, label="Training Loss")
     plt.legend()
     plt.xlabel("Epochs")
     plt.ylabel("MSE")
-    plt.show()
 
-    plt.title("GNN Power Flow Learning Curve")
+    plt.subplot(1, 2, 2)
+    plt.title("GNN Power Flow Validation Learning Curve")
     plt.plot(epochs, val_losses, label="Validation Loss")
     plt.legend()
     plt.xlabel("Epochs")
     plt.ylabel("MSE")
+
+    plt.tight_layout()
     plt.show()
 
 if __name__ == "__main__":
