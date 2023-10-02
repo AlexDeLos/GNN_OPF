@@ -83,6 +83,7 @@ class MessagePassingGNN(MessagePassing):
     # experiments/ablations:
     # add n of layers in the mlps for message function
     # add biases
+    # add dropout
     # add/remove layers to the whole model
     # use attention layer not vanilla mlp
     # add skip/residual connections in update function
