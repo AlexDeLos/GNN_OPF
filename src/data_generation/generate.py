@@ -9,6 +9,7 @@ import argparse
 from collections import Counter
 import time
 from pathlib import Path
+import subgraphs_methods
 
 
 def generate():
@@ -24,9 +25,12 @@ def get_arguments():
     parser.add_argument("network", choices=['case4gs', 'case5', 'case6ww', 'case9', 'case14', 'case24_ieee_rts', 'case30', 'case_ieee30', 'case33bw', 'case39', 'case57', 'case89pegase', 'case118', 'case145', 'case_illinois200', 'case300', 'case1354pegase', 'case1888rte', 'case2848rte', 'case2869pegase', 'case3120sp', 'case6470rte', 'case6495rte', 'case6515rte', 'case9241', 'GBnetwork', 'GBreducednetwork', 'iceland'])
     parser.add_argument("-n", "--num_subgraphs", type=int, default=10)
     parser.add_argument("-s", "--save_dir", default="./data")
+    parser.add_argument("-n_1", default=False)
+    parser.add_argument("-n_2", default=False)
     parser.add_argument("--min_size", type=int, default=5)
     parser.add_argument("--max_size", type=int, default=30)
     parser.add_argument("--n_1", type=bool, default=False)
+    parser.add_argument("--subgraphing_method", choices=['rnd_neighbor', 'bfs', 'rnd_walk'], default='rnd_neighbor')
     args = parser.parse_args()
     print(args)
     return args
@@ -88,13 +92,26 @@ def get_network(network_name):
         network = pn.iceland()
     return network
 
+
+def get_subgraphing_method(method_name):
+    if method_name == 'rnd_neighbor':
+        return subgraphs_methods.random_neighbor_selection
+    elif method_name == 'bfs':
+        return subgraphs_methods.bfs_neighbor_selection
+    elif method_name == 'rnd_walk':
+        return subgraphs_methods.random_walk_neighbor_selection
+
+
 def create_networks(arguments):
     start = time.perf_counter()
-    net = get_network(arguments.network)
-    starting_points = net.gen.bus
+    full_net = get_network(arguments.network)
+    subgraphing_method = get_subgraphing_method(arguments.subgraphing_method)
+    # A starting point is any bus that is connected to a generator to ensure that subgraphs contain at least one generator
+    starting_points = full_net.gen.bus
     i = 0
     while i < arguments.num_subgraphs:
         print(f"generating network {i + 1}")
+        
         length = np.random.randint(arguments.min_size, min(arguments.max_size, len(net.bus)))
         starting_point = starting_points[np.random.randint(0, len(starting_points))]
         
@@ -104,7 +121,8 @@ def create_networks(arguments):
             print(busses)
             print(downed_bus)
             del busses[downed_bus]
-        else:
+            new_net = tb.select_subnet(net, busses)
+        elif arguments.n_2:
             busses = [starting_point]  
 
             while len(busses) < length:
@@ -118,11 +136,19 @@ def create_networks(arguments):
                 if len(new_busses) == 0:
                     continue
                 busses.append(new_busses[np.random.randint(0, len(new_busses))])
+                new_net = tb.select_subnet(net, busses)
                 
-        new_net = tb.select_subnet(net, busses)
+        
+        else:
+            subgraph_length = np.random.randint(arguments.min_size, min(arguments.max_size, len(full_net.bus)))
+            initial_bus = starting_points[np.random.randint(0, len(starting_points))]
+            subgraph_busses = subgraphing_method(full_net, initial_bus, subgraph_length)
+            subgraph_net = tb.select_subnet(full_net, subgraph_busses)
 
         try:
-            pp.runpp(new_net)
+            if(arguments.n_1 or arguments.n_2):
+                pp.runpp(new_net)
+            pp.runpp(subgraph_net)
         except:
             print(f"Network not solvable trying a new one")
             continue
@@ -133,10 +159,10 @@ def create_networks(arguments):
         Path(f"{arguments.save_dir}/x").mkdir(parents=True, exist_ok=True)
         Path(f"{arguments.save_dir}/y").mkdir(parents=True, exist_ok=True)
         
-        pp.to_json(new_net, f"{arguments.save_dir}/x/{arguments.network}_{length}_{uid}.json")
-        new_net.res_gen.to_csv(f"{arguments.save_dir}/y/{arguments.network}_{length}_{uid}_gen.csv")
-        new_net.res_line.to_csv(f"{arguments.save_dir}/y/{arguments.network}_{length}_{uid}_line.csv")
-        new_net.res_bus.to_csv(f"{arguments.save_dir}/y/{arguments.network}_{length}_{uid}_bus.csv")
+        pp.to_json(subgraph_net, f"{arguments.save_dir}/x/{arguments.network}_{subgraph_length}_{arguments.subgraphing_method}_{uid}.json")
+        subgraph_net.res_gen.to_csv(f"{arguments.save_dir}/y/{arguments.network}_{subgraph_length}_{arguments.subgraphing_method}_{uid}_gen.csv")
+        subgraph_net.res_line.to_csv(f"{arguments.save_dir}/y/{arguments.network}_{subgraph_length}_{arguments.subgraphing_method}_{uid}_line.csv")
+        subgraph_net.res_bus.to_csv(f"{arguments.save_dir}/y/{arguments.network}_{subgraph_length}_{arguments.subgraphing_method}_{uid}_bus.csv")
 
         i += 1
     end = time.perf_counter()
