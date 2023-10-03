@@ -28,12 +28,11 @@ def get_arguments():
     )
     parser.add_argument("network", choices=['case4gs', 'case5', 'case6ww', 'case9', 'case14', 'case24_ieee_rts', 'case30', 'case_ieee30', 'case33bw', 'case39', 'case57', 'case89pegase', 'case118', 'case145', 'case_illinois200', 'case300', 'case1354pegase', 'case1888rte', 'case2848rte', 'case2869pegase', 'case3120sp', 'case6470rte', 'case6495rte', 'case6515rte', 'case9241', 'GBnetwork', 'GBreducednetwork', 'iceland'])
     parser.add_argument("-n", "--num_subgraphs", type=int, default=10)
-    parser.add_argument("-s", "--save_dir", default="./data")
-    parser.add_argument("-n_1", default=False)
-    parser.add_argument("-n_2", default=False)
+    parser.add_argument("-s", "--save_dir", default="./data")    
     parser.add_argument("--min_size", type=int, default=5)
     parser.add_argument("--max_size", type=int, default=30)
     parser.add_argument("--n_1", type=bool, default=False)
+    parser.add_argument("--n_2", , type=bool, default=False)
     parser.add_argument("--subgraphing_method", choices=['rnd_neighbor', 'bfs', 'rnd_walk'], default='rnd_neighbor')
     args = parser.parse_args()
     print(args)
@@ -116,42 +115,34 @@ def create_networks(arguments):
     while i < arguments.num_subgraphs:
         print(f"generating network {i + 1}")
         
-        length = np.random.randint(arguments.min_size, min(arguments.max_size, len(net.bus)))
-        starting_point = starting_points[np.random.randint(0, len(starting_points))]
+        subgraph_length = np.random.randint(arguments.min_size, min(arguments.max_size, len(full_net.bus)))
+        initial_bus = starting_points[np.random.randint(0, len(starting_points))]
         
         if arguments.n_1:
-            busses = list(net.bus.index)
-            downed_bus = np.random.randint(0, len(busses))
-            print(busses)
-            print(downed_bus)
-            del busses[downed_bus]
-            new_net = tb.select_subnet(net, busses)
-        elif arguments.n_2:
-            busses = [starting_point]  
+            subgraph_busses = list(full_net.bus.index)
+            downed_bus = np.random.randint(0, len(subgraph_busses))
+            del subgraph_busses[downed_bus]
 
-            while len(busses) < length:
-                s = busses[np.random.randint(0, len(busses))]
-                f = net.line.to_bus[np.where(np.array(net.line.from_bus) == s)[0]]
-                t = net.line.from_bus[np.where(np.array(net.line.to_bus) == s)[0]]
-                f_trafo = net.trafo.hv_bus[np.where(np.array(net.trafo.lv_bus) == s)[0]]
-                t_trafo = net.trafo.lv_bus[np.where(np.array(net.trafo.hv_bus) == s)[0]]
+        elif arguments.n_2:
+            subgraph_busses = [initial_bus]
+            while len(subgraph_busses) < subgraph_length:
+                s = subgraph_busses[np.random.randint(0, len(subgraph_busses))]
+                f = full_net.line.to_bus[np.where(np.array(full_net.line.from_bus) == s)[0]]
+                t = full_net.line.from_bus[np.where(np.array(full_net.line.to_bus) == s)[0]]
+                f_trafo = full_net.trafo.hv_bus[np.where(np.array(full_net.trafo.lv_bus) == s)[0]]
+                t_trafo = full_net.trafo.lv_bus[np.where(np.array(full_net.trafo.hv_bus) == s)[0]]
                 connected = np.concatenate((f, t, f_trafo, t_trafo))
-                new_busses = np.setdiff1d(connected, busses)
+                new_busses = np.setdiff1d(connected, subgraph_busses)
                 if len(new_busses) == 0:
                     continue
-                busses.append(new_busses[np.random.randint(0, len(new_busses))])
-                new_net = tb.select_subnet(net, busses)
-                
+                subgraph_busses.append(new_busses[np.random.randint(0, len(new_busses))])
         
         else:
-            subgraph_length = np.random.randint(arguments.min_size, min(arguments.max_size, len(full_net.bus)))
-            initial_bus = starting_points[np.random.randint(0, len(starting_points))]
             subgraph_busses = subgraphing_method(full_net, initial_bus, subgraph_length)
-            subgraph_net = tb.select_subnet(full_net, subgraph_busses)
+        
+        subgraph_net = tb.select_subnet(full_net, subgraph_busses)
 
         try:
-            if(arguments.n_1 or arguments.n_2):
-                pp.runpp(new_net)
             pp.runpp(subgraph_net)
         except:
             print(f"Network not solvable trying a new one")
