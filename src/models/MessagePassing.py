@@ -50,7 +50,7 @@ class MessagePassingGNN(MessagePassing):
         # define a mlp for update
         self.mlp_update = nn.Sequential(nn.Linear(output_dim, 256), nn.ReLU(), nn.Linear(256, output_dim))
 
-        self.dropuout_rate = dropout_rate
+        self.dropout_rate = dropout_rate
         
     def forward(self, data):
         # x has shape [num_nodes, input_dim]
