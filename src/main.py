@@ -185,10 +185,11 @@ def train_model(arguments, train, val, test):
 
 def train_batch(data, model, optimizer, criterion, device='cpu'):
     model.to(device)
-    optimizer.zero_grad()
     out = model(data)
-    loss = criterion(out, data.y) + physics_loss(data, out)
+    out_clone = out.clone().detach()
+    loss = criterion(out, data.y) + physics_loss(data, out_clone)
     loss.backward()
+    optimizer.zero_grad()
     optimizer.step()
     return loss
 
