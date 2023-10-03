@@ -10,9 +10,9 @@ import string
 import networkx as nx
 import pandapower as pp
 import pandapower.plotting as ppl
-from architectures.GAT import GATNodeRegression
+# from architectures.GAT import GATNodeRegression
 
-from models.GATConv import GATConvolution
+# from models.GATConv import GATConvolution
 # from playground.Loss_Playground import Loss_Playground
 
 import torch as th

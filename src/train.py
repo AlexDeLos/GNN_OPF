@@ -1,5 +1,6 @@
 from torch_geometric.loader import DataLoader as pyg_DataLoader
 import tqdm
+import torch as th
 from utils import get_gnn, get_optim, get_criterion
 
 
@@ -49,11 +50,65 @@ def train_batch(data, model, optimizer, criterion, device='cpu'):
     model.to(device)
     optimizer.zero_grad()
     out = model(data)
-    loss = criterion(out, data.y)
+    out_clone = out.clone().detach()
+    loss = criterion(out, data.y) + physics_loss(data, out)
     loss.backward()
     optimizer.step()
     return loss
 
+
+def physics_loss(network, output, log_loss=False):
+    """
+    Calculates power imbalances at each node in the graph and sums results.
+    Based on loss from https://arxiv.org/abs/2204.07000
+
+    @param network:    Input graph used for the NN model.
+                    Expected to contain nodes list and edges between nodes with features:
+                        - resistance r over the line
+                        - reactance x over the line
+    @param output:  Model outputs for each node. Node indices expected to match order in input graph.
+                    Expected to contain:
+                        - Active power p_mw
+                        - Reactive power q_mvar
+                        - Volt. mag. vm_pu
+                        - Volt. angle va_degree
+    @param log_loss: Use normal summed absolute imbalances at each node or a logarithmic version.
+
+    @return:    Returns total power imbalance over all the nodes.
+    """
+    # Get predicted power levels from the model outputs
+    # active_imbalance = output.p_mw #output[:, 0]
+    # reactive_imbalance = output.q_mvar #output[:, 1]
+    active_imbalance = output[:,0] # th.zeros(output_r.shape[0])
+    reactive_imbalance = output[:,1]#th.zeros(output_r.shape[0])
+    #output = [[0,1,2,3]]*network.num_edges
+    #output[:][2] = output_r
+
+    # Calculate admittance values (conductance, susceptance) from impedance values (edges)
+    # edge_att[:, 0] should contain resistances r, edge_att[:, 1] should contain reactances x,
+    denom = network.edge_attr[:, 0] * network.edge_attr[:, 0]
+    denom += network.edge_attr[:, 1] * network.edge_attr[:, 1]
+    conductances = network.edge_attr[:, 0] / denom
+    susceptances = -1.0 * network.edge_attr[:, 1] / denom
+
+    # Go over all edges and update the power imbalances for each node accordingly
+    # TODO: way to do this with tensors instead of loop?
+    for i, x in enumerate(th.transpose(network.edge_index, 0, 1)):
+        # x contains node indices [from, to]
+        angle_diff = output[x[0],3] - output[x[1],3]
+
+        active_imbalance[x[0]] -= th.abs(output[x[0],2]).detach().numpy() * th.abs(output[x[1],2]).detach().numpy() \
+                                    * (conductances[i] * th.cos(angle_diff).detach().numpy() + susceptances[i] * th.sin(angle_diff)).detach().numpy()
+        reactive_imbalance[x[0]] -= th.abs(output[x[0],2]).detach().numpy() * th.abs(output[x[1],2]).detach().numpy() \
+                                    * (conductances[i] * th.sin(angle_diff).detach().numpy() - susceptances[i] * th.cos(angle_diff)).detach().numpy()
+
+    # Use either sum of absolute imbalances or log of squared imbalances
+    if log_loss:
+        tot_loss = th.sum(np.abs(active_imbalance) + np.abs(reactive_imbalance))
+    else:
+        tot_loss = th.log(1.0 + th.sum(active_imbalance * active_imbalance + reactive_imbalance * reactive_imbalance))
+
+    return tot_loss
 
 def evaluate_batch(data, model, criterion, device='cpu'):
     model.to(device)
