@@ -40,8 +40,8 @@ def get_arguments():
 def load_data(dir):
     graph_path = f"{dir}/x"
     sol_path = f"{dir}/y"
-    graph_paths = sorted(os.listdir(graph_path))[:10]
-    sol_paths = sorted(os.listdir(sol_path))[:40]
+    graph_paths = sorted(os.listdir(graph_path))#[:10]
+    sol_paths = sorted(os.listdir(sol_path))#[:40]
     data = []
 
     for i, g in tqdm.tqdm(enumerate(graph_paths)):
