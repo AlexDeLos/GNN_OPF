@@ -169,6 +169,9 @@ __MACOSX/
 
 .vscode/
 
+Data/data/
+
 trained_models/
+
 *.json
 *.csv
