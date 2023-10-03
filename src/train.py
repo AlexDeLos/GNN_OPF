@@ -1,65 +1,62 @@
-import torch
-from utils import train_single_graph, evaluate_single_graph, test_single_graph, train_epoch, evaluate_epoch, test_epoch
-from models.GraphSAGE import GraphSAGE
-from torch_geometric.datasets import Planetoid
-from torch_geometric.datasets import PPI
-from torch_geometric.transforms import NormalizeFeatures
-from torch_geometric.data import DataLoader
-
-"""# single graph training
-# dataset contains 1 graph
-dataset = Planetoid(root='data/Planetoid', name='Cora', transform=NormalizeFeatures())
-data = dataset[0]
-
-# with open('Data/test.p', 'rb') as handle:
-#     tra_dataset_pyg = pickle.load(handle)
-# data = tra_dataset_pyg[0]
-# instantiate model
-model = GAT(in_dim=data.num_features, hidden_dim=[5, 3], out_dim=7, num_layers=2, heads=[1,1])
-#model = GraphSAGE(in_dim=data.num_features, hidden_dim=5, out_dim=7, num_layers=2, dropout=0.2)
-# setup training
-optimizer = torch.optim.Adam(model.parameters(), lr=0.005, weight_decay=5e-4)
-criterion = torch.nn.CrossEntropyLoss()
-
-# train
-for epoch in range(1, 150):
-    loss = train_single_graph(data=data, model=model, optimizer=optimizer, criterion=criterion)
-    val_loss = evaluate_single_graph(data=data, model=model, criterion=criterion)
-    test_acc = test_single_graph(data=data, model=model)
-
-    if epoch % 10 == 0:
-        print(f'Epoch: {epoch:03d}, trn_Loss: {loss:.3f}, val_loss: {val_loss:.3f}, tst_acc: {test_acc:.3f}')"""
-
-#############################################################################################################
-
-# multi graph training
-
-# use ppi dataset
-"""train_dataset = ...
-val_dataset = ...
-test_dataset = ...
+from torch_geometric.loader import DataLoader as pyg_DataLoader
+import tqdm
+from utils import get_gnn, get_optim, get_criterion
 
 
-# instantiate model
-model = GAT(dim_input=train_dataset.num_features, dim_hidden=[5, 3], dim_output=train_dataset.num_classes, num_layers=2, heads=[1,1])
+def train_model(arguments, train, val, test):
+    input_dim = train[0].x.shape[1]
+    edge_attr_dim = train[0].edge_attr.shape # why not [1]
+    output_dim = train[0].y.shape[1]
 
-# setup training
-optimizer = torch.optim.Adam(model.parameters(), lr=0.005, weight_decay=5e-4)
-criterion = torch.nn.CrossEntropyLoss()
+    print(f"Input shape: {input_dim}\nOutput shape: {output_dim}")
 
-# setup dataloaders for trian, val and test
-train_data_loader = DataLoader(train_dataset, batch_size=2, shuffle=True)
-val_data_loader = DataLoader(val_dataset, batch_size=2, shuffle=False)
-test_data_loader = DataLoader(test_dataset, batch_size=2, shuffle=False)
+    batch_size = arguments.batch_size
+    train_dataloader = pyg_DataLoader(train, batch_size=batch_size, shuffle=True)
+    val_dataloader = pyg_DataLoader(val, batch_size=batch_size, shuffle=True)
+    gnn_class = get_gnn(arguments.gnn)
+    gnn = gnn_class(input_dim, output_dim, edge_attr_dim)
+    print(f"GNN: \n{gnn}")
 
-# train
-for epoch in range(1, 5):
-    loss = train_epoch(model=model, loader=train_data_loader, optimizer=optimizer, criterion=criterion)
-    val_loss = evaluate_epoch(model=model, loader=val_data_loader, criterion=criterion)
-    test_acc = test_epoch(model=model, loader=test_data_loader)
+    optimizer_class = get_optim(arguments.optimizer)
+    optimizer = optimizer_class(gnn.parameters(), lr=arguments.learning_rate)
+    criterion = get_criterion(arguments.criterion)
+
+    losses = []
+    val_losses = []
+    for epoch in tqdm.tqdm(range(arguments.n_epochs)): #args epochs
+        epoch_loss = 0.0
+        epoch_val_loss = 0.0
+        gnn.train()
+        for batch in train_dataloader:
+            epoch_loss += train_batch(data=batch, model=gnn, optimizer=optimizer, criterion=criterion)
+        gnn.eval()
+        for batch in val_dataloader:
+            epoch_val_loss += evaluate_batch(data=batch, model=gnn, criterion=criterion)
+
+        avg_epoch_loss = epoch_loss.item() / len(train_dataloader)
+        avg_epoch_val_loss = epoch_val_loss.item() / len(val_dataloader)
+
+        losses.append(avg_epoch_loss)
+        val_losses.append(avg_epoch_val_loss)
+
+        if epoch % 10 == 0:
+            print(f'Epoch: {epoch:03d}, trn_Loss: {avg_epoch_loss:.3f}, val_loss: {avg_epoch_val_loss:.3f}')
     
-    print(f'Epoch: {epoch:03d}, trn_Loss: {loss:.3f}, val_loss: {val_loss:.3f}, tst_acc: {test_acc:.3f}')"""
+    return gnn, losses, val_losses
 
 
+def train_batch(data, model, optimizer, criterion, device='cpu'):
+    model.to(device)
+    optimizer.zero_grad()
+    out = model(data)
+    loss = criterion(out, data.y)
+    loss.backward()
+    optimizer.step()
+    return loss
 
 
+def evaluate_batch(data, model, criterion, device='cpu'):
+    model.to(device)
+    out = model(data)
+    loss = criterion(out, data.y)
+    return loss
