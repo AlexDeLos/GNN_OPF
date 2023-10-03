@@ -32,7 +32,6 @@ def get_arguments():
     parser.add_argument("--min_size", type=int, default=5)
     parser.add_argument("--max_size", type=int, default=30)
     parser.add_argument("--n_1", type=bool, default=False)
-    parser.add_argument("--n_2", , type=bool, default=False)
     parser.add_argument("--subgraphing_method", choices=['rnd_neighbor', 'bfs', 'rnd_walk'], default='rnd_neighbor')
     args = parser.parse_args()
     print(args)
@@ -122,21 +121,7 @@ def create_networks(arguments):
             subgraph_busses = list(full_net.bus.index)
             downed_bus = np.random.randint(0, len(subgraph_busses))
             del subgraph_busses[downed_bus]
-
-        elif arguments.n_2:
-            subgraph_busses = [initial_bus]
-            while len(subgraph_busses) < subgraph_length:
-                s = subgraph_busses[np.random.randint(0, len(subgraph_busses))]
-                f = full_net.line.to_bus[np.where(np.array(full_net.line.from_bus) == s)[0]]
-                t = full_net.line.from_bus[np.where(np.array(full_net.line.to_bus) == s)[0]]
-                f_trafo = full_net.trafo.hv_bus[np.where(np.array(full_net.trafo.lv_bus) == s)[0]]
-                t_trafo = full_net.trafo.lv_bus[np.where(np.array(full_net.trafo.hv_bus) == s)[0]]
-                connected = np.concatenate((f, t, f_trafo, t_trafo))
-                new_busses = np.setdiff1d(connected, subgraph_busses)
-                if len(new_busses) == 0:
-                    continue
-                subgraph_busses.append(new_busses[np.random.randint(0, len(new_busses))])
-        
+    
         else:
             subgraph_busses = subgraphing_method(full_net, initial_bus, subgraph_length)
         
