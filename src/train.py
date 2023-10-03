@@ -1,6 +1,7 @@
 from torch_geometric.loader import DataLoader as pyg_DataLoader
 import tqdm
 import torch as th
+import numpy as np
 from utils import get_gnn, get_optim, get_criterion
 
 
@@ -46,18 +47,21 @@ def train_model(arguments, train, val, test):
     return gnn, losses, val_losses
 
 
-def train_batch(data, model, optimizer, criterion, device='cpu'):
+def train_batch(data, model, optimizer, criterion, physics_crit=True, device='cpu'):
     model.to(device)
     optimizer.zero_grad()
     out = model(data)
-    out_clone = out.clone().detach()
-    loss = criterion(out, data.y) + physics_loss(data, out)
+    # out_clone = out.clone().detach()
+    if physics_crit:
+        loss = physics_loss(data, out)
+    else:
+        loss = criterion(out, data.y)
     loss.backward()
     optimizer.step()
     return loss
 
 
-def physics_loss(network, output, log_loss=False):
+def physics_loss(network, output, log_loss=True):
     """
     Calculates power imbalances at each node in the graph and sums results.
     Based on loss from https://arxiv.org/abs/2204.07000
@@ -85,11 +89,14 @@ def physics_loss(network, output, log_loss=False):
     #output[:][2] = output_r
 
     # Calculate admittance values (conductance, susceptance) from impedance values (edges)
-    # edge_att[:, 0] should contain resistances r, edge_att[:, 1] should contain reactances x,
-    denom = network.edge_attr[:, 0] * network.edge_attr[:, 0]
-    denom += network.edge_attr[:, 1] * network.edge_attr[:, 1]
-    conductances = network.edge_attr[:, 0] / denom
-    susceptances = -1.0 * network.edge_attr[:, 1] / denom
+    # edge_att[:, 0] should contain resistances r, edge_att[:, 1] should contain reactances x, edge_attr[:,-1] line length (km)
+    resist_line_total = network.edge_attr[:, 0] * network.edge_attr[:, -1]
+    react_line_total = network.edge_attr[:, 1] * network.edge_attr[:, -1]
+
+    denom = resist_line_total * resist_line_total
+    denom += react_line_total * react_line_total
+    conductances = resist_line_total / denom
+    susceptances = -1.0 * react_line_total / denom
 
     # Go over all edges and update the power imbalances for each node accordingly
     # TODO: way to do this with tensors instead of loop?
@@ -97,16 +104,22 @@ def physics_loss(network, output, log_loss=False):
         # x contains node indices [from, to]
         angle_diff = output[x[0],3] - output[x[1],3]
 
-        active_imbalance[x[0]] -= th.abs(output[x[0],2]).detach().numpy() * th.abs(output[x[1],2]).detach().numpy() \
-                                    * (conductances[i] * th.cos(angle_diff).detach().numpy() + susceptances[i] * th.sin(angle_diff)).detach().numpy()
-        reactive_imbalance[x[0]] -= th.abs(output[x[0],2]).detach().numpy() * th.abs(output[x[1],2]).detach().numpy() \
-                                    * (conductances[i] * th.sin(angle_diff).detach().numpy() - susceptances[i] * th.cos(angle_diff)).detach().numpy()
+        # active_imbalance[x[0]] -= th.abs(output[x[0],2]).detach().numpy() * th.abs(output[x[1],2]).detach().numpy() \
+        #                             * (conductances[i] * th.cos(angle_diff).detach().numpy() + susceptances[i] * th.sin(angle_diff)).detach().numpy()
+        # reactive_imbalance[x[0]] -= th.abs(output[x[0],2]).detach().numpy() * th.abs(output[x[1],2]).detach().numpy() \
+        #                             * (conductances[i] * th.sin(angle_diff).detach().numpy() - susceptances[i] * th.cos(angle_diff)).detach().numpy()
+
+        # TODO: fix detach issue leading to inplace modifications
+        active_imbalance[x[0]] -= th.abs_(output[x[0], 2]).detach() * th.abs_(output[x[1], 2]).detach() \
+                                  * (conductances[i] * th.cos(angle_diff) + susceptances[i] * th.sin(angle_diff))
+        reactive_imbalance[x[0]] -= th.abs_(output[x[0], 2]).detach() * th.abs_(output[x[1], 2]).detach() \
+                                    * (conductances[i] * th.sin(angle_diff) - susceptances[i] * th.cos(angle_diff))
 
     # Use either sum of absolute imbalances or log of squared imbalances
     if log_loss:
-        tot_loss = th.sum(np.abs(active_imbalance) + np.abs(reactive_imbalance))
-    else:
         tot_loss = th.log(1.0 + th.sum(active_imbalance * active_imbalance + reactive_imbalance * reactive_imbalance))
+    else:
+        tot_loss = th.sum(np.abs(active_imbalance) + np.abs(reactive_imbalance))
 
     return tot_loss
 

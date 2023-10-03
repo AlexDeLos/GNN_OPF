@@ -88,8 +88,8 @@ def create_data_instance(graph, y_bus, y_gen, y_line):
         # set each node label
         g.nodes[node.Index]['y'] = [float(y_bus['p_mw'][node.Index]),
                                     float(y_bus['q_mvar'][node.Index]),
-                                    float(y_bus['va_degree'][node.Index]),
-                                    float(y_bus['vm_pu'][node.Index])]
+                                    float(y_bus['vm_pu'][node.Index]),
+                                    float(y_bus['va_degree'][node.Index])]
         
     # quit()
 
