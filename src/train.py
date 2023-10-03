@@ -12,7 +12,7 @@ def train_model(arguments, train, val, test):
 
     batch_size = arguments.batch_size
     train_dataloader = pyg_DataLoader(train, batch_size=batch_size, shuffle=True)
-    val_dataloader = pyg_DataLoader(val, batch_size=batch_size, shuffle=True)
+    val_dataloader = pyg_DataLoader(val, batch_size=batch_size, shuffle=False)
     gnn_class = get_gnn(arguments.gnn)
     gnn = gnn_class(input_dim, output_dim, edge_attr_dim)
     print(f"GNN: \n{gnn}")
@@ -41,6 +41,18 @@ def train_model(arguments, train, val, test):
 
         if epoch % 10 == 0:
             print(f'Epoch: {epoch:03d}, trn_Loss: {avg_epoch_loss:.3f}, val_loss: {avg_epoch_val_loss:.3f}')
+        
+        #Early stopping
+        try:  
+            if val_losses[-1]>=val_losses[-2]:
+                early_stop += 1
+                if early_stop == arguments.patience:
+                    print("Early stopping! Epoch:", epoch)
+                    break
+            else:
+                early_stop = 0
+        except:
+            early_stop = 0
     
     return gnn, losses, val_losses
 
