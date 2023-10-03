@@ -11,6 +11,10 @@ import time
 from pathlib import Path
 import subgraphs_methods
 
+import warnings
+
+# Suppress FutureWarning
+warnings.filterwarnings("ignore", category=FutureWarning)
 
 def generate():
     arguments = get_arguments()
