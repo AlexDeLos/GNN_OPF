@@ -2,13 +2,17 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch_geometric.nn import GATConv
 
-class GATConvolution(nn.Module):
+class GAT(nn.Module):
+
+    class_name = "GAT"
+
     def __init__(self, input_dim, output_dim, edge_attr_dim,
                  n_hidden_gat=2, 
                  hidden_gat_dim=16, 
                  n_hidden_lin=2, 
                  hidden_lin_dim=64, 
-                 heads=1, *args, **kwargs) -> None:
+                 heads=1,
+                 dropout_rate=0.3, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self.convs = nn.ModuleList()
         self.lins = nn.ModuleList()
@@ -22,16 +26,19 @@ class GATConvolution(nn.Module):
             self.lins.append(nn.Linear(hidden_lin_dim, hidden_lin_dim))
 
         self.lins.append(nn.Linear(hidden_lin_dim, output_dim))
+        self.dropout_rate = dropout_rate
 
     def forward(self, data):
         x, edge_index, edge_attr = data.x, data.edge_index, data.edge_attr
         
         for c in self.convs:
             x = c(x, edge_index, edge_attr)
+            #x = F.dropout(x, p=self.dropout_rate, training=self.training)
             x = F.leaky_relu(x, 0.2)
                 
         for l in self.lins[:-1]:
             x = l(x)
+            #x = F.dropout(x, p=self.dropout_rate, training=self.training)
             x = F.relu(x, 0.2)
         x = self.lins[-1](x)
         return x
