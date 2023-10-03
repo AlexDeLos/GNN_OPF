@@ -1,7 +1,7 @@
 import torch.nn.functional as F
 from torch_geometric.nn import SAGEConv
 import torch
-from torch.nn import Linear
+import torch.nn as nn
 
 class GraphSAGE(torch.nn.Module):
 
@@ -11,34 +11,47 @@ class GraphSAGE(torch.nn.Module):
             self, 
             input_dim, 
             output_dim, 
-            edge_attr_dim=0, 
-            hidden_dim=64,
-            num_layers=2, 
-            dropout=0.1
+            edge_attr_dim=0, # not taken by SAGEConv, necessary for compatibility with GAT
+            n_hidden_conv=2, 
+            hidden_conv_dim=64, 
+            n_hidden_lin=1, 
+            hidden_lin_dim=64,  
+            dropout=0.1,
         ):
-        super().__init__()
-        self.convs = torch.nn.ModuleList()
-
-        if num_layers == 1:
-            self.convs.append(SAGEConv(input_dim, hidden_dim))
-        else:
-            self.convs.append(SAGEConv(input_dim, hidden_dim))
-            for i in range(num_layers - 1):
-                self.convs.append(SAGEConv(hidden_dim, hidden_dim))
         
+        super().__init__()
+        self.convs = nn.ModuleList()
+        self.lins = nn.ModuleList()
+
+        self.convs.append(SAGEConv(in_channels=input_dim, out_channels=hidden_conv_dim))
+        for _ in range(n_hidden_conv):
+            self.convs.append(SAGEConv(in_channels=hidden_conv_dim, out_channels=hidden_conv_dim))
+        
+        self.lins.append(nn.Linear(hidden_conv_dim, hidden_lin_dim))
+        for _ in range(n_hidden_lin):
+            self.lins.append(nn.Linear(hidden_lin_dim, hidden_lin_dim))
+
+        self.lins.append(nn.Linear(hidden_lin_dim, output_dim))
+
         self.dropout_rate = dropout
-        self.linear = Linear(hidden_dim, output_dim)
 
     # https://pytorch-geometric.readthedocs.io/en/latest/cheatsheet/gnn_cheatsheet.html
     # SAGEConv does not take edge attributes
     def forward(self, data):
         x, edge_index = data.x, data.edge_index
-        for i in range(len(self.convs)-1):
-            x = self.convs[i](x=x, edge_index=edge_index)
+
+        for c in self.convs:
+            x = c(x=x, edge_index=edge_index)
             x = F.dropout(x, p=self.dropout_rate, training=self.training)
             x = F.elu(x)
-        
-        x = self.linear(x)
+
+        for l in self.lins[:-1]:
+            x = l(x)
+            x = F.dropout(x, p=self.dropout_rate, training=self.training)
+            x = F.elu(x)
+
+        x = self.lins[-1](x)
+
         return x
 
         

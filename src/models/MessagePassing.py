@@ -9,7 +9,16 @@ class MessagePassingGNN(MessagePassing):
 
     class_name = "MessagePassing"
 
-    def __init__(self, input_dim, output_dim, edge_attr_dim, hidden_dim=64, aggr='mean', num_layers=5):
+    def __init__(
+            self, 
+            input_dim, 
+            output_dim, 
+            edge_attr_dim, 
+            hidden_dim=64,
+            num_layers=3,
+            dropout_rate=0.1, 
+            aggr='mean', 
+        ):
         super(MessagePassingGNN, self).__init__(aggr=aggr)
 
         # Define your layers here.
@@ -41,6 +50,8 @@ class MessagePassingGNN(MessagePassing):
         # define a mlp for update
         self.mlp_update = nn.Sequential(nn.Linear(output_dim, 256), nn.ReLU(), nn.Linear(256, output_dim))
 
+        self.dropuout_rate = dropout_rate
+        
     def forward(self, data):
         # x has shape [num_nodes, input_dim]
         # edge_index has shape [2, E]
@@ -52,9 +63,11 @@ class MessagePassingGNN(MessagePassing):
         # Step 2: Linearly transform node feature matrix.
         for node_layer in self.node_layers[:-1]:
             x = F.relu(node_layer(x))
+            x = F.dropout(x, p=self.dropout_rate, training=self.training)
         
         for edge_attr_layer in self.edge_layers[:-1]:
             edge_attr = F.relu(edge_attr_layer(edge_attr))
+            edge_attr = F.dropout(edge_attr, p=self.dropout_rate, training=self.training)
 
         # Step 4-5: Start propagating messages.
         # propage will call the message function, then the aggregate (i.e. mean) function,
