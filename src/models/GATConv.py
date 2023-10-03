@@ -24,10 +24,10 @@ class GATConvolution(nn.Module):
         self.lins.append(nn.Linear(hidden_lin_dim, output_dim))
 
     def forward(self, data):
-        x, edge_index = data.x, data.edge_index
+        x, edge_index, edge_attr = data.x, data.edge_index, data.edge_attr
         
         for c in self.convs:
-            x = c(x, edge_index)
+            x = c(x, edge_index, edge_attr)
             x = F.leaky_relu(x, 0.2)
                 
         for l in self.lins[:-1]:

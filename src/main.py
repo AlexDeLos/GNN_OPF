@@ -10,9 +10,9 @@ import string
 import networkx as nx
 import pandapower as pp
 import pandapower.plotting as ppl
-from architectures.GAT import GATNodeRegression
 
 from models.GATConv import GATConvolution
+from models.GINE import GINE
 
 import torch as th
 import torch.nn as nn
@@ -48,7 +48,7 @@ def main():
 def get_arguments():
     parser = argparse.ArgumentParser(prog="GNN script",
                                      description="Run a GNN to solve an inductive power system problem (power flow only for now)")
-    parser.add_argument("gnn", choices=["GATConv", "GAT"], default="GATConv")
+    parser.add_argument("gnn", choices=["GATConv", "GINE"], default="GATConv")
     parser.add_argument("--train", default="./Data/train")
     parser.add_argument("--val", default="./Data/val")
     parser.add_argument("--test", default="./Data/test")
@@ -107,12 +107,11 @@ def create_data_instance(graph, y_bus, y_gen, y_line):
                                     float(node.p_mw_load), #load
                                     float(node.q_mvar)] #load
         
-        g.nodes[node.Index]['y'] = [# float(y_bus['p_mw'][node.Index])]
+        g.nodes[node.Index]['y'] = [float(y_bus['p_mw'][node.Index])]
                                     # float(y_bus['q_mvar'][node.Index])]
-                                    float(y_bus['va_degree'][node.Index])]
+                                    # float(y_bus['va_degree'][node.Index])]
                                     # float(y_bus['vm_pu'][node.Index])]
         
-    # quit()
     for edges in graph.line.itertuples():
         g.edges[edges.from_bus, edges.to_bus, ('line', edges.Index)]['edge_attr'] = [float(edges.r_ohm_per_km),
                                                                                      float(edges.x_ohm_per_km),
@@ -128,8 +127,8 @@ def create_data_instance(graph, y_bus, y_gen, y_line):
 def get_gnn(gnn_name):
     if gnn_name == "GATConv":
         return GATConvolution
-    if gnn_name == "GAT":
-        return GATNodeRegression
+    if gnn_name == "GINE":
+        return GINE
     
 def get_optim(optim_name):
     if optim_name == "Adam":
@@ -143,10 +142,10 @@ def get_criterion(criterion_name):
     
 def train_model(arguments, train, val, test):
     input_dim = train[0].x.shape[1]
-    edge_attr_dim = train[0].edge_attr.shape
+    edge_attr_dim = train[0].edge_attr.shape[1]
     output_dim = train[0].y.shape[1]
 
-    print(f"Input shape: {input_dim}\nOutput shape: {output_dim}")
+    print(f"Input shape: {input_dim}\nOutput shape: {output_dim}\nEdge attribute shape: {edge_attr_dim}")
 
     batch_size = arguments.batch_size
     train_dataloader = pyg_DataLoader(train, batch_size=batch_size, shuffle=True)
