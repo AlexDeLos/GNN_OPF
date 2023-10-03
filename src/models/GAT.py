@@ -27,9 +27,9 @@ class GAT(nn.Module):
 
         self.convs.append(GATConv(in_channels=input_dim, out_channels=hidden_conv_dim, heads=heads, edge_attr_dim=edge_attr_dim))
         for _ in range(n_hidden_conv):
-            self.convs.append(GATConv(in_channels=hidden_conv_dim, out_channels=hidden_conv_dim, heads=heads, edge_attr_dim=edge_attr_dim))
+            self.convs.append(GATConv(in_channels=hidden_conv_dim * heads, out_channels=hidden_conv_dim, heads=heads, edge_attr_dim=edge_attr_dim))
 
-        self.lins.append(nn.Linear(hidden_conv_dim, hidden_lin_dim))
+        self.lins.append(nn.Linear(hidden_conv_dim * heads, hidden_lin_dim))
         for _ in range(n_hidden_lin):
             self.lins.append(nn.Linear(hidden_lin_dim, hidden_lin_dim))
 
@@ -38,7 +38,7 @@ class GAT(nn.Module):
 
     def forward(self, data):
         x, edge_index, edge_attr = data.x, data.edge_index, data.edge_attr
-        
+
         for c in self.convs:
             x = c(x, edge_index, edge_attr)
             x = F.dropout(x, p=self.dropout_rate, training=self.training)
