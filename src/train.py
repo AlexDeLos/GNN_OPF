@@ -1,4 +1,5 @@
 from torch_geometric.loader import DataLoader as pyg_DataLoader
+import torch_geometric.utils as pyg_util
 import tqdm
 import torch as th
 import numpy as np
@@ -83,10 +84,11 @@ def physics_loss(network, output, log_loss=True):
     # Get predicted power levels from the model outputs
     # active_imbalance = output.p_mw #output[:, 0]
     # reactive_imbalance = output.q_mvar #output[:, 1]
-    active_imbalance = output[:,0] # th.zeros(output_r.shape[0])
-    reactive_imbalance = output[:,1]#th.zeros(output_r.shape[0])
+    active_imbalance = output[:, 0]  # th.zeros(output_r.shape[0])
+    reactive_imbalance = output[:, 1]  # th.zeros(output_r.shape[0])
     #output = [[0,1,2,3]]*network.num_edges
     #output[:][2] = output_r
+
 
     # Calculate admittance values (conductance, susceptance) from impedance values (edges)
     # edge_att[:, 0] should contain resistances r, edge_att[:, 1] should contain reactances x, edge_attr[:,-1] line length (km)
@@ -98,22 +100,35 @@ def physics_loss(network, output, log_loss=True):
     conductances = resist_line_total / denom
     susceptances = -1.0 * react_line_total / denom
 
+    # Tensor operations instead of edges loop
+    from_nodes = pyg_util.select(output, network.edge_index[0], 0)  # list of duplicated node outputs based on edges
+    to_nodes = pyg_util.select(output, network.edge_index[1], 0)
+    angle_diffs = from_nodes[:, 3] - to_nodes[:, 3]  # list of angle differences for all edges
+
+    # Inplace operation error:
+    # act_imb = th.abs_(from_nodes[:, 2]) * th.abs_(to_nodes[:, 2]) * (conductances * th.cos(angle_diffs) + susceptances * th.sin(angle_diffs))  # per edge power flow into/out of from_nodes
+    # rea_imb = th.abs_(from_nodes[:, 2]) * th.abs_(to_nodes[:, 2]) * (conductances * th.sin(angle_diffs) - susceptances * th.cos(angle_diffs))
+
+    # .clone() fixes error and should keep gradients flowing as expected
+    act_imb = th.abs_(from_nodes.clone()[:, 2]) * th.abs_(to_nodes.clone()[:, 2]) * (conductances * th.cos(angle_diffs) + susceptances * th.sin(angle_diffs))  # per edge power flow into/out of from_nodes
+    rea_imb = th.abs_(from_nodes.clone()[:, 2]) * th.abs_(to_nodes.clone()[:, 2]) * (conductances * th.sin(angle_diffs) - susceptances * th.cos(angle_diffs))
+
+    aggr_act_imb = pyg_util.scatter(act_imb, network.edge_index[0])  # aggregate all active powers per from_node
+    aggr_rea_imb = pyg_util.scatter(rea_imb, network.edge_index[0])
+    active_imbalance = output[:, 0] - aggr_act_imb  # subtract from power at each node to find imbalance
+    reactive_imbalance = output[:, 1] - aggr_rea_imb
+
+
+    # Initial loop version instead of tensor operations
     # Go over all edges and update the power imbalances for each node accordingly
-    # TODO: way to do this with tensors instead of loop?
-    for i, x in enumerate(th.transpose(network.edge_index, 0, 1)):
-        # x contains node indices [from, to]
-        angle_diff = output[x[0],3] - output[x[1],3]
-
-        # active_imbalance[x[0]] -= th.abs(output[x[0],2]).detach().numpy() * th.abs(output[x[1],2]).detach().numpy() \
-        #                             * (conductances[i] * th.cos(angle_diff).detach().numpy() + susceptances[i] * th.sin(angle_diff)).detach().numpy()
-        # reactive_imbalance[x[0]] -= th.abs(output[x[0],2]).detach().numpy() * th.abs(output[x[1],2]).detach().numpy() \
-        #                             * (conductances[i] * th.sin(angle_diff).detach().numpy() - susceptances[i] * th.cos(angle_diff)).detach().numpy()
-
-        # TODO: fix detach issue leading to inplace modifications
-        active_imbalance[x[0]] -= th.abs_(output[x[0], 2]).detach() * th.abs_(output[x[1], 2]).detach() \
-                                  * (conductances[i] * th.cos(angle_diff) + susceptances[i] * th.sin(angle_diff))
-        reactive_imbalance[x[0]] -= th.abs_(output[x[0], 2]).detach() * th.abs_(output[x[1], 2]).detach() \
-                                    * (conductances[i] * th.sin(angle_diff) - susceptances[i] * th.cos(angle_diff))
+    # for i, x in enumerate(th.transpose(network.edge_index, 0, 1)):
+    #     # x contains node indices [from, to]
+    #     angle_diff = output[x[0], 3] - output[x[1], 3]
+    #
+    #     active_imbalance[x[0]] -= th.abs_(output[x[0], 2]).detach() * th.abs_(output[x[1], 2]).detach() \
+    #                               * (conductances[i] * th.cos(angle_diff) + susceptances[i] * th.sin(angle_diff))
+    #     reactive_imbalance[x[0]] -= th.abs_(output[x[0], 2]).detach() * th.abs_(output[x[1], 2]).detach() \
+    #                                 * (conductances[i] * th.sin(angle_diff) - susceptances[i] * th.cos(angle_diff))
 
     # Use either sum of absolute imbalances or log of squared imbalances
     if log_loss:
