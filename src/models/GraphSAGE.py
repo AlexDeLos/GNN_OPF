@@ -11,7 +11,7 @@ class GraphSAGE(torch.nn.Module):
             self, 
             input_dim, 
             output_dim, 
-            edge_attr_dim=0, # not taken by SAGEConv, necessary for compatibility with GAT
+            edge_attr_dim=0, # not used by SAGEConv, necessary for compatibility with models that use edge attributes
             n_hidden_conv=2, 
             hidden_conv_dim=64, 
             n_hidden_lin=1, 
