@@ -175,3 +175,5 @@ trained_models/
 
 *.json
 *.csv
+
+loaded_data/
