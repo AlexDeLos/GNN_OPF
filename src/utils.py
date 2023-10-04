@@ -72,8 +72,8 @@ def load_data(train_dir, val_dir, test_dir):
         test = load_data_helper(test_dir)
 
         # create folder if it doesn't exist
-        if not os.path.exists(".data_generation/loaded_data"):
-            os.makedirs(".data_generation/loaded_data")
+        if not os.path.exists("./data_generation/loaded_data"):
+            os.makedirs("./data_generation/loaded_data")
 
         # save data to pkl
         write_to_pkl(train, "./data_generation/loaded_data/train.pkl")
