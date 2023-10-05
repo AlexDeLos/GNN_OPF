@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 from models.GAT import GAT
 from models.MessagePassing import MessagePassingGNN
 from models.GraphSAGE import GraphSAGE
+from models.GINE import GINE
 import os
 import pandapower.plotting as ppl
 import pandas as pd
@@ -20,8 +21,8 @@ def get_arguments():
     parser = argparse.ArgumentParser(prog="GNN script",
                                      description="Run a GNN to solve an inductive power system problem (power flow only for now)")
     
-    parser.add_argument("gnn", choices=["GAT", "MessagePassing", "GraphSAGE"], default="GAT")
-    parser.add_argument("--train", default="./Data/expand")
+    parser.add_argument("gnn", choices=["GAT", "MessagePassing", "GraphSAGE", "GINE"], default="GAT")
+    parser.add_argument("--train", default="./Data/train")
     parser.add_argument("--val", default="./Data/val")
     parser.add_argument("--test", default="./Data/test")
     parser.add_argument("-s", "--save_model", action="store_true", default=True)
@@ -115,6 +116,10 @@ def get_gnn(gnn_name):
     
     if gnn_name == "GraphSAGE":
         return GraphSAGE
+    
+    if gnn_name == "GINE":
+        return GINE
+
     
 
 def get_optim(optim_name):
