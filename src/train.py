@@ -5,7 +5,7 @@ from utils import get_gnn, get_optim, get_criterion
 
 def train_model(arguments, train, val, test):
     input_dim = train[0].x.shape[1]
-    edge_attr_dim = train[0].edge_attr.shape # why not [1]
+    edge_attr_dim = train[0].edge_attr.shape[1] # why not [1]
     output_dim = train[0].y.shape[1]
 
     print(f"Input shape: {input_dim}\nOutput shape: {output_dim}")

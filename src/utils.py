@@ -21,7 +21,7 @@ def get_arguments():
                                      description="Run a GNN to solve an inductive power system problem (power flow only for now)")
     
     parser.add_argument("gnn", choices=["GAT", "MessagePassing", "GraphSAGE"], default="GAT")
-    parser.add_argument("--train", default="./Data/train")
+    parser.add_argument("--train", default="./Data/expand")
     parser.add_argument("--val", default="./Data/val")
     parser.add_argument("--test", default="./Data/test")
     parser.add_argument("-s", "--save_model", action="store_true", default=True)
@@ -86,10 +86,10 @@ def create_data_instance(graph, y_bus, y_gen, y_line):
                                     float(node.q_mvar)] #load
         
         # set each node label
-        g.nodes[node.Index]['y'] = [# float(y_bus['p_mw'][node.Index])]
-                                    # float(y_bus['q_mvar'][node.Index])]
-                                    float(y_bus['va_degree'][node.Index])]
-                                    # float(y_bus['vm_pu'][node.Index])]
+        g.nodes[node.Index]['y'] = [float(y_bus['p_mw'][node.Index]),
+                                    float(y_bus['q_mvar'][node.Index]),
+                                    float(y_bus['va_degree'][node.Index]),
+                                    float(y_bus['vm_pu'][node.Index])]
         
     # quit()
 
@@ -134,12 +134,19 @@ def save_model(model, model_name, model_class_name):
         'model': model, # save the model object with some of its parameters
         'state_dict': model.state_dict(),
     }
+    # timestamp = pd.Timestamp.now().strftime("%Y-%m-%d")
+    model_name = model_name + "_" + model_class_name # + "_" + str(timestamp)
+    th.save(model.state_dict(), f"./trained_models/{model_name}.pt")
 
-    timestamp = pd.Timestamp.now().strftime("%Y-%m-%d %H:%M")
-
-    model_name = model_name + "_" + model_class_name + "_" + str(timestamp)
-
-    th.save(state, f"./trained_models/{model_name}")
+def load_model(gnn_type, path, data):
+    input_dim = data[0].x.shape[1]
+    edge_attr_dim = data[0].edge_attr.shape[1] 
+    output_dim = data[0].y.shape[1]
+    print(input_dim, edge_attr_dim, output_dim)
+    gnn_class = get_gnn(gnn_type)
+    model = gnn_class(input_dim, output_dim, edge_attr_dim)
+    model.load_state_dict(th.load(path))
+    return model
 
 
 def plot_losses(losses, val_losses, model_name):
