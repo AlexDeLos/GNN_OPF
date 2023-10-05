@@ -24,13 +24,14 @@ def generate():
 def get_arguments():
     parser = argparse.ArgumentParser(
         prog="power network subgraph generator",
-        description="Generates a specified number of subnetworks from a power network"
+        description="Generates a specified number of subnetworks from a power network",
     )
     parser.add_argument("network", choices=['case4gs', 'case5', 'case6ww', 'case9', 'case14', 'case24_ieee_rts', 'case30', 'case_ieee30', 'case33bw', 'case39', 'case57', 'case89pegase', 'case118', 'case145', 'case_illinois200', 'case300', 'case1354pegase', 'case1888rte', 'case2848rte', 'case2869pegase', 'case3120sp', 'case6470rte', 'case6495rte', 'case6515rte', 'case9241', 'GBnetwork', 'GBreducednetwork', 'iceland'])
     parser.add_argument("-n", "--num_subgraphs", type=int, default=10)
-    parser.add_argument("-s", "--save_dir", default="./data")
+    parser.add_argument("-s", "--save_dir", default="./data")    
     parser.add_argument("--min_size", type=int, default=5)
     parser.add_argument("--max_size", type=int, default=30)
+    parser.add_argument("--n_1", type=bool, default=False)
     parser.add_argument("--subgraphing_method", choices=['rnd_neighbor', 'bfs', 'rnd_walk'], default='rnd_neighbor')
     args = parser.parse_args()
     print(args)
@@ -112,9 +113,18 @@ def create_networks(arguments):
     i = 0
     while i < arguments.num_subgraphs:
         print(f"generating network {i + 1}")
+        
         subgraph_length = np.random.randint(arguments.min_size, min(arguments.max_size, len(full_net.bus)))
         initial_bus = starting_points[np.random.randint(0, len(starting_points))]
-        subgraph_busses = subgraphing_method(full_net, initial_bus, subgraph_length)
+        
+        if arguments.n_1:
+            subgraph_busses = list(full_net.bus.index)
+            downed_bus = np.random.randint(0, len(subgraph_busses))
+            del subgraph_busses[downed_bus]
+    
+        else:
+            subgraph_busses = subgraphing_method(full_net, initial_bus, subgraph_length)
+        
         subgraph_net = tb.select_subnet(full_net, subgraph_busses)
 
         try:

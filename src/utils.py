@@ -3,10 +3,12 @@ import matplotlib.pyplot as plt
 from models.GAT import GAT
 from models.MessagePassing import MessagePassingGNN
 from models.GraphSAGE import GraphSAGE
+from models.GINE import GINE
 import os
 import pandapower.plotting as ppl
 import pandas as pd
 import pandapower as pp
+import pickle
 import numpy as np
 import random
 import string
@@ -20,7 +22,7 @@ def get_arguments():
     parser = argparse.ArgumentParser(prog="GNN script",
                                      description="Run a GNN to solve an inductive power system problem (power flow only for now)")
     
-    parser.add_argument("gnn", choices=["GAT", "MessagePassing", "GraphSAGE"], default="GAT")
+    parser.add_argument("gnn", choices=["GAT", "MessagePassing", "GraphSAGE", "GINE"], default="GAT")
     parser.add_argument("--train", default="./Data/train")
     parser.add_argument("--val", default="./Data/val")
     parser.add_argument("--test", default="./Data/test")
@@ -33,11 +35,12 @@ def get_arguments():
     parser.add_argument("-n", "--n_epochs", default=250)
     parser.add_argument("-l", "--learning_rate", default=1e-4)
     parser.add_argument("-w", "--weight_decay", default=0.05)
+    parser.add_argument("--patience", default=40)
     args = parser.parse_args()
     return args
 
 
-def load_data(dir):
+def load_data_helper(dir):
     graph_path = f"{dir}/x"
     sol_path = f"{dir}/y"
     graph_paths = sorted(os.listdir(graph_path))#[:10]
@@ -54,6 +57,34 @@ def load_data(dir):
         data.append(instance)
 
     return data
+
+def load_data(train_dir, val_dir, test_dir):
+    try:
+        train = read_from_pkl("./data_generation/loaded_data/train.pkl")
+        val = read_from_pkl("./data_generation/loaded_data/val.pkl")
+        test = read_from_pkl("./data_generation/loaded_data/test.pkl")
+        print("Data Loaded from pkl files")
+    except:
+        print("Data not found, loading from json files...")
+        print("Training Data...")
+        train = load_data_helper(train_dir)
+        print("Validation Data...")
+        val = load_data_helper(val_dir)
+        print("Testing Data...")
+        test = load_data_helper(test_dir)
+
+        # create folder if it doesn't exist
+        if not os.path.exists("./data_generation/loaded_data"):
+            os.makedirs("./data_generation/loaded_data")
+
+        # save data to pkl
+        write_to_pkl(train, "./data_generation/loaded_data/train.pkl")
+        write_to_pkl(val, "./data_generation/loaded_data/val.pkl")
+        write_to_pkl(test, "./data_generation/loaded_data/test.pkl")
+
+        print("Data Loaded and saved to pkl files")
+
+    return train, val, test
 
 
 # return a torch_geometric.data.Data object for each instance
@@ -116,6 +147,10 @@ def get_gnn(gnn_name):
     if gnn_name == "GraphSAGE":
         return GraphSAGE
     
+    if gnn_name == "GINE":
+        return GINE
+
+    
 
 def get_optim(optim_name):
     if optim_name == "Adam":
@@ -161,3 +196,12 @@ def plot_losses(losses, val_losses, model_name):
 
     plt.tight_layout()
     plt.show()
+
+def write_to_pkl(data, path):
+    with open(path, 'wb') as f:
+        pickle.dump(data, f)
+
+def read_from_pkl(path):
+    with open(path, 'rb') as f:
+        data = pickle.load(f)
+    return data
