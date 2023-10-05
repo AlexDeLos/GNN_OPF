@@ -7,6 +7,7 @@ import os
 import pandapower.plotting as ppl
 import pandas as pd
 import pandapower as pp
+import pickle
 import numpy as np
 import random
 import string
@@ -38,7 +39,7 @@ def get_arguments():
     return args
 
 
-def load_data(dir):
+def load_data_helper(dir):
     graph_path = f"{dir}/x"
     sol_path = f"{dir}/y"
     graph_paths = sorted(os.listdir(graph_path))#[:10]
@@ -55,6 +56,34 @@ def load_data(dir):
         data.append(instance)
 
     return data
+
+def load_data(train_dir, val_dir, test_dir):
+    try:
+        train = read_from_pkl("./data_generation/loaded_data/train.pkl")
+        val = read_from_pkl("./data_generation/loaded_data/val.pkl")
+        test = read_from_pkl("./data_generation/loaded_data/test.pkl")
+        print("Data Loaded from pkl files")
+    except:
+        print("Data not found, loading from json files...")
+        print("Training Data...")
+        train = load_data_helper(train_dir)
+        print("Validation Data...")
+        val = load_data_helper(val_dir)
+        print("Testing Data...")
+        test = load_data_helper(test_dir)
+
+        # create folder if it doesn't exist
+        if not os.path.exists("./data_generation/loaded_data"):
+            os.makedirs("./data_generation/loaded_data")
+
+        # save data to pkl
+        write_to_pkl(train, "./data_generation/loaded_data/train.pkl")
+        write_to_pkl(val, "./data_generation/loaded_data/val.pkl")
+        write_to_pkl(test, "./data_generation/loaded_data/test.pkl")
+
+        print("Data Loaded and saved to pkl files")
+
+    return train, val, test
 
 
 # return a torch_geometric.data.Data object for each instance
@@ -87,10 +116,10 @@ def create_data_instance(graph, y_bus, y_gen, y_line):
                                     float(node.q_mvar)] #load
         
         # set each node label
-        g.nodes[node.Index]['y'] = [# float(y_bus['p_mw'][node.Index])]
-                                    # float(y_bus['q_mvar'][node.Index])]
-                                    float(y_bus['va_degree'][node.Index])]
-                                    # float(y_bus['vm_pu'][node.Index])]
+        g.nodes[node.Index]['y'] = [float(y_bus['p_mw'][node.Index]),
+                                    float(y_bus['q_mvar'][node.Index]),
+                                    float(y_bus['va_degree'][node.Index]),
+                                    float(y_bus['vm_pu'][node.Index])]
         
     # quit()
 
@@ -162,3 +191,12 @@ def plot_losses(losses, val_losses, model_name):
 
     plt.tight_layout()
     plt.show()
+
+def write_to_pkl(data, path):
+    with open(path, 'wb') as f:
+        pickle.dump(data, f)
+
+def read_from_pkl(path):
+    with open(path, 'rb') as f:
+        data = pickle.load(f)
+    return data
