@@ -11,12 +11,8 @@ def main():
     arguments = get_arguments()
     print(f"Parsed arguments: {arguments}")
 
-    print("Loading Training Data")
-    train = load_data(arguments.train)
-    print("Loading Validation Data")
-    val = load_data(arguments.val)
-    print("Loading Testing Data")
-    # test = load_data(arguments.test)
+    
+    train, val, test = load_data(arguments.train, arguments.val, arguments.test)    
 
     print(f"Data Loaded \n",
           f"Number of training samples = {len(train)}\n",

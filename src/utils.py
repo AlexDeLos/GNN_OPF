@@ -8,6 +8,7 @@ import os
 import pandapower.plotting as ppl
 import pandas as pd
 import pandapower as pp
+import pickle
 import numpy as np
 import random
 import string
@@ -34,15 +35,16 @@ def get_arguments():
     parser.add_argument("-n", "--n_epochs", default=250)
     parser.add_argument("-l", "--learning_rate", default=1e-4)
     parser.add_argument("-w", "--weight_decay", default=0.05)
+    parser.add_argument("--patience", default=40)
     args = parser.parse_args()
     return args
 
 
-def load_data(dir):
+def load_data_helper(dir):
     graph_path = f"{dir}/x"
     sol_path = f"{dir}/y"
-    graph_paths = sorted(os.listdir(graph_path))#[:10]
-    sol_paths = sorted(os.listdir(sol_path))#[:40]
+    graph_paths = sorted(os.listdir(graph_path))
+    sol_paths = sorted(os.listdir(sol_path))
     data = []
 
     for i, g in tqdm.tqdm(enumerate(graph_paths)):
@@ -56,21 +58,53 @@ def load_data(dir):
 
     return data
 
+def load_data(train_dir, val_dir, test_dir):
+    try:
+        train = read_from_pkl("./data_generation/loaded_data/train.pkl")
+        val = read_from_pkl("./data_generation/loaded_data/val.pkl")
+        test = read_from_pkl("./data_generation/loaded_data/test.pkl")
+        print("Data Loaded from pkl files")
+    except:
+        print("Data not found, loading from json files...")
+        print("Training Data...")
+        train = load_data_helper(train_dir)
+        print("Validation Data...")
+        val = load_data_helper(val_dir)
+        print("Testing Data...")
+        test = load_data_helper(test_dir)
+
+        # create folder if it doesn't exist
+        if not os.path.exists("./data_generation/loaded_data"):
+            os.makedirs("./data_generation/loaded_data")
+
+        # save data to pkl
+        write_to_pkl(train, "./data_generation/loaded_data/train.pkl")
+        write_to_pkl(val, "./data_generation/loaded_data/val.pkl")
+        write_to_pkl(test, "./data_generation/loaded_data/test.pkl")
+
+        print("Data Loaded and saved to pkl files")
+
+    return train, val, test
+
 
 # return a torch_geometric.data.Data object for each instance
 def create_data_instance(graph, y_bus, y_gen, y_line):
     g = ppl.create_nxgraph(graph, include_trafos=True)
 
+    # https://pandapower.readthedocs.io/en/latest/elements/gen.html
     gen = graph.gen[['bus', 'p_mw', 'vm_pu']]
     gen.rename(columns={'p_mw': 'p_mw_gen'}, inplace=True)
     gen.set_index('bus', inplace=True)
 
+    # https://pandapower.readthedocs.io/en/latest/elements/load.html
     load = graph.load[['bus', 'p_mw', 'q_mvar']]
     load.rename(columns={'p_mw': 'p_mw_load'}, inplace=True)
     load.set_index('bus', inplace=True)
 
+    # https://pandapower.readthedocs.io/en/latest/elements/bus.html
     node_feat = graph.bus[['vn_kv', 'max_vm_pu', 'min_vm_pu']]
-    # make sure all nodes have the same number of features
+
+    # make sure all nodes (bus, gen, load) have the same number of features (namely the union of all features)
     node_feat = node_feat.merge(gen, left_index=True, right_index=True, how='outer')
     node_feat = node_feat.merge(load, left_index=True, right_index=True, how='outer')
     # fill missing feature values with 0
@@ -80,11 +114,11 @@ def create_data_instance(graph, y_bus, y_gen, y_line):
 
     for node in node_feat.itertuples():
         # set each node features
-        g.nodes[node.Index]['x'] = [float(node.vn_kv), #bus
-                                    float(node.p_mw_gen), #gen
-                                    float(node.vm_pu), #gen
-                                    float(node.p_mw_load), #load
-                                    float(node.q_mvar)] #load
+        g.nodes[node.Index]['x'] = [float(node.vn_kv), #bus, the grid voltage level.
+                                    float(node.p_mw_gen), #gen, the active power of the generator
+                                    float(node.vm_pu), #gen, the voltage magnitude of the generator.
+                                    float(node.p_mw_load), #load, the active power of the load
+                                    float(node.q_mvar)] #load, the reactive power of the load
         
         # set each node label
         g.nodes[node.Index]['y'] = [float(y_bus['p_mw'][node.Index]),
@@ -181,3 +215,12 @@ def plot_losses(losses, val_losses, model_name):
 
     plt.tight_layout()
     plt.show()
+
+def write_to_pkl(data, path):
+    with open(path, 'wb') as f:
+        pickle.dump(data, f)
+
+def read_from_pkl(path):
+    with open(path, 'rb') as f:
+        data = pickle.load(f)
+    return data

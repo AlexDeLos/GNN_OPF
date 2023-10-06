@@ -14,15 +14,15 @@ class GINE(torch.nn.Module):
             Sequential(Linear(input_dim, hidden_gine_dim),
                        BatchNorm1d(hidden_gine_dim), ReLU(),
                        Linear(hidden_gine_dim, hidden_gine_dim), ReLU()),
-                       edge_dim=edge_dim)
+                       edge_dim=edge_dim[1])
         self.conv2 = GINEConv(
             Sequential(Linear(hidden_gine_dim, hidden_gine_dim), BatchNorm1d(hidden_gine_dim), ReLU(),
                        Linear(hidden_gine_dim, hidden_gine_dim), ReLU()),
-                       edge_dim=edge_dim)
+                       edge_dim=edge_dim[1])
         self.conv3 = GINEConv(
             Sequential(Linear(hidden_gine_dim, hidden_gine_dim), BatchNorm1d(hidden_gine_dim), ReLU(),
                        Linear(hidden_gine_dim, hidden_gine_dim), ReLU()),
-                       edge_dim=edge_dim)
+                       edge_dim=edge_dim[1])
         self.lin1 = Linear(hidden_gine_dim*3, hidden_lin_dim)
         self.lin2 = Linear(hidden_lin_dim, output_dim)
 
