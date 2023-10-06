@@ -32,7 +32,7 @@ def get_arguments():
     parser.add_argument("-o", "--optimizer", default="Adam")
     parser.add_argument("-c", "--criterion", default="MSELoss")
     parser.add_argument("-b", "--batch_size", default=16)
-    parser.add_argument("-n", "--n_epochs", default=250)
+    parser.add_argument("-n", "--n_epochs", default=60)
     parser.add_argument("-l", "--learning_rate", default=1e-4)
     parser.add_argument("-w", "--weight_decay", default=0.05)
     parser.add_argument("--patience", default=40)
@@ -85,6 +85,36 @@ def load_data(train_dir, val_dir, test_dir):
         print("Data Loaded and saved to pkl files")
 
     return train, val, test
+
+
+def normalize_data(train, val, test):
+    # train, val and test are lists of torch_geometric.data.Data objects
+    # create a tensor for x, y and edge_attr for all data (train, val, test)
+    combined_x = th.cat([data.x for data in train + val + test], dim=0)
+    combined_y = th.cat([data.y for data in train + val + test], dim=0)
+    combined_edge_attr = th.cat([data.edge_attr for data in train + val + test], dim=0)
+
+    # Use min max normalization to normalize data between 0 and 1 
+    # https://en.wikipedia.org/wiki/Feature_scaling#Rescaling_(min-max_normalization)
+    
+    # find min value and max for all columns
+    min_x = th.min(combined_x, dim=0).values
+    max_x = th.max(combined_x, dim=0).values
+    min_y = th.min(combined_y, dim=0).values
+    max_y = th.max(combined_y, dim=0).values
+    min_edge_attr = th.min(combined_edge_attr, dim=0).values
+    max_edge_attr = th.max(combined_edge_attr, dim=0).values
+
+    epsilon = 1e-7  # to avoid division by zero
+    # normalize data
+    for data in train + val + test:
+        data.x = (data.x - min_x) / (max_x - min_x + epsilon)
+        data.y = (data.y - min_y) / (max_y - min_y + epsilon)
+        data.edge_attr = (data.edge_attr - min_edge_attr) / (max_edge_attr - min_edge_attr + epsilon)
+
+    return train, val, test
+
+
 
 
 # return a torch_geometric.data.Data object for each instance

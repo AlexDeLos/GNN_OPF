@@ -1,5 +1,5 @@
 from train import train_model
-from utils import get_arguments, load_data, save_model, plot_losses
+from utils import get_arguments, load_data, normalize_data, save_model, plot_losses
 import warnings
 
 # Suppress FutureWarning
@@ -13,6 +13,7 @@ def main():
 
     
     train, val, test = load_data(arguments.train, arguments.val, arguments.test)    
+    train, val, test = normalize_data(train, val, test)
 
     print(f"Data Loaded \n",
           f"Number of training samples = {len(train)}\n",
