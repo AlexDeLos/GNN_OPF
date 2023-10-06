@@ -98,12 +98,17 @@ def normalize_data(train, val, test):
     # https://en.wikipedia.org/wiki/Feature_scaling#Rescaling_(min-max_normalization)
     
     # find min value and max for all columns
-    min_x = th.min(combined_x, dim=0).values
-    max_x = th.max(combined_x, dim=0).values
-    min_y = th.min(combined_y, dim=0).values
-    max_y = th.max(combined_y, dim=0).values
-    min_edge_attr = th.min(combined_edge_attr, dim=0).values
-    max_edge_attr = th.max(combined_edge_attr, dim=0).values
+    # x: vn_kv, p_mw_gen, vm_pu, p_mw_load, q_mvar
+    min_x = th.min(combined_x, dim=0).values # tensor([     0.6000,   -681.7000,      0.0000,      0.0000,   -171.5000])
+    max_x = th.max(combined_x, dim=0).values # tensor([  500.0000, 56834.0000,     1.1550, 57718.0000, 13936.0000])
+
+    # y: p_mw, q_mvar, va_degree, vm_pu
+    min_y = th.min(combined_y, dim=0).values # tensor([-11652.4385,  -5527.3564,   -156.9993,      0.0579])
+    max_y = th.max(combined_y, dim=0).values # tensor([ 5844.1426,  1208.3413,   160.0282,     1.9177])
+
+    # edge_attr: r_ohm_per_km, x_ohm_per_km, c_nf_per_km, g_us_per_km, max_i_ka, parallel, df, length_km
+    min_edge_attr = th.min(combined_edge_attr, dim=0).values # tensor([  -296.9000,      0.0306,      0.0000,      0.0000,      0.0684,   1.0000,      1.0000,      1.0000])
+    max_edge_attr = th.max(combined_edge_attr, dim=0).values # tensor([ 1152.5000,  1866.5001,  4859.9951,     0.0000, 99999.0000,     1.0000,   1.0000,     1.0000])
 
     epsilon = 1e-7  # to avoid division by zero
     # normalize data
