@@ -12,8 +12,11 @@ def main():
     print(f"Parsed arguments: {arguments}")
 
     
-    train, val, test = load_data(arguments.train, arguments.val, arguments.test)    
-    train, val, test = normalize_data(train, val, test)
+    train, val, test = load_data(arguments.train, arguments.val, arguments.test)  
+
+    if arguments.normalize:
+        print("Normalizing Data")
+        train, val, test = normalize_data(train, val, test)
 
     print(f"Data Loaded \n",
           f"Number of training samples = {len(train)}\n",
