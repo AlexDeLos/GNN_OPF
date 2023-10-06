@@ -16,15 +16,15 @@ def main():
     print("Loading Validation Data")
     val = load_data(arguments.val)
     print("Loading Testing Data")
-    test = load_data(arguments.test)
+    # test = load_data(arguments.test)
 
     print(f"Data Loaded \n",
           f"Number of training samples = {len(train)}\n",
-          f"Number of validation samples = {len(val)}\n",
-          f"Number of testing samples = {len(test)}\n",)
+          f"Number of validation samples = {len(val)}\n")
+        #   f"Number of testing samples = {len(test)}\n",)
 
     print("Training Model")
-    model, losses, val_losses = train_model(arguments, train, val, test)
+    model, losses, val_losses = train_model(arguments, train, val)
     model_class_name = model.class_name
     if arguments.save_model:
         print("Saving Model")

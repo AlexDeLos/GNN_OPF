@@ -25,34 +25,30 @@ def test(model, data):
     loader = DataLoader(data)
     errors = []
     p_errors = []
-    first = True
     for g in loader:
         out = model(g)
         error = th.sub(g.y, out)
-        print("out: \n", out)
-        print("y: \n", g.y)
-        print("error: \n", error)
         p_error = th.div(error, g.y) * 100
-        if first:
-            print(error.shape)
-            print(p_error.shape)
-            first = False
-        errors.append(error.detach().numpy().flatten())
-        p_errors.append(p_error.detach().numpy().flatten())
+        errors.append(error.detach().numpy())
+        p_errors.append(p_error.detach().numpy())
+
     errors = np.concatenate(errors)
+    errors = errors.reshape((-1, 4))
+
     p_errors = np.concatenate(p_errors)
+    p_errors = p_errors.reshape((-1, 4))
+
     mask = np.isinf(p_errors)
     p_errors[mask] = 0
-
-    print(p_errors)
 
     plt.hist(errors)
     plt.show()
     plt.hist(p_errors)
     plt.show()
-    within = np.array((abs(p_errors) < 5)).sum() / len(p_errors)
-    print("within", within)
-    print("within 5%:", (abs(p_errors) < 5) / len(p_errors))
+
+    num_correct = np.sum(abs(p_errors) < 5, axis=0)
+    
+    print("within", num_correct / len(p_errors))
     return errors, p_errors
 
 if __name__ == '__main__':

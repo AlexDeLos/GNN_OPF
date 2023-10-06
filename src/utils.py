@@ -59,7 +59,7 @@ def load_data(dir):
 
 # return a torch_geometric.data.Data object for each instance
 def create_data_instance(graph, y_bus, y_gen, y_line):
-    g = ppl.create_nxgraph(graph, include_trafos=False)
+    g = ppl.create_nxgraph(graph, include_trafos=True)
 
     gen = graph.gen[['bus', 'p_mw', 'vm_pu']]
     gen.rename(columns={'p_mw': 'p_mw_gen'}, inplace=True)
@@ -92,8 +92,6 @@ def create_data_instance(graph, y_bus, y_gen, y_line):
                                     float(y_bus['va_degree'][node.Index]),
                                     float(y_bus['vm_pu'][node.Index])]
         
-    # quit()
-
     for edges in graph.line.itertuples():
         g.edges[edges.from_bus, edges.to_bus, ('line', edges.Index)]['edge_attr'] = [float(edges.r_ohm_per_km),
                                                                                      float(edges.x_ohm_per_km),
@@ -102,8 +100,18 @@ def create_data_instance(graph, y_bus, y_gen, y_line):
                                                                                      float(edges.max_i_ka),
                                                                                      float(edges.parallel),
                                                                                      float(edges.df),
-                                                                                     float(edges.length_km),]
-
+                                                                                     float(edges.length_km)]
+        
+    for trafos in graph.trafo.itertuples():
+        g.edges[trafos.lv_bus, trafos.hv_bus, ('trafo', trafos.Index)]['edge_attr'] = [trafos.vk_percent * (trafos.vn_lv_kv ** 2) / trafos.sn_mva,
+                                                                                       trafos.vk_percent * (trafos.vn_hv_kv ** 2) / trafos.sn_mva,
+                                                                                       0.0, 
+                                                                                       0.0, 
+                                                                                       0.0, 
+                                                                                       0.0, 
+                                                                                       0.0, 
+                                                                                       1.0]
+        
     return from_networkx(g)
 
 
