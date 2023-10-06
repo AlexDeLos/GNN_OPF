@@ -107,6 +107,11 @@ def get_subgraphing_method(method_name):
 def create_networks(arguments):
     start = time.perf_counter()
     full_net = get_network(arguments.network)
+
+    # the external grid is plotted as a yellow rectangle, buses are blue dots, loads are black triangles with tip pointing down
+    # transformers are red overlapping circles, generators are black circle with a small black propeller in the middle 
+    # ppl.simple_plot(full_net, plot_loads=True, plot_gens=True, trafo_color="r", switch_color="g") 
+
     subgraphing_method = get_subgraphing_method(arguments.subgraphing_method)
     # A starting point is any bus that is connected to a generator to ensure that subgraphs contain at least one generator
     starting_points = full_net.gen.bus
@@ -129,6 +134,8 @@ def create_networks(arguments):
 
         try:
             pp.runpp(subgraph_net)
+            # ppl.simple_plot(subgraph_net, plot_loads=True, plot_gens=True, trafo_color="r", switch_color="g") 
+
         except:
             print(f"Network not solvable trying a new one")
             continue
