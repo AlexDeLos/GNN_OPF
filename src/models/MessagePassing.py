@@ -34,8 +34,7 @@ class MessagePassingGNN(MessagePassing):
         if num_layers == 1:
             self.node_layers.append(nn.Linear(input_dim, output_dim))
             self.edge_layers.append(nn.Linear(edge_attr_dim[1], output_dim))
-            mlp_input_dim = output_dim
-        
+
         else:
             # Input layer
             self.node_layers.append(nn.Linear(input_dim, hidden_dim))
@@ -50,10 +49,8 @@ class MessagePassingGNN(MessagePassing):
             self.node_layers.append(nn.Linear(hidden_dim, output_dim))
             self.edge_layers.append(nn.Linear(hidden_dim, output_dim))
 
-            mlp_input_dim = hidden_dim
-
         # define a mlp for message passing
-        self.mlp_message = nn.Sequential(nn.Linear(mlp_input_dim, 256), nn.ReLU(), nn.Linear(256, output_dim))
+        self.mlp_message = nn.Sequential(nn.Linear(output_dim, 256), nn.ReLU(), nn.Linear(256, output_dim))
         
         # define a mlp for update
         self.mlp_update = nn.Sequential(nn.Linear(output_dim, 256), nn.ReLU(), nn.Linear(256, output_dim))
@@ -108,8 +105,5 @@ class MessagePassingGNN(MessagePassing):
     # experiments/ablations:
     # add n of layers in the mlps for message function
     # add biases
-    # add dropout
-    # add/remove layers to the whole model
-    # use attention layer not vanilla mlp
     # add skip/residual connections in update function
     # use only edge features and not node features

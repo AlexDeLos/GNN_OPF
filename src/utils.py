@@ -43,8 +43,8 @@ def get_arguments():
 def load_data_helper(dir):
     graph_path = f"{dir}/x"
     sol_path = f"{dir}/y"
-    graph_paths = sorted(os.listdir(graph_path))#[:10]
-    sol_paths = sorted(os.listdir(sol_path))#[:40]
+    graph_paths = sorted(os.listdir(graph_path))
+    sol_paths = sorted(os.listdir(sol_path))
     data = []
 
     for i, g in tqdm.tqdm(enumerate(graph_paths)):
@@ -91,16 +91,20 @@ def load_data(train_dir, val_dir, test_dir):
 def create_data_instance(graph, y_bus, y_gen, y_line):
     g = ppl.create_nxgraph(graph, include_trafos=False)
 
+    # https://pandapower.readthedocs.io/en/latest/elements/gen.html
     gen = graph.gen[['bus', 'p_mw', 'vm_pu']]
     gen.rename(columns={'p_mw': 'p_mw_gen'}, inplace=True)
     gen.set_index('bus', inplace=True)
 
+    # https://pandapower.readthedocs.io/en/latest/elements/load.html
     load = graph.load[['bus', 'p_mw', 'q_mvar']]
     load.rename(columns={'p_mw': 'p_mw_load'}, inplace=True)
     load.set_index('bus', inplace=True)
 
+    # https://pandapower.readthedocs.io/en/latest/elements/bus.html
     node_feat = graph.bus[['vn_kv', 'max_vm_pu', 'min_vm_pu']]
-    # make sure all nodes have the same number of features
+
+    # make sure all nodes (bus, gen, load) have the same number of features (namely the union of all features)
     node_feat = node_feat.merge(gen, left_index=True, right_index=True, how='outer')
     node_feat = node_feat.merge(load, left_index=True, right_index=True, how='outer')
     # fill missing feature values with 0
@@ -110,29 +114,29 @@ def create_data_instance(graph, y_bus, y_gen, y_line):
 
     for node in node_feat.itertuples():
         # set each node features
-        g.nodes[node.Index]['x'] = [float(node.vn_kv), #bus
-                                    float(node.p_mw_gen), #gen
-                                    float(node.vm_pu), #gen
-                                    float(node.p_mw_load), #load
-                                    float(node.q_mvar)] #load
+        g.nodes[node.Index]['x'] = [float(node.vn_kv), #bus, the grid voltage level.
+                                    float(node.p_mw_gen), #gen, the active power of the generator
+                                    float(node.vm_pu), #gen, the voltage magnitude of the generator.
+                                    float(node.p_mw_load), #load, the active power of the load
+                                    float(node.q_mvar)] #load, the reactive power of the load
         
         # set each node label
-        g.nodes[node.Index]['y'] = [float(y_bus['p_mw'][node.Index]),
-                                    float(y_bus['q_mvar'][node.Index]),
-                                    float(y_bus['va_degree'][node.Index]),
-                                    float(y_bus['vm_pu'][node.Index])]
+        g.nodes[node.Index]['y'] = [float(y_bus['p_mw'][node.Index]), # the active power at the node
+                                    float(y_bus['q_mvar'][node.Index]), # the reactive power at the node
+                                    float(y_bus['va_degree'][node.Index]), # the voltage angle at the node
+                                    float(y_bus['vm_pu'][node.Index])] # the voltage magnitude at the node
         
     # quit()
-
+    # https://pandapower.readthedocs.io/en/latest/elements/line.html
     for edges in graph.line.itertuples():
-        g.edges[edges.from_bus, edges.to_bus, ('line', edges.Index)]['edge_attr'] = [float(edges.r_ohm_per_km),
-                                                                                     float(edges.x_ohm_per_km),
-                                                                                     float(edges.c_nf_per_km),
-                                                                                     float(edges.g_us_per_km),
-                                                                                     float(edges.max_i_ka),
-                                                                                     float(edges.parallel),
-                                                                                     float(edges.df),
-                                                                                     float(edges.length_km),]
+        g.edges[edges.from_bus, edges.to_bus, ('line', edges.Index)]['edge_attr'] = [float(edges.r_ohm_per_km), #  line resistance in ohm per km
+                                                                                     float(edges.x_ohm_per_km), #  line reactance in ohm per km
+                                                                                     float(edges.c_nf_per_km), # line capacitance (line-to-earth) in nano Farad per km
+                                                                                     float(edges.g_us_per_km), # dielectric conductance in micro Siemens per km
+                                                                                     float(edges.max_i_ka), # maximum thermal current in kilo Ampere
+                                                                                     float(edges.parallel), #  number of parallel line systems
+                                                                                     float(edges.df), # derating factor: maximal current of line in relation to nominal current of line (from 0 to 1)
+                                                                                     float(edges.length_km),] # The line length in km
 
     return from_networkx(g)
 
