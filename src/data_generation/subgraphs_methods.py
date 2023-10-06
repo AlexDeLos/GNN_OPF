@@ -52,7 +52,7 @@ def bfs_neighbor_selection(full_net, starting_bus, subgraph_length):
 
 
 def random_walk_neighbor_selection(full_net, starting_bus, subgraph_length):
-    restart_prob=0.2
+    restart_prob=0.1
     previous_step_bus = starting_bus
     current_bus = starting_bus
     subgraph_busses = [starting_bus]

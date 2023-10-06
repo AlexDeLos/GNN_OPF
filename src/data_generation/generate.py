@@ -52,8 +52,6 @@ def get_network(network_name):
         network = pn.case30()
     elif network_name == 'case_ieee30':
         network = pn.case_ieee30()
-    elif network_name == 'case33bw':
-        network = pn.case33bw()
     elif network_name == 'case39':
         network = pn.case39()
     elif network_name == 'case57':
