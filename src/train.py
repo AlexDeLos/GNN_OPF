@@ -112,7 +112,7 @@ def get_distance_from_generator(data):
         #if the p_mw_gen is > 0 then it is a generator
         vm_pu = node[2]
         if vm_pu > 0:
-            distances.append(bfs(data, i))
+            distances.append(BFS(data, i))
 
     result = [-1]*len(data.x)
     for el in range(0, len(result)):
@@ -127,7 +127,6 @@ def get_distance_from_generator(data):
 
 def get_neighbors(data, node):
     neighbors = set()
-    # node = n.item()
     edges = data.edge_index
 
     #assume they are ordered
@@ -135,34 +134,48 @@ def get_neighbors(data, node):
     for i,node1 in enumerate(edges[0,:]):
         if node1.item() == node:
             neighbors.add(edges[1,i].item())
-    for i,node1 in enumerate(edges[1,:]):
-        if node1.item() == node:
-            neighbors.add(edges[0,i].item())
     
     return neighbors
 
+def BFS(graph, source):
 
-def bfs(graph, source):
-    Q = Queue()
-    depth = -1
+    # Mark all the vertices as not visited
+    visited = [False] * graph.edge_index.shape[1]
+
+    # Create a queue for BFS
+    queue = []
+
+    
     array = [[]]
     array[0].append(source)
-    visited_vertices = set()
-    Q.put(source)
-    visited_vertices.update({0})
-    while not Q.empty():
-        vertex = Q.get()
-        # print(vertex, end="-->")
+    depth = -1
+
+    # Mark the source node as
+    # visited and enqueue it
+    queue.append(source)
+    visited[source] = True
+
+    while queue:
+
+        # Dequeue a vertex from
+        # queue and print it
+        s = queue.pop(0)
+        
         depth +=1
         if depth != 0:
             array.append([])
-        
-        for u in get_neighbors(graph, vertex):
-            if u not in visited_vertices:
-                Q.put(u)
-                array[depth].append(u)
-                visited_vertices.update({u})
+
+        # Get all adjacent vertices of the
+        # dequeued vertex s.
+        # If an adjacent has not been visited,
+        # then mark it visited and enqueue it
+        for i in get_neighbors(graph, s):
+            if visited[i] == False:
+                queue.append(i)
+                visited[i] = True
+                array[depth].append(i)
     return array
+
 
 def evaluate_batch(data, model, criterion, device='cpu'):
     model.to(device)
