@@ -26,7 +26,7 @@ def get_arguments():
         prog="power network subgraph generator",
         description="Generates a specified number of subnetworks from a power network",
     )
-    parser.add_argument("network", choices=['case4gs', 'case5', 'case6ww', 'case9', 'case14', 'case24_ieee_rts', 'case30', 'case_ieee30', 'case33bw', 'case39', 'case57', 'case89pegase', 'case118', 'case145', 'case_illinois200', 'case300', 'case1354pegase', 'case1888rte', 'case2848rte', 'case2869pegase', 'case3120sp', 'case6470rte', 'case6495rte', 'case6515rte', 'case9241', 'GBnetwork', 'GBreducednetwork', 'iceland'])
+    parser.add_argument("network", choices=['case4gs', 'case5', 'case6ww', 'case9', 'case14', 'case24_ieee_rts', 'case30', 'case_ieee30', 'case39', 'case57', 'case89pegase', 'case118', 'case145', 'case_illinois200', 'case300', 'case1354pegase', 'case1888rte', 'case2848rte', 'case2869pegase', 'case3120sp', 'case6470rte', 'case6495rte', 'case6515rte', 'case9241', 'GBnetwork', 'GBreducednetwork', 'iceland'])
     parser.add_argument("-n", "--num_subgraphs", type=int, default=10)
     parser.add_argument("-s", "--save_dir", default="./data")    
     parser.add_argument("--min_size", type=int, default=5)
@@ -52,8 +52,6 @@ def get_network(network_name):
         network = pn.case30()
     elif network_name == 'case_ieee30':
         network = pn.case_ieee30()
-    elif network_name == 'case33bw':
-        network = pn.case33bw()
     elif network_name == 'case39':
         network = pn.case39()
     elif network_name == 'case57':
@@ -107,6 +105,11 @@ def get_subgraphing_method(method_name):
 def create_networks(arguments):
     start = time.perf_counter()
     full_net = get_network(arguments.network)
+
+    # the external grid is plotted as a yellow rectangle, buses are blue dots, loads are black triangles with tip pointing down
+    # transformers are red overlapping circles, generators are black circle with a small black propeller in the middle 
+    # ppl.simple_plot(full_net, plot_loads=True, plot_gens=True, trafo_color="r", switch_color="g") 
+
     subgraphing_method = get_subgraphing_method(arguments.subgraphing_method)
     # A starting point is any bus that is connected to a generator to ensure that subgraphs contain at least one generator
     starting_points = full_net.gen.bus
@@ -129,6 +132,8 @@ def create_networks(arguments):
 
         try:
             pp.runpp(subgraph_net)
+            # ppl.simple_plot(subgraph_net, plot_loads=True, plot_gens=True, trafo_color="r", switch_color="g") 
+
         except:
             print(f"Network not solvable trying a new one")
             continue
