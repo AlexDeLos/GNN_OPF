@@ -32,10 +32,10 @@ def train_model(arguments, train, val, test):
         epoch_val_loss = 0.0
         gnn.train()
         for batch in train_dataloader:
-            distance_plot(gnn, batch,False)
             epoch_loss += train_batch(data=batch, model=gnn, optimizer=optimizer, criterion=criterion)
         gnn.eval()
         for batch in val_dataloader:
+            # distance_plot(gnn, batch, True)
             epoch_val_loss += evaluate_batch(data=batch, model=gnn, criterion=criterion)
 
         avg_epoch_loss = epoch_loss.item() / len(train_dataloader)
@@ -46,7 +46,7 @@ def train_model(arguments, train, val, test):
 
         if epoch % 10 == 0:
             print(f'Epoch: {epoch:03d}, trn_Loss: {avg_epoch_loss:.3f}, val_loss: {avg_epoch_val_loss:.3f}')
-        if epoch == arguments.n_epochs-1:
+        if epoch == arguments.n_epochs-1 and arguments.plot_node_error:
             distance_plot(gnn, batch,True)
             # print(f'Epoch: {epoch:03d}, trn_Loss: {avg_epoch_loss:.3f}, val_loss: {avg_epoch_val_loss:.3f}')
         #Early stopping
@@ -66,13 +66,13 @@ def train_model(arguments, train, val, test):
 
 def distance_plot(model, batch, show = False):
     out = model(batch)
-    distance_loss = get_distance_loss(out,batch.y,batch)
+    distance_loss,len = get_distance_loss(out,batch.y,batch)
     if(show):
-        plt.bar(list(range(0,10)), distance_loss, color ='maroon', 
-            width = 0.4)
-        plt.xlabel("Error with distance from the generator")
+        plt.bar(list(range(0,len)), distance_loss, color ='maroon')
+        plt.title("Error with distance from the generator")
         plt.ylabel("Error")
-        plt.title("Nodes away from the generator the node was located")
+        plt.xticks(range(0,len))
+        plt.xlabel("Nodes away from the generator the node was located")
         plt.show()
 
 def train_batch(data, model, optimizer, criterion, device='cpu'):
@@ -89,17 +89,20 @@ def train_batch(data, model, optimizer, criterion, device='cpu'):
     return loss
 
 def get_distance_loss(out,labels,data):
-    res = [0]*10
-    norm = [0]*10
+    res = [0]
+    norm = [0]
     distances = get_distance_from_generator(data)
     for i, dis in enumerate(distances):
         if dis != -1:
+            if dis > len(res)-1:
+                res = res + [0]*(dis-len(res) +1)
+                norm = norm + [0]*(dis-len(norm) +1)
             norm[dis] += 1
             res[dis] += th.sum(th.abs(out[i]-labels[i])).item()
     for i in range(len(res)):
         if norm[i] != 0:
             res[i] = res[i]/norm[i]
-    return res
+    return res, len(res)
 
 def MES_loss(cur,out,label):
     return th.add(cur+th.abs(out-label))
@@ -108,8 +111,8 @@ def get_distance_from_generator(data):
     distances = []
     for i, node in enumerate(data.x):
         #if the p_mw_gen is > 0 then it is a generator
-        p_mw_gen = node[1]
-        if p_mw_gen > 0:
+        vm_pu = node[2]
+        if vm_pu > 0:
             distances.append(bfs(data, i))
 
     result = [-1]*len(data.x)
