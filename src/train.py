@@ -3,6 +3,7 @@ import tqdm
 from queue import Queue
 import torch as th
 import utils
+import matplotlib.pyplot as plt 
 from utils import get_gnn, get_optim, get_criterion
 
 
@@ -31,6 +32,7 @@ def train_model(arguments, train, val, test):
         epoch_val_loss = 0.0
         gnn.train()
         for batch in train_dataloader:
+            distance_plot(gnn, batch,False)
             epoch_loss += train_batch(data=batch, model=gnn, optimizer=optimizer, criterion=criterion)
         gnn.eval()
         for batch in val_dataloader:
@@ -44,13 +46,16 @@ def train_model(arguments, train, val, test):
 
         if epoch % 10 == 0:
             print(f'Epoch: {epoch:03d}, trn_Loss: {avg_epoch_loss:.3f}, val_loss: {avg_epoch_val_loss:.3f}')
-        
+        if epoch == arguments.n_epochs-1:
+            distance_plot(gnn, batch,True)
+            # print(f'Epoch: {epoch:03d}, trn_Loss: {avg_epoch_loss:.3f}, val_loss: {avg_epoch_val_loss:.3f}')
         #Early stopping
         try:  
             if val_losses[-1]>=val_losses[-2]:
                 early_stop += 1
                 if early_stop == arguments.patience:
                     print("Early stopping! Epoch:", epoch)
+                    distance_plot(gnn, batch)
                     break
             else:
                 early_stop = 0
@@ -59,47 +64,103 @@ def train_model(arguments, train, val, test):
     
     return gnn, losses, val_losses
 
+def distance_plot(model, batch, show = False):
+    out = model(batch)
+    distance_loss = get_distance_loss(out,batch.y,batch)
+    if(show):
+        plt.bar(list(range(0,10)), distance_loss, color ='maroon', 
+            width = 0.4)
+        plt.xlabel("Error with distance from the generator")
+        plt.ylabel("Error")
+        plt.title("Nodes away from the generator the node was located")
+        plt.show()
 
 def train_batch(data, model, optimizer, criterion, device='cpu'):
     model.to(device)
     optimizer.zero_grad()
     out = model(data)
-    distance = get_distance_from_generator(data)
+    # each element i in this array represents the distance of the node i from the nearest generator
+    # distance_loss = get_distance_loss(out,data.y,data)
+    # print(distance_loss)
+
     loss = criterion(out, data.y)
     loss.backward()
     optimizer.step()
     return loss
 
+def get_distance_loss(out,labels,data):
+    res = [0]*10
+    norm = [0]*10
+    distances = get_distance_from_generator(data)
+    for i, dis in enumerate(distances):
+        if dis != -1:
+            norm[dis] += 1
+            res[dis] += th.sum(th.abs(out[i]-labels[i])).item()
+    for i in range(len(res)):
+        if norm[i] != 0:
+            res[i] = res[i]/norm[i]
+    return res
+
+def MES_loss(cur,out,label):
+    return th.add(cur+th.abs(out-label))
+
 def get_distance_from_generator(data):
-    for node in data.x:
+    distances = []
+    for i, node in enumerate(data.x):
         #if the p_mw_gen is > 0 then it is a generator
         p_mw_gen = node[1]
         if p_mw_gen > 0:
-            bfs(data,node)
-        
-    distance = th.zeros(data.x.shape[0], 1)
-    return distance
+            distances.append(bfs(data, i))
+
+    result = [-1]*len(data.x)
+    for el in range(0, len(result)):
+        max_distance = 999999999
+        for distance in distances:
+            for i in distance:
+                if el in i and max_distance > distance.index(i):
+                    max_distance = distance.index(i)
+        if max_distance != 999999999:
+            result[el] = max_distance
+    return result
 
 def get_neighbors(data, node):
-    neighbors = []
+    neighbors = set()
+    # node = n.item()
     edges = data.edge_index
-    print(edges)
 
+    #assume they are ordered
+    #broken:
+    for i,node1 in enumerate(edges[0,:]):
+        if node1.item() == node:
+            neighbors.add(edges[1,i].item())
+    for i,node1 in enumerate(edges[1,:]):
+        if node1.item() == node:
+            neighbors.add(edges[0,i].item())
+    
     return neighbors
 
 
 def bfs(graph, source):
     Q = Queue()
+    depth = -1
+    array = [[]]
+    array[0].append(source)
     visited_vertices = set()
     Q.put(source)
     visited_vertices.update({0})
     while not Q.empty():
         vertex = Q.get()
-        print(vertex, end="-->")
+        # print(vertex, end="-->")
+        depth +=1
+        if depth != 0:
+            array.append([])
+        
         for u in get_neighbors(graph, vertex):
             if u not in visited_vertices:
                 Q.put(u)
+                array[depth].append(u)
                 visited_vertices.update({u})
+    return array
 
 def evaluate_batch(data, model, criterion, device='cpu'):
     model.to(device)
