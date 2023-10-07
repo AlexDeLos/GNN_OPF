@@ -45,10 +45,9 @@ def train_model(arguments, train, val, test):
         val_losses.append(avg_epoch_val_loss)
 
         if epoch % 10 == 0:
-            print(f'Epoch: {epoch:03d}, trn_Loss: {avg_epoch_loss:.3f}, val_loss: {avg_epoch_val_loss:.3f}')
+            print(f'Epoch: {epoch:03d}, trn_Loss: {avg_epoch_loss:.6f}, val_loss: {avg_epoch_val_loss:.6f}')
         if epoch == arguments.n_epochs-1 and arguments.plot_node_error:
             distance_plot(gnn, batch,True)
-            # print(f'Epoch: {epoch:03d}, trn_Loss: {avg_epoch_loss:.3f}, val_loss: {avg_epoch_val_loss:.3f}')
         #Early stopping
         try:  
             if val_losses[-1]>=val_losses[-2]:

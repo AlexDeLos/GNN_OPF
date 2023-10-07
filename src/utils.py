@@ -32,11 +32,13 @@ def get_arguments():
     parser.add_argument("-o", "--optimizer", default="Adam")
     parser.add_argument("-c", "--criterion", default="MSELoss")
     parser.add_argument("-b", "--batch_size", default=16)
-    parser.add_argument("-n", "--n_epochs", default=250)
+    parser.add_argument("-n", "--n_epochs", default=200)
     parser.add_argument("-l", "--learning_rate", default=1e-4)
     parser.add_argument("-w", "--weight_decay", default=0.05)
     parser.add_argument("--patience", default=40)
     parser.add_argument("--plot_node_error", default=True)
+    parser.add_argument("--normalize", action="store_true", default=False)
+
     args = parser.parse_args()
     return args
 
@@ -84,6 +86,59 @@ def load_data(train_dir, val_dir, test_dir):
         write_to_pkl(test, "./data_generation/loaded_data/test.pkl")
 
         print("Data Loaded and saved to pkl files")
+
+    return train, val, test
+
+
+def normalize_data(train, val, test, standard_normalizaton=True):
+    # train, val and test are lists of torch_geometric.data.Data objects
+    # create a tensor for x, y and edge_attr for all data (train, val, test)
+    combined_x = th.cat([data.x for data in train + val + test], dim=0)
+    combined_y = th.cat([data.y for data in train + val + test], dim=0)
+    combined_edge_attr = th.cat([data.edge_attr for data in train + val + test], dim=0)
+
+    epsilon = 1e-7  # to avoid division by zero
+
+    # Standard normalization between -1 and 1
+    if standard_normalizaton:
+
+        # compute mean and std for all columns
+        mean_x = th.mean(combined_x, dim=0)
+        std_x = th.std(combined_x, dim=0)
+
+        mean_y = th.mean(combined_y, dim=0) 
+        std_y = th.std(combined_y, dim=0)
+
+        mean_edge_attr = th.mean(combined_edge_attr, dim=0) 
+        std_edge_attr = th.std(combined_edge_attr, dim=0)
+
+        # normalize data
+        for data in train + val + test:
+            data.x = (data.x - mean_x) / (std_x + epsilon)
+            data.y = (data.y - mean_y) / (std_y + epsilon)
+            data.edge_attr = (data.edge_attr - mean_edge_attr) / (std_edge_attr + epsilon)
+    
+    else: # Use min max normalization to normalize data between 0 and 1 
+        # https://en.wikipedia.org/wiki/Feature_scaling#Rescaling_(min-max_normalization)
+        
+        # find min value and max for all columns
+        # x: vn_kv, p_mw_gen, vm_pu, p_mw_load, q_mvar
+        min_x = th.min(combined_x, dim=0).values # tensor([     0.6000,   -681.7000,      0.0000,      0.0000,   -171.5000])
+        max_x = th.max(combined_x, dim=0).values # tensor([  500.0000, 56834.0000,     1.1550, 57718.0000, 13936.0000])
+
+        # y: p_mw, q_mvar, va_degree, vm_pu
+        min_y = th.min(combined_y, dim=0).values # tensor([-11652.4385,  -5527.3564,   -156.9993,      0.0579])
+        max_y = th.max(combined_y, dim=0).values # tensor([ 5844.1426,  1208.3413,   160.0282,     1.9177])
+
+        # edge_attr: r_ohm_per_km, x_ohm_per_km, c_nf_per_km, g_us_per_km, max_i_ka, parallel, df, length_km
+        min_edge_attr = th.min(combined_edge_attr, dim=0).values # tensor([  -296.9000,      0.0306,      0.0000,      0.0000,      0.0684,   1.0000,      1.0000,      1.0000])
+        max_edge_attr = th.max(combined_edge_attr, dim=0).values # tensor([ 1152.5000,  1866.5001,  4859.9951,     0.0000, 99999.0000,     1.0000,   1.0000,     1.0000])
+
+        # normalize data
+        for data in train + val + test:
+            data.x = (data.x - min_x) / (max_x - min_x + epsilon)
+            data.y = (data.y - min_y) / (max_y - min_y + epsilon)
+            data.edge_attr = (data.edge_attr - min_edge_attr) / (max_edge_attr - min_edge_attr + epsilon)
 
     return train, val, test
 
