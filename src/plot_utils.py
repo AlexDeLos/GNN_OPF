@@ -5,7 +5,21 @@ import pandas as pd
 import torch as th
 import matplotlib.pyplot as plt
 
+import numpy as np
+import matplotlib.pyplot as plt
+
 def plot_losses(losses, val_losses, model_name):
+    """
+    Plots the training and validation losses for a given model.
+
+    Args:
+        losses (list): List of training losses.
+        val_losses (list): List of validation losses.
+        model_name (str): Name of the model.
+
+    Returns:
+        None
+    """
     epochs = np.arange(len(losses))
 
     plt.subplot(1, 2, 1)
@@ -43,12 +57,19 @@ def distance_plot(model, batch):
     plt.title("Error with distance from the generator")
     plt.ylabel("Error")
     plt.xticks(range(0,len))
-    timestamp = pd.Timestamp.now().strftime("%Y-%m-%d %H:%M")
-    model_name = "distance_plot" + "_" + model.class_name + "_" + str(timestamp)
     plt.xlabel("Nodes away from the generator the node was located")
-    plt.savefig(f"plots/{model_name}.png")
+    # change directory to root of project
+    os.chdir(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    if not os.path.exists("plots"):
+        os.mkdir("plots")
+
+    timestamp = pd.Timestamp.now().strftime("%Y-%m-%d %H:%M")
+
+    model_name = "distance_plot" + "_" + model.class_name + "_" + str(timestamp)
+    plt.savefig(f"plots/{model_name}.png", format="png")
     plt.show()
-    plt.close()
+
+
 
 def get_distance_loss(out, labels, data):
     """
@@ -77,9 +98,6 @@ def get_distance_loss(out, labels, data):
             res[i] = res[i]/normalization_vector[i]
     return res, len(res)
 
-
-def MES_loss(cur,out,label):
-    return th.add(cur+th.abs(out-label))
 
 
 def get_distance_from_generator(data):
@@ -126,7 +144,6 @@ def get_neighbors(data, node):
     edges = data.edge_index
 
     #assume they are ordered
-    #broken:
     for edge_idex,node_at_other_end in enumerate(edges[0,:]):
         if node_at_other_end.item() == node:
             neighbors.add(edges[1,edge_idex].item())
