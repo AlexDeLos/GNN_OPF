@@ -224,7 +224,7 @@ def get_criterion(criterion_name):
         return nn.L1Loss()
     
 
-def save_model(model, model_name, model_class_name):
+def save_model(model, model_name):
     state = {
         'model': model, # save the model object with some of its parameters
         'state_dict': model.state_dict(),
@@ -232,7 +232,7 @@ def save_model(model, model_name, model_class_name):
 
     timestamp = pd.Timestamp.now().strftime("%Y-%m-%d %H:%M")
 
-    model_name = model_name + "_" + model_class_name + "_" + str(timestamp)
+    model_name = model_name + "_" + model.class_name + "_" + str(timestamp)
 
     th.save(state, f"./trained_models/{model_name}")
 

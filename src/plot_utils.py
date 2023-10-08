@@ -1,7 +1,8 @@
-
-import torch as th
 import matplotlib.pyplot as plt 
 import numpy as np
+import os
+import pandas as pd
+import torch as th
 
 def plot_losses(losses, val_losses, model_name):
     epochs = np.arange(len(losses))
@@ -33,7 +34,16 @@ def distance_plot(model, batch):
     plt.xticks(range(0,len))
     plt.xlabel("Nodes away from the generator the node was located")
     plt.show()
-    plt.savefig("distance_plot.png")
+
+    # change directory to root of project
+    os.chdir(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    if not os.path.exists("plots"):
+        os.mkdir("plots")
+
+    timestamp = pd.Timestamp.now().strftime("%Y-%m-%d %H:%M")
+
+    model_name = "distance_plot" + "_" + model.class_name + "_" + str(timestamp)
+    plt.savefig(f"plots/{model_name}.png")
 
 
 def get_distance_loss(out,labels,data):

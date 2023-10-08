@@ -26,14 +26,16 @@ def main():
 
     print("Training Model")
     model, losses, val_losses, last_batch = train_model(arguments, train, val, test)
-    model_class_name = model.class_name
+
     if arguments.save_model:
         print("Saving Model")
-        save_model(model, arguments.model_name, model_class_name)
+        save_model(model, arguments.model_name)
     if arguments.plot:
-        plot_losses(losses, val_losses, model_class_name)
+        print("Plotting losses")
+        plot_losses(losses, val_losses, model.class_name)
     
     if arguments.plot_node_error:
+        print("Plotting node error per distance from generator")
         distance_plot(model, last_batch)
     
     
