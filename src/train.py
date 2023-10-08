@@ -1,6 +1,5 @@
 from torch_geometric.loader import DataLoader as pyg_DataLoader
 import tqdm
-import plot_utils
 from utils import get_gnn, get_optim, get_criterion
 
 
@@ -24,6 +23,7 @@ def train_model(arguments, train, val, test):
 
     losses = []
     val_losses = []
+    last_batch = None
     for epoch in tqdm.tqdm(range(arguments.n_epochs)): #args epochs
         epoch_loss = 0.0
         epoch_val_loss = 0.0
@@ -32,7 +32,7 @@ def train_model(arguments, train, val, test):
             epoch_loss += train_batch(data=batch, model=gnn, optimizer=optimizer, criterion=criterion)
         gnn.eval()
         for batch in val_dataloader:
-            # distance_plot(gnn, batch, True)
+            last_batch = batch
             epoch_val_loss += evaluate_batch(data=batch, model=gnn, criterion=criterion)
 
         avg_epoch_loss = epoch_loss.item() / len(train_dataloader)
@@ -43,36 +43,30 @@ def train_model(arguments, train, val, test):
 
         if epoch % 10 == 0:
             print(f'Epoch: {epoch:03d}, trn_Loss: {avg_epoch_loss:.6f}, val_loss: {avg_epoch_val_loss:.6f}')
-        if epoch == arguments.n_epochs-1 and arguments.plot_node_error:
-            plot_utils.distance_plot(gnn, batch,True)
+        
         #Early stopping
         try:  
             if val_losses[-1]>=val_losses[-2]:
                 early_stop += 1
                 if early_stop == arguments.patience:
                     print("Early stopping! Epoch:", epoch)
-                    distance_plot(gnn, batch)
                     break
             else:
                 early_stop = 0
         except:
             early_stop = 0
     
-    return gnn, losses, val_losses
-
+    return gnn, losses, val_losses, last_batch
 
 
 def train_batch(data, model, optimizer, criterion, device='cpu'):
     model.to(device)
     optimizer.zero_grad()
     out = model(data)
-    # each element i in this array represents the distance of the node i from the nearest generator
-
     loss = criterion(out, data.y)
     loss.backward()
     optimizer.step()
     return loss
-
 
 
 def evaluate_batch(data, model, criterion, device='cpu'):

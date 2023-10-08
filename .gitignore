@@ -177,4 +177,4 @@ trained_models/
 *.csv
 
 loaded_data/
-distance_plot.png
+plots/
