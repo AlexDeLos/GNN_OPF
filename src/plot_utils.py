@@ -33,7 +33,6 @@ def distance_plot(model, batch):
     plt.ylabel("Error")
     plt.xticks(range(0,len))
     plt.xlabel("Nodes away from the generator the node was located")
-    plt.show()
 
     # change directory to root of project
     os.chdir(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -44,6 +43,7 @@ def distance_plot(model, batch):
 
     model_name = "distance_plot" + "_" + model.class_name + "_" + str(timestamp)
     plt.savefig(f"plots/{model_name}.png")
+    plt.show()
 
 
 def get_distance_loss(out,labels,data):
