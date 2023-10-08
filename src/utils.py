@@ -36,8 +36,8 @@ def get_arguments():
     parser.add_argument("-l", "--learning_rate", default=1e-4)
     parser.add_argument("-w", "--weight_decay", default=0.05)
     parser.add_argument("--patience", default=40)
-    parser.add_argument("--plot_node_error", action="store_true", default=True)
-    parser.add_argument("--normalize", action="store_true", default=True)
+    parser.add_argument("--plot_node_error", action="store_true", default=False)
+    parser.add_argument("--normalize", action="store_true", default=False)
 
     args = parser.parse_args()
     return args

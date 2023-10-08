@@ -43,9 +43,12 @@ def distance_plot(model, batch):
     plt.title("Error with distance from the generator")
     plt.ylabel("Error")
     plt.xticks(range(0,len))
+    timestamp = pd.Timestamp.now().strftime("%Y-%m-%d %H:%M")
+    model_name = "distance_plot" + "_" + model.class_name + "_" + str(timestamp)
     plt.xlabel("Nodes away from the generator the node was located")
+    plt.savefig(f"plots/{model_name}.png")
     plt.show()
-    plt.savefig("distance_plot.png")
+    plt.close()
 
 def get_distance_loss(out, labels, data):
     """
