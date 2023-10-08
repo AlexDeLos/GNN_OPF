@@ -3,17 +3,16 @@ import torch as th
 import matplotlib.pyplot as plt 
 
 
-def distance_plot(model, batch, show = False):
+def distance_plot(model, batch):
     out = model(batch)
     distance_loss,len = get_distance_loss(out,batch.y,batch)
-    if(show):
-        plt.bar(list(range(0,len)), distance_loss, color ='maroon')
-        plt.title("Error with distance from the generator")
-        plt.ylabel("Error")
-        plt.xticks(range(0,len))
-        plt.xlabel("Nodes away from the generator the node was located")
-        plt.show()
-        plt.savefig("distance_plot.png")
+    plt.bar(list(range(0,len)), distance_loss, color ='maroon')
+    plt.title("Error with distance from the generator")
+    plt.ylabel("Error")
+    plt.xticks(range(0,len))
+    plt.xlabel("Nodes away from the generator the node was located")
+    plt.show()
+    plt.savefig("distance_plot.png")
 
 def get_distance_loss(out,labels,data):
     res = [0]
