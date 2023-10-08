@@ -1,6 +1,27 @@
 
 import torch as th
 import matplotlib.pyplot as plt 
+import numpy as np
+
+def plot_losses(losses, val_losses, model_name):
+    epochs = np.arange(len(losses))
+
+    plt.subplot(1, 2, 1)
+    plt.title(f"{model_name} - Power Flow Training Learning Curve")
+    plt.plot(epochs, losses, label="Training Loss")
+    plt.legend()
+    plt.xlabel("Epochs")
+    plt.ylabel("MSE")
+
+    plt.subplot(1, 2, 2)
+    plt.title(f"{model_name} - Power Flow Validation Learning Curve")
+    plt.plot(epochs, val_losses, label="Validation Loss")
+    plt.legend()
+    plt.xlabel("Epochs")
+    plt.ylabel("MSE")
+
+    plt.tight_layout()
+    plt.show()
 
 
 def distance_plot(model, batch):
@@ -13,6 +34,7 @@ def distance_plot(model, batch):
     plt.xlabel("Nodes away from the generator the node was located")
     plt.show()
     plt.savefig("distance_plot.png")
+
 
 def get_distance_loss(out,labels,data):
     res = [0]
@@ -30,8 +52,10 @@ def get_distance_loss(out,labels,data):
             res[i] = res[i]/norm[i]
     return res, len(res)
 
+
 def MES_loss(cur,out,label):
     return th.add(cur+th.abs(out-label))
+
 
 def get_distance_from_generator(data):
     distances = []
@@ -52,6 +76,7 @@ def get_distance_from_generator(data):
             result[el] = max_distance
     return result
 
+
 def get_neighbors(data, node):
     neighbors = set()
     edges = data.edge_index
@@ -63,6 +88,7 @@ def get_neighbors(data, node):
             neighbors.add(edges[1,i].item())
     
     return neighbors
+
 
 def BFS(graph, source):
 

@@ -1,6 +1,6 @@
 from train import train_model
-from utils import get_arguments, load_data, normalize_data, save_model, plot_losses
-from plot_utils import distance_plot
+from utils import get_arguments, load_data, normalize_data, save_model
+from plot_utils import distance_plot, plot_losses
 import warnings
 
 # Suppress FutureWarning

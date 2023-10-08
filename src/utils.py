@@ -237,26 +237,6 @@ def save_model(model, model_name, model_class_name):
     th.save(state, f"./trained_models/{model_name}")
 
 
-def plot_losses(losses, val_losses, model_name):
-    epochs = np.arange(len(losses))
-
-    plt.subplot(1, 2, 1)
-    plt.title(f"{model_name} - Power Flow Training Learning Curve")
-    plt.plot(epochs, losses, label="Training Loss")
-    plt.legend()
-    plt.xlabel("Epochs")
-    plt.ylabel("MSE")
-
-    plt.subplot(1, 2, 2)
-    plt.title(f"{model_name} - Power Flow Validation Learning Curve")
-    plt.plot(epochs, val_losses, label="Validation Loss")
-    plt.legend()
-    plt.xlabel("Epochs")
-    plt.ylabel("MSE")
-
-    plt.tight_layout()
-    plt.show()
-
 def write_to_pkl(data, path):
     with open(path, 'wb') as f:
         pickle.dump(data, f)
