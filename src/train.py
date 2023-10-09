@@ -23,6 +23,7 @@ def train_model(arguments, train, val):
 
     losses = []
     val_losses = []
+    last_batch = None
     for epoch in tqdm.tqdm(range(arguments.n_epochs)): #args epochs
         epoch_loss = 0.0
         epoch_val_loss = 0.0
@@ -31,6 +32,7 @@ def train_model(arguments, train, val):
             epoch_loss += train_batch(data=batch, model=gnn, optimizer=optimizer, criterion=criterion)
         gnn.eval()
         for batch in val_dataloader:
+            last_batch = batch
             epoch_val_loss += evaluate_batch(data=batch, model=gnn, criterion=criterion)
 
         avg_epoch_loss = epoch_loss.item() / len(train_dataloader)
@@ -54,7 +56,7 @@ def train_model(arguments, train, val):
         except:
             early_stop = 0
     
-    return gnn, losses, val_losses
+    return gnn, losses, val_losses, last_batch
 
 
 def train_batch(data, model, optimizer, criterion, device='cpu'):

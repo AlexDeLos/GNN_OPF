@@ -177,3 +177,4 @@ trained_models/
 *.csv
 
 loaded_data/
+plots/
