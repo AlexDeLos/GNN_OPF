@@ -114,7 +114,8 @@ def get_distance_from_generator(data):
     for node_index, node in enumerate(data.x):
         #if the p_mw_gen is > 0 then it is a generator
         vm_pu = node[2]
-        if vm_pu > 0:
+        p_mw_gen = node[1]
+        if vm_pu > 0 and p_mw_gen > 0:
             distances.append(BFS(data, node_index))
 
     result = [-1]*len(data.x)
