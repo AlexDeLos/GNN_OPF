@@ -27,11 +27,10 @@ def main():
     print("Training Model")
     
     model, losses, val_losses, last_batch = train_model(arguments, train, val)
-    model_class_name = model.class_name
 
     if arguments.save_model:
         print("Saving Model")
-        save_model(model, arguments.model_name, model_class_name)
+        save_model(model, arguments.model_name)
     if arguments.plot:
         print("Plotting losses")
         plot_losses(losses, val_losses, model.class_name)
