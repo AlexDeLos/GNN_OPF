@@ -40,7 +40,7 @@ def train_model(arguments, train, val):
         val_losses.append(avg_epoch_val_loss)
 
         if epoch % 10 == 0:
-            print(f'Epoch: {epoch:03d}, trn_Loss: {avg_epoch_loss:.3f}, val_loss: {avg_epoch_val_loss:.3f}')
+            print(f'Epoch: {epoch:03d}, trn_Loss: {avg_epoch_loss:.6f}, val_loss: {avg_epoch_val_loss:.6f}')
         
         #Early stopping
         try:  

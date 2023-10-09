@@ -18,8 +18,6 @@ echo "Generating from case30"
 python $SCRIPT_DIR/generate.py case30 -n 15 -s $SCRIPT_DIR/train  >/dev/null
 echo "Generating from case_ieee30"
 python $SCRIPT_DIR/generate.py case_ieee30 -n 15 -s $SCRIPT_DIR/train  >/dev/null
-echo "Generating from case33bw"
-python $SCRIPT_DIR/generate.py case33bw -n 15 -s $SCRIPT_DIR/train  >/dev/null
 echo "Generating from case39"
 python $SCRIPT_DIR/generate.py case39 -n 15 -s $SCRIPT_DIR/train  >/dev/null
 echo "Generating from case57"
