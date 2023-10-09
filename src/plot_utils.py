@@ -112,11 +112,10 @@ def get_distance_from_generator(data):
     """
     distances = []
     for node_index, node in enumerate(data.x):
-        #if the p_mw_gen is > 0 then it is a generator
+        #if the p_mw_gen is > 0 and vm_pu > 0 then it is a generator
         vm_pu = node[2]
         p_mw_gen = node[1]
         if vm_pu > 0 and p_mw_gen > 0:
-            #distances.append(BFS(data, node_index))
             dis = [[]]
             dfs(set(), data, node_index, 0, dis)
             distances.append(dis)
@@ -127,7 +126,7 @@ def get_distance_from_generator(data):
         for distance in distances:
             for node_index in distance:
                 if el in node_index and max_distance > distance.index(node_index):
-                    max_distance = distance.index(node_index) #285 gives 22, should it?
+                    max_distance = distance.index(node_index)
         if max_distance != 999999999:
             result[el] = max_distance
     return result
@@ -188,6 +187,5 @@ def dfs(visited, graph, node, depth, ret_array):
         if node == 285 and depth == 3:
             x= 1
         for node_connected in get_neighbors(graph, node):
-            #problem is not here
             dfs(visited, graph, node_connected, depth + 1, ret_array)
 
