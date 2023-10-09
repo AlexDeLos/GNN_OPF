@@ -235,15 +235,15 @@ def get_criterion(criterion_name):
     if criterion_name == "L1Loss":
         return nn.L1Loss()
     
-
-def save_model(model, model_name):
+def save_model(model, model_name, model_class_name):
     state = {
         'model': model, # save the model object with some of its parameters
         'state_dict': model.state_dict(),
     }
     # timestamp = pd.Timestamp.now().strftime("%Y-%m-%d")
-    model_name = model_name + "_" + model.class_name # + "_" + str(timestamp)
+    model_name = model_name + "_" + model_class_name # + "_" + str(timestamp)
     th.save(model.state_dict(), f"./trained_models/{model_name}.pt")
+    
 
 def load_model(gnn_type, path, data):
     input_dim = data[0].x.shape[1]
