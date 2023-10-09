@@ -127,7 +127,7 @@ def get_distance_from_generator(data):
         for distance in distances:
             for node_index in distance:
                 if el in node_index and max_distance > distance.index(node_index):
-                    max_distance = distance.index(node_index)
+                    max_distance = distance.index(node_index) #285 gives 22, should it?
         if max_distance != 999999999:
             result[el] = max_distance
     return result
@@ -170,62 +170,24 @@ def dfs(visited, graph, node, depth, ret_array):
     Returns:
         None
     """
-    if node not in visited:
+    this_path_is_shorter = True
+    if node in visited:
+        for dep in range(0,depth):
+            for i in range(len(ret_array[dep])):
+                if ret_array[dep][i] == node:
+                    this_path_is_shorter = False
+                    break
+
+    if node not in visited or this_path_is_shorter:
         if len(ret_array) <= depth:
             ret_array.append([])
         ret_array[depth].append(node)
         visited.add(node)
+        if node == 284 and depth == 2:
+            x= 1
+        if node == 285 and depth == 3:
+            x= 1
         for node_connected in get_neighbors(graph, node):
+            #problem is not here
             dfs(visited, graph, node_connected, depth + 1, ret_array)
 
-
-def BFS(graph, source):
-    """
-    Perform a breadth-first search on a graph starting from a given source node.
-
-    Args:
-        graph (Graph): The graph to search.
-        source (int): The index of the source node.
-
-    Returns:
-        list: A list of lists, where each inner list contains the indices of nodes at a given depth
-              from the source node. The outer list contains all the inner lists in order of increasing depth.
-    """
-    # Mark all the vertices as not visited
-    visited = [False] * graph.edge_index.shape[1]
-
-    # Create a queue for BFS
-    queue = []
-
-    
-    bfs_neighbors = [[]]
-    bfs_neighbors[0].append(source)
-    depth = 0
-
-    # Mark the source node as
-    # visited and enqueue it
-    queue.append(source)
-    queue.append(-1)
-    visited[source] = True
-
-    while queue:
-
-        # Dequeue a vertex from
-        # queue and print it
-        s = queue.pop(0)
-        if s == -1:
-            depth +=1
-            bfs_neighbors.append([])
-        else: 
-
-            # Get all adjacent vertices of the
-            # dequeued vertex s.
-            # If an adjacent has not been visited,
-            # then mark it visited and enqueue it
-            for node_connected in get_neighbors(graph, s):
-                if visited[node_connected] == False:
-                    queue.append(node_connected)
-                    visited[node_connected] = True
-                    bfs_neighbors[depth].append(node_connected)
-            queue.append(-1)
-    return bfs_neighbors
