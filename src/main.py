@@ -21,11 +21,11 @@ def main():
 
     print(f"Data Loaded \n",
           f"Number of training samples = {len(train)}\n",
-          f"Number of validation samples = {len(val)}\n",
-          f"Number of testing samples = {len(test)}\n",)
+          f"Number of validation samples = {len(val)}\n")
+        #   f"Number of testing samples = {len(test)}\n",)
 
     print("Training Model")
-    model, losses, val_losses, last_batch = train_model(arguments, train, val, test)
+    model, losses, val_losses, last_batch = train_model(arguments, train, val)#, test)
 
     if arguments.save_model:
         print("Saving Model")

@@ -36,30 +36,11 @@ def get_arguments():
     parser.add_argument("-l", "--learning_rate", default=1e-4)
     parser.add_argument("-w", "--weight_decay", default=0.05)
     parser.add_argument("--patience", default=40)
-    parser.add_argument("--plot_node_error", action="store_true", default=False)
+    parser.add_argument("--plot_node_error", action="store_true", default=True)
     parser.add_argument("--normalize", action="store_true", default=False)
 
     args = parser.parse_args()
     return args
-
-
-def load_data_helper(dir):
-    graph_path = f"{dir}/x"
-    sol_path = f"{dir}/y"
-    graph_paths = sorted(os.listdir(graph_path))
-    sol_paths = sorted(os.listdir(sol_path))
-    data = []
-
-    for i, g in tqdm.tqdm(enumerate(graph_paths)):
-        graph = pp.from_json(f"{graph_path}/{g}")
-        y_bus = pd.read_csv(f"{sol_path}/{sol_paths[i * 3]}", index_col=0)
-        y_gen = pd.read_csv(f"{sol_path}/{sol_paths[i * 3 + 1]}", index_col=0)
-        y_line = pd.read_csv(f"{sol_path}/{sol_paths[i * 3 + 2]}", index_col=0)
-
-        instance = create_data_instance(graph, y_bus, y_gen, y_line)
-        data.append(instance)
-
-    return data
 
 def load_data(train_dir, val_dir, test_dir):
     try:
@@ -89,6 +70,23 @@ def load_data(train_dir, val_dir, test_dir):
 
     return train, val, test
 
+def load_data_helper(dir):
+    graph_path = f"{dir}/x"
+    sol_path = f"{dir}/y"
+    graph_paths = sorted(os.listdir(graph_path))
+    sol_paths = sorted(os.listdir(sol_path))
+    data = []
+
+    for i, g in tqdm.tqdm(enumerate(graph_paths)):
+        graph = pp.from_json(f"{graph_path}/{g}")
+        y_bus = pd.read_csv(f"{sol_path}/{sol_paths[i * 3]}", index_col=0)
+        y_gen = pd.read_csv(f"{sol_path}/{sol_paths[i * 3 + 1]}", index_col=0)
+        y_line = pd.read_csv(f"{sol_path}/{sol_paths[i * 3 + 2]}", index_col=0)
+
+        instance = create_data_instance(graph, y_bus, y_gen, y_line)
+        data.append(instance)
+
+    return data
 
 def normalize_data(train, val, test, standard_normalizaton=True):
     # train, val and test are lists of torch_geometric.data.Data objects
@@ -145,7 +143,7 @@ def normalize_data(train, val, test, standard_normalizaton=True):
 
 # return a torch_geometric.data.Data object for each instance
 def create_data_instance(graph, y_bus, y_gen, y_line):
-    g = ppl.create_nxgraph(graph, include_trafos=False)
+    g = ppl.create_nxgraph(graph, include_trafos=True)
 
     # https://pandapower.readthedocs.io/en/latest/elements/gen.html
     gen = graph.gen[['bus', 'p_mw', 'vm_pu']]
@@ -167,7 +165,10 @@ def create_data_instance(graph, y_bus, y_gen, y_line):
     node_feat.fillna(0.0, inplace=True)
     # remove duplicate columns/indices
     node_feat = node_feat[~node_feat.index.duplicated(keep='first')]
-
+    # print("here")
+    # print(gen)
+    # print(load)
+    # print(node_feat)
     for node in node_feat.itertuples():
         # set each node features
         g.nodes[node.Index]['x'] = [float(node.vn_kv), #bus, the grid voltage level.
@@ -177,22 +178,35 @@ def create_data_instance(graph, y_bus, y_gen, y_line):
                                     float(node.q_mvar)] #load, the reactive power of the load
         
         # set each node label
-        g.nodes[node.Index]['y'] = [float(y_bus['p_mw'][node.Index]), # the active power at the node
-                                    float(y_bus['q_mvar'][node.Index]), # the reactive power at the node
-                                    float(y_bus['va_degree'][node.Index]), # the voltage angle at the node
-                                    float(y_bus['vm_pu'][node.Index])] # the voltage magnitude at the node
-        
-    # quit()
-    # https://pandapower.readthedocs.io/en/latest/elements/line.html
+        g.nodes[node.Index]['y'] = [float(y_bus['p_mw'][node.Index]),
+                                    float(y_bus['q_mvar'][node.Index]),
+                                    float(y_bus['va_degree'][node.Index]),
+                                    float(y_bus['vm_pu'][node.Index])]
+    first = True
     for edges in graph.line.itertuples():
-        g.edges[edges.from_bus, edges.to_bus, ('line', edges.Index)]['edge_attr'] = [float(edges.r_ohm_per_km), #  line resistance in ohm per km
-                                                                                     float(edges.x_ohm_per_km), #  line reactance in ohm per km
-                                                                                     float(edges.c_nf_per_km), # line capacitance (line-to-earth) in nano Farad per km
-                                                                                     float(edges.g_us_per_km), # dielectric conductance in micro Siemens per km
-                                                                                     float(edges.max_i_ka), # maximum thermal current in kilo Ampere
-                                                                                     float(edges.parallel), #  number of parallel line systems
-                                                                                     float(edges.df), # derating factor: maximal current of line in relation to nominal current of line (from 0 to 1)
-                                                                                     float(edges.length_km),] # The line length in km
+        if first:
+            common_edge = edges
+            first = False
+        g.edges[edges.from_bus, edges.to_bus, ('line', edges.Index)]['edge_attr'] = [float(edges.r_ohm_per_km),
+                                                                                     float(edges.x_ohm_per_km),
+                                                                                     float(edges.c_nf_per_km),
+                                                                                     float(edges.g_us_per_km),
+                                                                                     float(edges.max_i_ka),
+                                                                                     float(edges.parallel),
+                                                                                     float(edges.df),
+                                                                                     float(edges.length_km)]
+    # print(common_edge)
+    for trafos in graph.trafo.itertuples():
+        g.edges[trafos.lv_bus, trafos.hv_bus, ('trafo', trafos.Index)]['edge_attr'] = [float(common_edge.r_ohm_per_km),
+                                                                                     float(common_edge.x_ohm_per_km),
+                                                                                     float(common_edge.c_nf_per_km),
+                                                                                     float(common_edge.g_us_per_km),
+                                                                                     float(common_edge.max_i_ka),
+                                                                                     float(common_edge.parallel),
+                                                                                     float(common_edge.df),
+                                                                                     1]
+
+
 
     return from_networkx(g)
 
@@ -209,8 +223,6 @@ def get_gnn(gnn_name):
     
     if gnn_name == "GINE":
         return GINE
-
-    
 
 def get_optim(optim_name):
     if optim_name == "Adam":
@@ -229,12 +241,19 @@ def save_model(model, model_name):
         'model': model, # save the model object with some of its parameters
         'state_dict': model.state_dict(),
     }
+    # timestamp = pd.Timestamp.now().strftime("%Y-%m-%d")
+    model_name = model_name + "_" + model.class_name # + "_" + str(timestamp)
+    th.save(model.state_dict(), f"./trained_models/{model_name}.pt")
 
-    timestamp = pd.Timestamp.now().strftime("%Y-%m-%d %H:%M")
-
-    model_name = model_name + "_" + model.class_name + "_" + str(timestamp)
-
-    th.save(state, f"./trained_models/{model_name}")
+def load_model(gnn_type, path, data):
+    input_dim = data[0].x.shape[1]
+    edge_attr_dim = data[0].edge_attr.shape[1] 
+    output_dim = data[0].y.shape[1]
+    print(input_dim, edge_attr_dim, output_dim)
+    gnn_class = get_gnn(gnn_type)
+    model = gnn_class(input_dim, output_dim, edge_attr_dim)
+    model.load_state_dict(th.load(path))
+    return model
 
 
 def write_to_pkl(data, path):
