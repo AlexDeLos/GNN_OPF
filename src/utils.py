@@ -56,16 +56,16 @@ def load_data(train_dir, val_dir, test_dir):
         print("Testing Data...")
         test = load_data_helper(test_dir)
 
-        # # create folder if it doesn't exist
-        # if not os.path.exists("./data_generation/loaded_data"):
-        #     os.makedirs("./data_generation/loaded_data")
+        # create folder if it doesn't exist
+        if not os.path.exists("./data_generation/loaded_data"):
+            os.makedirs("./data_generation/loaded_data")
 
-        # # save data to pkl
-        # write_to_pkl(train, "./data_generation/loaded_data/train.pkl")
-        # write_to_pkl(val, "./data_generation/loaded_data/val.pkl")
-        # write_to_pkl(test, "./data_generation/loaded_data/test.pkl")
+        # save data to pkl
+        write_to_pkl(train, "./data_generation/loaded_data/train.pkl")
+        write_to_pkl(val, "./data_generation/loaded_data/val.pkl")
+        write_to_pkl(test, "./data_generation/loaded_data/test.pkl")
 
-        # print("Data Loaded and saved to pkl files")
+        print("Data Loaded and saved to pkl files")
 
     return train, val, test
 
