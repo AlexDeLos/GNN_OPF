@@ -39,6 +39,33 @@ def get_arguments():
     args = parser.parse_args()
     return args
 
+def load_data(train_dir, val_dir, test_dir):
+    try:
+        train = read_from_pkl("./data_generation/loaded_data/train.pkl")
+        val = read_from_pkl("./data_generation/loaded_data/val.pkl")
+        test = read_from_pkl("./data_generation/loaded_data/test.pkl")
+        print("Data Loaded from pkl files")
+    except:
+        print("Data not found, loading from json files...")
+        print("Training Data...")
+        train = load_data_helper(train_dir)
+        print("Validation Data...")
+        val = load_data_helper(val_dir)
+        print("Testing Data...")
+        test = load_data_helper(test_dir)
+
+        # # create folder if it doesn't exist
+        # if not os.path.exists("./data_generation/loaded_data"):
+        #     os.makedirs("./data_generation/loaded_data")
+
+        # # save data to pkl
+        # write_to_pkl(train, "./data_generation/loaded_data/train.pkl")
+        # write_to_pkl(val, "./data_generation/loaded_data/val.pkl")
+        # write_to_pkl(test, "./data_generation/loaded_data/test.pkl")
+
+        # print("Data Loaded and saved to pkl files")
+
+    return train, val, test
 
 def load_data_helper(dir):
     graph_path = f"{dir}/x"
@@ -57,35 +84,6 @@ def load_data_helper(dir):
         data.append(instance)
 
     return data
-
-def load_data(train_dir, val_dir, test_dir):
-    try:
-        train = read_from_pkl("./data_generation/loaded_data/train.pkl")
-        val = read_from_pkl("./data_generation/loaded_data/val.pkl")
-        test = read_from_pkl("./data_generation/loaded_data/test.pkl")
-        print("Data Loaded from pkl files")
-    except:
-        print("Data not found, loading from json files...")
-        print("Training Data...")
-        train = load_data_helper(train_dir)
-        print("Validation Data...")
-        val = load_data_helper(val_dir)
-        print("Testing Data...")
-        test = load_data_helper(test_dir)
-
-        # create folder if it doesn't exist
-        if not os.path.exists("./data_generation/loaded_data"):
-            os.makedirs("./data_generation/loaded_data")
-
-        # save data to pkl
-        write_to_pkl(train, "./data_generation/loaded_data/train.pkl")
-        write_to_pkl(val, "./data_generation/loaded_data/val.pkl")
-        write_to_pkl(test, "./data_generation/loaded_data/test.pkl")
-
-        print("Data Loaded and saved to pkl files")
-
-    return train, val, test
-
 
 # return a torch_geometric.data.Data object for each instance
 def create_data_instance(graph, y_bus, y_gen, y_line):
@@ -111,7 +109,10 @@ def create_data_instance(graph, y_bus, y_gen, y_line):
     node_feat.fillna(0.0, inplace=True)
     # remove duplicate columns/indices
     node_feat = node_feat[~node_feat.index.duplicated(keep='first')]
-
+    # print("here")
+    # print(gen)
+    # print(load)
+    # print(node_feat)
     for node in node_feat.itertuples():
         # set each node features
         g.nodes[node.Index]['x'] = [float(node.vn_kv), #bus, the grid voltage level.
@@ -125,8 +126,11 @@ def create_data_instance(graph, y_bus, y_gen, y_line):
                                     float(y_bus['q_mvar'][node.Index]),
                                     float(y_bus['va_degree'][node.Index]),
                                     float(y_bus['vm_pu'][node.Index])]
-        
+    first = True
     for edges in graph.line.itertuples():
+        if first:
+            common_edge = edges
+            first = False
         g.edges[edges.from_bus, edges.to_bus, ('line', edges.Index)]['edge_attr'] = [float(edges.r_ohm_per_km),
                                                                                      float(edges.x_ohm_per_km),
                                                                                      float(edges.c_nf_per_km),
@@ -135,17 +139,19 @@ def create_data_instance(graph, y_bus, y_gen, y_line):
                                                                                      float(edges.parallel),
                                                                                      float(edges.df),
                                                                                      float(edges.length_km)]
-        
+    # print(common_edge)
     for trafos in graph.trafo.itertuples():
-        g.edges[trafos.lv_bus, trafos.hv_bus, ('trafo', trafos.Index)]['edge_attr'] = [trafos.vk_percent * (trafos.vn_lv_kv ** 2) / trafos.sn_mva,
-                                                                                       trafos.vk_percent * (trafos.vn_hv_kv ** 2) / trafos.sn_mva,
-                                                                                       0.0, 
-                                                                                       0.0, 
-                                                                                       0.0, 
-                                                                                       0.0, 
-                                                                                       0.0, 
-                                                                                       1.0]
-        
+        g.edges[trafos.lv_bus, trafos.hv_bus, ('trafo', trafos.Index)]['edge_attr'] = [float(common_edge.r_ohm_per_km),
+                                                                                     float(common_edge.x_ohm_per_km),
+                                                                                     float(common_edge.c_nf_per_km),
+                                                                                     float(common_edge.g_us_per_km),
+                                                                                     float(common_edge.max_i_ka),
+                                                                                     float(common_edge.parallel),
+                                                                                     float(common_edge.df),
+                                                                                     1]
+
+
+
     return from_networkx(g)
 
 
@@ -161,8 +167,6 @@ def get_gnn(gnn_name):
     
     if gnn_name == "GINE":
         return GINE
-
-    
 
 def get_optim(optim_name):
     if optim_name == "Adam":

@@ -5,11 +5,11 @@ import matplotlib.pyplot as plt
 from torch_geometric.loader import DataLoader
 
 
-from utils import get_gnn, load_data, load_model
+from utils import load_data_helper, load_model
 
 def main():
     args = parse_args()
-    data = load_data(args.data_path)
+    data = load_data_helper(args.data_path)
     model = load_model(args.gnn_type, args.model_path, data)
     errors, p_errors = test(model, data)
 
@@ -41,10 +41,10 @@ def test(model, data):
     mask = np.isinf(p_errors)
     p_errors[mask] = 0
 
-    plt.hist(errors)
-    plt.show()
-    plt.hist(p_errors)
-    plt.show()
+    # plt.hist(errors)
+    # plt.show()
+    # plt.hist(p_errors)
+    # plt.show()
 
     num_correct = np.sum(abs(p_errors) < 5, axis=0)
     

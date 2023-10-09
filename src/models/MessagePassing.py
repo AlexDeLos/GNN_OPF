@@ -33,12 +33,12 @@ class MessagePassingGNN(MessagePassing):
 
         if num_layers == 1:
             self.node_layers.append(nn.Linear(input_dim, output_dim))
-            self.edge_layers.append(nn.Linear(edge_attr_dim[1], output_dim))
+            self.edge_layers.append(nn.Linear(edge_attr_dim, output_dim)) #[1]
 
         else:
             # Input layer
             self.node_layers.append(nn.Linear(input_dim, hidden_dim))
-            self.edge_layers.append(nn.Linear(edge_attr_dim[1], hidden_dim))
+            self.edge_layers.append(nn.Linear(edge_attr_dim, hidden_dim)) #[1]
 
             # Hidden layers
             for _ in range(num_layers - 2):
