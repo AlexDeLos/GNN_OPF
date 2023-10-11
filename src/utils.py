@@ -44,9 +44,9 @@ def get_arguments():
 
 def load_data(train_dir, val_dir, test_dir):
     try:
-        train = read_from_pkl("./data_generation/loaded_data/train.pkl")
-        val = read_from_pkl("./data_generation/loaded_data/val.pkl")
-        test = read_from_pkl("./data_generation/loaded_data/test.pkl")
+        train = read_from_pkl("../data_generation/loaded_data/train.pkl")
+        val = read_from_pkl("../data_generation/loaded_data/val.pkl")
+        test = read_from_pkl("../data_generation/loaded_data/test.pkl")
         print("Data Loaded from pkl files")
     except:
         print("Data not found, loading from json files...")
@@ -58,13 +58,13 @@ def load_data(train_dir, val_dir, test_dir):
         test = load_data_helper(test_dir)
 
         # create folder if it doesn't exist
-        if not os.path.exists("./data_generation/loaded_data"):
-            os.makedirs("./data_generation/loaded_data")
+        if not os.path.exists("../data_generation/loaded_data"):
+            os.makedirs("../data_generation/loaded_data")
 
         # save data to pkl
-        write_to_pkl(train, "./data_generation/loaded_data/train.pkl")
-        write_to_pkl(val, "./data_generation/loaded_data/val.pkl")
-        write_to_pkl(test, "./data_generation/loaded_data/test.pkl")
+        write_to_pkl(train, "../data_generation/loaded_data/train.pkl")
+        write_to_pkl(val, "../data_generation/loaded_data/val.pkl")
+        write_to_pkl(test, "../data_generation/loaded_data/test.pkl")
 
         print("Data Loaded and saved to pkl files")
 
