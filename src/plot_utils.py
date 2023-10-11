@@ -182,10 +182,6 @@ def dfs(visited, graph, node, depth, ret_array):
             ret_array.append([])
         ret_array[depth].append(node)
         visited.add(node)
-        if node == 284 and depth == 2:
-            x= 1
-        if node == 285 and depth == 3:
-            x= 1
         for node_connected in get_neighbors(graph, node):
             dfs(visited, graph, node_connected, depth + 1, ret_array)
 
