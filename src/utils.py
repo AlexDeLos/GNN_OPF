@@ -16,6 +16,7 @@ import torch as th
 import torch.nn as nn
 from torch_geometric.utils.convert import from_networkx
 import tqdm
+import math
 
 
 def get_arguments():
@@ -28,7 +29,7 @@ def get_arguments():
     parser.add_argument("--test", default="./Data/test")
     parser.add_argument("-s", "--save_model", action="store_true", default=True)
     parser.add_argument("-m", "--model_name", default=''.join([random.choice(string.ascii_letters + string.digits) for _ in range(8)]))
-    parser.add_argument("-p", "--plot", action="store_true", default=True)
+    parser.add_argument("-p", "--plot", action="store_true", default=False)
     parser.add_argument("-o", "--optimizer", default="Adam")
     parser.add_argument("-c", "--criterion", default="MSELoss")
     parser.add_argument("-b", "--batch_size", default=16)
@@ -44,9 +45,9 @@ def get_arguments():
 
 def load_data(train_dir, val_dir, test_dir):
     try:
-        train = read_from_pkl("./data_generation/loaded_data/train.pkl")
-        val = read_from_pkl("./data_generation/loaded_data/val.pkl")
-        test = read_from_pkl("./data_generation/loaded_data/test.pkl")
+        train = read_from_pkl(f"{train_dir}/pickled.pkl")
+        val = read_from_pkl(f"{val_dir}/pickled.pkl")
+        test = read_from_pkl(f"{test_dir}/pickled.pkl")
         print("Data Loaded from pkl files")
     except:
         print("Data not found, loading from json files...")
@@ -57,14 +58,10 @@ def load_data(train_dir, val_dir, test_dir):
         print("Testing Data...")
         test = load_data_helper(test_dir)
 
-        # create folder if it doesn't exist
-        if not os.path.exists("./data_generation/loaded_data"):
-            os.makedirs("./data_generation/loaded_data")
-
         # save data to pkl
-        write_to_pkl(train, "./data_generation/loaded_data/train.pkl")
-        write_to_pkl(val, "./data_generation/loaded_data/val.pkl")
-        write_to_pkl(test, "./data_generation/loaded_data/test.pkl")
+        write_to_pkl(train, f"{train_dir}/pickled.pkl")
+        write_to_pkl(val, f"{val_dir}/pickled.pkl")
+        write_to_pkl(test, f"{test_dir}/pickled.pkl")
 
         print("Data Loaded and saved to pkl files")
 
@@ -155,56 +152,80 @@ def create_data_instance(graph, y_bus, y_gen, y_line):
     load.rename(columns={'p_mw': 'p_mw_load'}, inplace=True)
     load.set_index('bus', inplace=True)
 
+    ext = graph.ext_grid[['bus', 'vm_pu', 'va_degree']]
+    ext.rename(columns={'vm_pu': 'vm_pu_ext'}, inplace=True)
+    ext['va_degree'] = True
+    ext.set_index('bus', inplace=True)
+
+    shunt = graph.shunt[['bus', 'p_mw', 'q_mvar']]
+    shunt.rename(columns={'p_mw': 'p_mw_shunt', 'q_mvar': 'q_mvar_shunt'}, inplace=True)
+    shunt.set_index('bus', inplace=True)
+
     # https://pandapower.readthedocs.io/en/latest/elements/bus.html
     node_feat = graph.bus[['vn_kv', 'max_vm_pu', 'min_vm_pu']]
 
     # make sure all nodes (bus, gen, load) have the same number of features (namely the union of all features)
     node_feat = node_feat.merge(gen, left_index=True, right_index=True, how='outer')
     node_feat = node_feat.merge(load, left_index=True, right_index=True, how='outer')
+    node_feat = node_feat.merge(ext, left_index=True, right_index=True, how='outer')
+    node_feat = node_feat.merge(shunt, left_index=True, right_index=True, how='outer')
+
     # fill missing feature values with 0
     node_feat.fillna(0.0, inplace=True)
+    node_feat['vm_pu'] = node_feat['vm_pu'] + node_feat['vm_pu_ext']
+    del node_feat['vm_pu_ext']
     # remove duplicate columns/indices
     node_feat = node_feat[~node_feat.index.duplicated(keep='first')]
-    # print("here")
-    # print(gen)
-    # print(load)
+
+    # print()
     # print(node_feat)
+    # quit()
     for node in node_feat.itertuples():
         # set each node features
         g.nodes[node.Index]['x'] = [float(node.vn_kv), #bus, the grid voltage level.
                                     float(node.p_mw_gen), #gen, the active power of the generator
                                     float(node.vm_pu), #gen, the voltage magnitude of the generator.
                                     float(node.p_mw_load), #load, the active power of the load
-                                    float(node.q_mvar)] #load, the reactive power of the load
+                                    float(node.q_mvar), #load, the reactive power of the load 
+                                    float(node.p_mw_shunt),
+                                    float(node.q_mvar_shunt),
+                                    float(node.va_degree)] 
         
         # set each node label
         g.nodes[node.Index]['y'] = [float(y_bus['p_mw'][node.Index]),
                                     float(y_bus['q_mvar'][node.Index]),
                                     float(y_bus['va_degree'][node.Index]),
                                     float(y_bus['vm_pu'][node.Index])]
+    
     first = True
     for edges in graph.line.itertuples():
         if first:
             common_edge = edges
             first = False
-        g.edges[edges.from_bus, edges.to_bus, ('line', edges.Index)]['edge_attr'] = [float(edges.r_ohm_per_km),
-                                                                                     float(edges.x_ohm_per_km),
-                                                                                     float(edges.c_nf_per_km),
-                                                                                     float(edges.g_us_per_km),
-                                                                                     float(edges.max_i_ka),
-                                                                                     float(edges.parallel),
-                                                                                     float(edges.df),
-                                                                                     float(edges.length_km)]
+        g.edges[edges.from_bus, edges.to_bus, ('line', edges.Index)]['edge_attr'] = [float(1 / (edges.r_ohm_per_km * edges.length_km) if (edges.r_ohm_per_km * edges.length_km) > 0 else 1e9),
+                                                                                     float(1 / (edges.x_ohm_per_km * edges.length_km) if (edges.x_ohm_per_km * edges.length_km) > 0 else 1e9)]
+                                                                                    # [float(edges.r_ohm_per_km),
+                                                                                    #  float(edges.x_ohm_per_km),
+                                                                                    #  float(edges.c_nf_per_km),
+                                                                                    #  float(edges.g_us_per_km),
+                                                                                    #  float(edges.max_i_ka),
+                                                                                    #  float(edges.parallel),
+                                                                                    #  float(edges.df),
+                                                                                    #  float(edges.length_km),
+                                                                                    #  0.0]
     # print(common_edge)
     for trafos in graph.trafo.itertuples():
-        g.edges[trafos.lv_bus, trafos.hv_bus, ('trafo', trafos.Index)]['edge_attr'] = [float(common_edge.r_ohm_per_km),
-                                                                                     float(common_edge.x_ohm_per_km),
-                                                                                     float(common_edge.c_nf_per_km),
-                                                                                     float(common_edge.g_us_per_km),
-                                                                                     float(common_edge.max_i_ka),
-                                                                                     float(common_edge.parallel),
-                                                                                     float(common_edge.df),
-                                                                                     1]
+        g.edges[trafos.lv_bus, trafos.hv_bus, ('trafo', trafos.Index)]['edge_attr'] = [float((trafos.sn_mva / (trafos.vn_lv_kv * math.sqrt(3))) / trafos.vkr_percent if trafos.vkr_percent > 0 else 1e9),
+                                                                                       float((trafos.sn_mva / (trafos.vn_lv_kv * math.sqrt(3))) / math.sqrt((trafos.vk_percent ** 2) - (trafos.vkr_percent) ** 2))]
+                                                                                    # [float(common_edge.r_ohm_per_km),
+                                                                                    #  float(common_edge.x_ohm_per_km),
+                                                                                    #  float(common_edge.c_nf_per_km),
+                                                                                    #  float(common_edge.g_us_per_km),
+                                                                                    #  float(common_edge.max_i_ka),
+                                                                                    #  float(common_edge.parallel),
+                                                                                    #  float(common_edge.df),
+                                                                                    #  1.0,
+                                                                                    #  float(trafos.shift_degree)]
 
 
 

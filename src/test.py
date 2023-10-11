@@ -5,12 +5,17 @@ import matplotlib.pyplot as plt
 from torch_geometric.loader import DataLoader
 
 
-from utils import load_data_helper, load_model
+from utils import load_data_helper, load_model, read_from_pkl, write_to_pkl
 
 def main():
     args = parse_args()
-    data = load_data_helper(args.data_path)
+    try:
+        data = read_from_pkl(f"{args.data_path}/pickled.pkl")
+    except:
+        data = load_data_helper(f"{args.data_path}/pickled.pkl")
+        write_to_pkl(data, f"{args.data_path}/pickled.pkl")
     model = load_model(args.gnn_type, args.model_path, data)
+    model.eval()
     errors, p_errors = test(model, data)
 
 def parse_args():
