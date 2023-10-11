@@ -1,6 +1,7 @@
 from torch_geometric.loader import DataLoader as pyg_DataLoader
 import tqdm
 from utils import get_gnn, get_optim, get_criterion
+from models.pl import ACLoss
 
 
 def train_model(arguments, train, val):
@@ -16,6 +17,7 @@ def train_model(arguments, train, val):
     gnn_class = get_gnn(arguments.gnn)
     gnn = gnn_class(input_dim, output_dim, edge_attr_dim)
     print(f"GNN: \n{gnn}")
+    ac = ACLoss()
 
     optimizer_class = get_optim(arguments.optimizer)
     optimizer = optimizer_class(gnn.parameters(), lr=arguments.learning_rate)
@@ -28,10 +30,10 @@ def train_model(arguments, train, val):
         epoch_val_loss = 0.0
         gnn.train()
         for batch in train_dataloader:
-            epoch_loss += train_batch(data=batch, model=gnn, optimizer=optimizer, criterion=criterion)
+            epoch_loss += train_batch(data=batch, model=gnn, optimizer=optimizer, criterion=criterion, ac=ac)
         gnn.eval()
         for batch in val_dataloader:
-            epoch_val_loss += evaluate_batch(data=batch, model=gnn, criterion=criterion)
+            epoch_val_loss += evaluate_batch(data=batch, model=gnn, criterion=criterion, ac=ac)
 
         avg_epoch_loss = epoch_loss.item() / len(train_dataloader)
         avg_epoch_val_loss = epoch_val_loss.item() / len(val_dataloader)
@@ -57,18 +59,18 @@ def train_model(arguments, train, val):
     return gnn, losses, val_losses
 
 
-def train_batch(data, model, optimizer, criterion, device='cpu'):
+def train_batch(data, model, optimizer, criterion, device='cpu', ac=None):
     model.to(device)
     optimizer.zero_grad()
     out = model(data)
-    loss = criterion(out, data.y)
+    loss = ac(out, data.y, data.edge_index, data.edge_attr) # criterion(out, data.y)
     loss.backward()
     optimizer.step()
     return loss
 
 
-def evaluate_batch(data, model, criterion, device='cpu'):
+def evaluate_batch(data, model, criterion, device='cpu', ac=None):
     model.to(device)
     out = model(data)
-    loss = criterion(out, data.y)
+    loss = ac(out, data.y, data.edge_index, data.edge_attr) # criterion(out, data.y)
     return loss
