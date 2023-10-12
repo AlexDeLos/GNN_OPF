@@ -140,7 +140,7 @@ def physics_loss(network, output, log_loss=True):
     # Combine node features with corresponding edges
     from_nodes = pyg_util.select(combined_output, network.edge_index[0], 0)  # list of duplicated node outputs based on edges
     to_nodes = pyg_util.select(combined_output, network.edge_index[1], 0)
-    angle_diffs = from_nodes[:, 3] - to_nodes[:, 3]  # list of angle differences for all edges
+    angle_diffs = (from_nodes[:, 3] - to_nodes[:, 3]) * math.pi / 180.0  # list of angle (rad.) differences for all edges
 
     act_imb = th.abs_(from_nodes.clone()[:, 2]) * th.abs_(to_nodes.clone()[:, 2]) * (conductances * th.cos(angle_diffs) + susceptances * th.sin(angle_diffs))  # per edge power flow into/out of from_nodes
     rea_imb = th.abs_(from_nodes.clone()[:, 2]) * th.abs_(to_nodes.clone()[:, 2]) * (conductances * th.sin(angle_diffs) - susceptances * th.cos(angle_diffs))
