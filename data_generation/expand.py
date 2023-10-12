@@ -25,7 +25,7 @@ def get_args():
         prog="power network subgraph generator",
         description="Generates a specified number of subnetworks from a power network"
     )
-    # if file is moved in another directory (currently in root/data_generation), this needs to be changed
+    # if file is moved in another directory level relative to the root (currently in root/data_generation), this needs to be changed
     root_directory = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     parser.add_argument("-d", "--data_path", default=root_directory + "/Data/train")
     parser.add_argument("-s", "--save_dir", default=root_directory + "/Data/expand")

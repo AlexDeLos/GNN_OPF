@@ -30,7 +30,7 @@ def get_arguments():
     parser.add_argument("network", choices=['case4gs', 'case5', 'case6ww', 'case9', 'case14', 'case24_ieee_rts', 'case30', 'case_ieee30', 'case39', 'case57', 'case89pegase', 'case118', 'case145', 'case_illinois200', 'case300', 'case1354pegase', 'case1888rte', 'case2848rte', 'case2869pegase', 'case3120sp', 'case6470rte', 'case6495rte', 'case6515rte', 'case9241', 'GBnetwork', 'GBreducednetwork', 'iceland'])
     parser.add_argument("-n", "--num_subgraphs", type=int, default=10)
 
-    # if file is moved in another directory (currently in root/data_generation), this needs to be changed
+    # if file is moved in another directory level relative to the root (currently in root/data_generation), this needs to be changed
     root_directory = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     parser.add_argument("-s", "--save_dir", default=root_directory + "/Data") 
 

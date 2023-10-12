@@ -23,7 +23,7 @@ def get_arguments():
                                      description="Run a GNN to solve an inductive power system problem (power flow only for now)")
     
     parser.add_argument("gnn", choices=["GAT", "MessagePassing", "GraphSAGE", "GINE"], default="GAT")
-    
+    # if file is moved in another directory level relative to the root (currently in root/src), this needs to be changed
     root_directory = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     parser.add_argument("--train", default=root_directory + "/Data/train")
     parser.add_argument("--val", default=root_directory + "/Data/val")
@@ -240,7 +240,7 @@ def save_model(model, model_name):
     }
     # timestamp = pd.Timestamp.now().strftime("%Y-%m-%d")
     model_name = model_name + "_" + model.class_name # + "_" + str(timestamp)
-    # if file is moved in another directory (currently in root/src), this needs to be changed
+    # if file is moved in another directory level relative to the root (currently in root/src), this needs to be changed
     root_directory = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     save_directory = root_directory + "/trained_models"
     if not os.path.exists(save_directory):
