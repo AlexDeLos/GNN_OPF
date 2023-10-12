@@ -58,15 +58,17 @@ def distance_plot(model, batch):
     plt.ylabel("Error")
     plt.xticks(range(0,len))
     plt.xlabel("Nodes away from the generator the node was located")
-    # change directory to root of project
-    os.chdir(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    if not os.path.exists("plots"):
-        os.mkdir("plots")
+    
+    # if file is moved in another directory level relative to the root (currently in root/src), this needs to be changed
+    root_directory = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    plot_directory = root_directory + "/plots"
+    if not os.path.exists(plot_directory):
+        os.mkdir(plot_directory)
 
     timestamp = pd.Timestamp.now().strftime("%Y-%m-%d %H:%M")
 
     model_name = "distance_plot" + "_" + model.class_name + "_" + str(timestamp)
-    plt.savefig(f"plots/{model_name}.png", format="png")
+    plt.savefig(f"{plot_directory}/{model_name}.png", format="png")
     plt.show()
 
 

@@ -3,6 +3,7 @@ import pandapower.plotting as ppl
 import pandapower.networks as pn
 import pandapower.toolbox as tb
 import numpy as np
+import os
 import string
 import random
 import argparse
@@ -28,7 +29,11 @@ def get_arguments():
     )
     parser.add_argument("network", choices=['case4gs', 'case5', 'case6ww', 'case9', 'case14', 'case24_ieee_rts', 'case30', 'case_ieee30', 'case39', 'case57', 'case89pegase', 'case118', 'case145', 'case_illinois200', 'case300', 'case1354pegase', 'case1888rte', 'case2848rte', 'case2869pegase', 'case3120sp', 'case6470rte', 'case6495rte', 'case6515rte', 'case9241', 'GBnetwork', 'GBreducednetwork', 'iceland'])
     parser.add_argument("-n", "--num_subgraphs", type=int, default=10)
-    parser.add_argument("-s", "--save_dir", default="./Data")    
+
+    # if file is moved in another directory level relative to the root (currently in root/data_generation), this needs to be changed
+    root_directory = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    parser.add_argument("-s", "--save_dir", default=root_directory + "/Data") 
+
     parser.add_argument("--min_size", type=int, default=5)
     parser.add_argument("--max_size", type=int, default=30)
     parser.add_argument("--n_1", type=bool, default=False)
