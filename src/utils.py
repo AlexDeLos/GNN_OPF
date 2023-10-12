@@ -235,30 +235,25 @@ def create_data_instance(graph, y_bus, y_gen, y_line):
         if first:
             common_edge = edges
             first = False
-        g.edges[edges.from_bus, edges.to_bus, ('line', edges.Index)]['edge_attr'] = [float(1 / (edges.r_ohm_per_km * edges.length_km) if (edges.r_ohm_per_km * edges.length_km) > 0 else 1e4),
-                                                                                     float(1 / (edges.x_ohm_per_km * edges.length_km) if (edges.x_ohm_per_km * edges.length_km) > 0 else 1e4)]
-                                                                                    # [float(edges.r_ohm_per_km),
-                                                                                    #  float(edges.x_ohm_per_km),
+        g.edges[edges.from_bus, edges.to_bus, ('line', edges.Index)]['edge_attr'] = [float(edges.r_ohm_per_km),
+                                                                                     float(edges.x_ohm_per_km),
+                                                                                     float(edges.length_km)]
                                                                                     #  float(edges.c_nf_per_km),
                                                                                     #  float(edges.g_us_per_km),
                                                                                     #  float(edges.max_i_ka),
                                                                                     #  float(edges.parallel),
                                                                                     #  float(edges.df),
-                                                                                    #  float(edges.length_km),
-                                                                                    #  0.0]
+
     # print(common_edge)
     for trafos in graph.trafo.itertuples():
-        g.edges[trafos.lv_bus, trafos.hv_bus, ('trafo', trafos.Index)]['edge_attr'] = [float((trafos.sn_mva / (trafos.vn_lv_kv * math.sqrt(3))) / trafos.vkr_percent if trafos.vkr_percent > 0 else 1e4),
-                                                                                       float((trafos.sn_mva / (trafos.vn_lv_kv * math.sqrt(3))) / math.sqrt((trafos.vk_percent ** 2) - (trafos.vkr_percent) ** 2))]
-                                                                                    # [float(common_edge.r_ohm_per_km),
-                                                                                    #  float(common_edge.x_ohm_per_km),
+        g.edges[trafos.lv_bus, trafos.hv_bus, ('trafo', trafos.Index)]['edge_attr'] = [float(trafos.vkr_percent / (trafos.sn_mva / (trafos.vn_lv_kv * math.sqrt(3)))),
+                                                                                       float(math.sqrt((trafos.vk_percent ** 2) - (trafos.vkr_percent) ** 2)) / (trafos.sn_mva / (trafos.vn_lv_kv * math.sqrt(3))),
+                                                                                       1.0]
                                                                                     #  float(common_edge.c_nf_per_km),
                                                                                     #  float(common_edge.g_us_per_km),
                                                                                     #  float(common_edge.max_i_ka),
                                                                                     #  float(common_edge.parallel),
                                                                                     #  float(common_edge.df),
-                                                                                    #  1.0,
-                                                                                    #  float(trafos.shift_degree)]
     return from_networkx(g)
 
 
