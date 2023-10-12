@@ -60,7 +60,7 @@ def distance_plot(model, batch):
     plt.xlabel("Nodes away from the generator the node was located")
     
     # if file is moved in another directory level relative to the root (currently in root/src), this needs to be changed
-    root_directory = os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    root_directory = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     plot_directory = root_directory + "/plots"
     if not os.path.exists(plot_directory):
         os.mkdir(plot_directory)
