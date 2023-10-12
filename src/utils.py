@@ -29,7 +29,7 @@ def get_arguments():
     parser.add_argument("--test", default="./Data/test")
     parser.add_argument("-s", "--save_model", action="store_true", default=True)
     parser.add_argument("-m", "--model_name", default=''.join([random.choice(string.ascii_letters + string.digits) for _ in range(8)]))
-    parser.add_argument("-p", "--plot", action="store_true", default=False)
+    parser.add_argument("-p", "--plot", action="store_true", default=True)
     parser.add_argument("-o", "--optimizer", default="Adam")
     parser.add_argument("-c", "--criterion", default="MSELoss")
     parser.add_argument("-b", "--batch_size", default=16)
@@ -141,69 +141,102 @@ def normalize_data(train, val, test, standard_normalizaton=True):
 # return a torch_geometric.data.Data object for each instance
 def create_data_instance(graph, y_bus, y_gen, y_line):
     g = ppl.create_nxgraph(graph, include_trafos=True)
-
+    # []
     # https://pandapower.readthedocs.io/en/latest/elements/gen.html
     gen = graph.gen[['bus', 'p_mw', 'vm_pu']]
     gen.rename(columns={'p_mw': 'p_mw_gen'}, inplace=True)
+    gen['is_gen'] = 1
     gen.set_index('bus', inplace=True)
 
     # https://pandapower.readthedocs.io/en/latest/elements/load.html
     load = graph.load[['bus', 'p_mw', 'q_mvar']]
     load.rename(columns={'p_mw': 'p_mw_load'}, inplace=True)
+    load['is_load'] = 1
     load.set_index('bus', inplace=True)
 
     ext = graph.ext_grid[['bus', 'vm_pu', 'va_degree']]
     ext.rename(columns={'vm_pu': 'vm_pu_ext'}, inplace=True)
-    ext['va_degree'] = True
+    ext['va_degree'] = 1
+    ext['is_ext'] = 1
     ext.set_index('bus', inplace=True)
 
-    shunt = graph.shunt[['bus', 'p_mw', 'q_mvar']]
-    shunt.rename(columns={'p_mw': 'p_mw_shunt', 'q_mvar': 'q_mvar_shunt'}, inplace=True)
-    shunt.set_index('bus', inplace=True)
-
     # https://pandapower.readthedocs.io/en/latest/elements/bus.html
-    node_feat = graph.bus[['vn_kv', 'max_vm_pu', 'min_vm_pu']]
+    node_feat = graph.bus[['vn_kv']]
 
     # make sure all nodes (bus, gen, load) have the same number of features (namely the union of all features)
     node_feat = node_feat.merge(gen, left_index=True, right_index=True, how='outer')
     node_feat = node_feat.merge(load, left_index=True, right_index=True, how='outer')
     node_feat = node_feat.merge(ext, left_index=True, right_index=True, how='outer')
-    node_feat = node_feat.merge(shunt, left_index=True, right_index=True, how='outer')
 
     # fill missing feature values with 0
     node_feat.fillna(0.0, inplace=True)
     node_feat['vm_pu'] = node_feat['vm_pu'] + node_feat['vm_pu_ext']
+    node_feat['p_mw'] = node_feat['p_mw_load'] - node_feat['p_mw_gen']
+
     del node_feat['vm_pu_ext']
+    del node_feat['p_mw_gen']
+    del node_feat['p_mw_load']
+    del node_feat['vn_kv']
+
     # remove duplicate columns/indices
     node_feat = node_feat[~node_feat.index.duplicated(keep='first')]
+    node_feat['is_none'] = (node_feat['is_gen'] == 0) & (node_feat['is_load'] == 0) & (node_feat['is_ext'] == 0)
+    node_feat['is_none'] = node_feat['is_none'].astype(float)
+    node_feat = node_feat[['is_load', 'is_gen', 'is_ext', 'is_none', 'p_mw', 'q_mvar', 'vm_pu']]
+    zero_check = node_feat[(node_feat['is_load'] == 0) & (node_feat['is_gen'] == 0) & (node_feat['is_ext'] == 0) & (node_feat['is_none'] == 0)]
 
-    # print()
-    # print(node_feat)
-    # quit()
+    if not zero_check.empty:
+        print("zero check failed")
+        print(node_feat)
+        print("zero check results")
+        print(zero_check)
+        quit()
+    
+
     for node in node_feat.itertuples():
         # set each node features
-        g.nodes[node.Index]['x'] = [float(node.vn_kv), #bus, the grid voltage level.
-                                    float(node.p_mw_gen), #gen, the active power of the generator
-                                    float(node.vm_pu), #gen, the voltage magnitude of the generator.
-                                    float(node.p_mw_load), #load, the active power of the load
-                                    float(node.q_mvar), #load, the reactive power of the load 
-                                    float(node.p_mw_shunt),
-                                    float(node.q_mvar_shunt),
-                                    float(node.va_degree)] 
+        g.nodes[node.Index]['x'] = [float(node.is_load), 
+                                    float(node.is_gen), 
+                                    float(node.is_ext), 
+                                    float(node.is_none), 
+                                    float(node.p_mw), 
+                                    float(node.q_mvar), 
+                                    float(node.vm_pu)]
         
-        # set each node label
         g.nodes[node.Index]['y'] = [float(y_bus['p_mw'][node.Index]),
                                     float(y_bus['q_mvar'][node.Index]),
-                                    float(y_bus['va_degree'][node.Index]),
-                                    float(y_bus['vm_pu'][node.Index])]
-    
+                                    float(y_bus['vm_pu'][node.Index]),
+                                    float(y_bus['va_degree'][node.Index])]
+        # set each node label by type
+        # if node.is_load:
+        #     g.nodes[node.Index]['y'] = [float(y_bus['va_degree'][node.Index]),
+        #                                 float(y_bus['vm_pu'][node.Index])]
+        #     # g.nodes[node.Index]['reals'] = [float(y_bus['p_mw'][node.Index]),
+        #     #                                 float(y_bus['q_mvar'][node.Index])]
+        # elif node.is_gen:
+        #     g.nodes[node.Index]['y'] = [float(y_bus['q_mvar'][node.Index]),
+        #                                 float(y_bus['va_degree'][node.Index])]
+        #     # g.nodes[node.Index]['reals'] = [float(y_bus['p_mw'][node.Index]),
+        #     #                                 float(y_bus['vm_pu'][node.Index])]
+        # elif node.is_ext:
+        #     g.nodes[node.Index]['y'] = [float(y_bus['p_mw'][node.Index]),
+        #                                 float(y_bus['q_mvar'][node.Index])]
+        #     # g.nodes[node.Index]['reals'] = [float(y_bus['vm_pu'][node.Index]),
+        #     #                                 float(y_bus['va_degree'][node.Index])]
+        # else:
+        #     g.nodes[node.Index]['y'] = [float(y_bus['va_degree'][node.Index]),
+        #                                 float(y_bus['vm_pu'][node.Index])]
+        #     # g.nodes[node.Index]['reals'] = [float(y_bus['p_mw'][node.Index]),
+        #     #                                 float(y_bus['q_mvar'][node.Index])]
+        
+
     first = True
     for edges in graph.line.itertuples():
         if first:
             common_edge = edges
             first = False
-        g.edges[edges.from_bus, edges.to_bus, ('line', edges.Index)]['edge_attr'] = [float(1 / (edges.r_ohm_per_km * edges.length_km) if (edges.r_ohm_per_km * edges.length_km) > 0 else 1e9),
-                                                                                     float(1 / (edges.x_ohm_per_km * edges.length_km) if (edges.x_ohm_per_km * edges.length_km) > 0 else 1e9)]
+        g.edges[edges.from_bus, edges.to_bus, ('line', edges.Index)]['edge_attr'] = [float(1 / (edges.r_ohm_per_km * edges.length_km) if (edges.r_ohm_per_km * edges.length_km) > 0 else 1e4),
+                                                                                     float(1 / (edges.x_ohm_per_km * edges.length_km) if (edges.x_ohm_per_km * edges.length_km) > 0 else 1e4)]
                                                                                     # [float(edges.r_ohm_per_km),
                                                                                     #  float(edges.x_ohm_per_km),
                                                                                     #  float(edges.c_nf_per_km),
@@ -215,7 +248,7 @@ def create_data_instance(graph, y_bus, y_gen, y_line):
                                                                                     #  0.0]
     # print(common_edge)
     for trafos in graph.trafo.itertuples():
-        g.edges[trafos.lv_bus, trafos.hv_bus, ('trafo', trafos.Index)]['edge_attr'] = [float((trafos.sn_mva / (trafos.vn_lv_kv * math.sqrt(3))) / trafos.vkr_percent if trafos.vkr_percent > 0 else 1e9),
+        g.edges[trafos.lv_bus, trafos.hv_bus, ('trafo', trafos.Index)]['edge_attr'] = [float((trafos.sn_mva / (trafos.vn_lv_kv * math.sqrt(3))) / trafos.vkr_percent if trafos.vkr_percent > 0 else 1e4),
                                                                                        float((trafos.sn_mva / (trafos.vn_lv_kv * math.sqrt(3))) / math.sqrt((trafos.vk_percent ** 2) - (trafos.vkr_percent) ** 2))]
                                                                                     # [float(common_edge.r_ohm_per_km),
                                                                                     #  float(common_edge.x_ohm_per_km),
@@ -226,9 +259,6 @@ def create_data_instance(graph, y_bus, y_gen, y_line):
                                                                                     #  float(common_edge.df),
                                                                                     #  1.0,
                                                                                     #  float(trafos.shift_degree)]
-
-
-
     return from_networkx(g)
 
 
@@ -270,7 +300,6 @@ def load_model(gnn_type, path, data):
     input_dim = data[0].x.shape[1]
     edge_attr_dim = data[0].edge_attr.shape[1] 
     output_dim = data[0].y.shape[1]
-    print(input_dim, edge_attr_dim, output_dim)
     gnn_class = get_gnn(gnn_type)
     model = gnn_class(input_dim, output_dim, edge_attr_dim)
     model.load_state_dict(th.load(path))

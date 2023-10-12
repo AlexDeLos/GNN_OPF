@@ -64,7 +64,7 @@ def train_batch(data, model, optimizer, criterion, device='cpu', ac=None):
     model.to(device)
     optimizer.zero_grad()
     out = model(data)
-    loss = ac(out, data.y, data.edge_index, data.edge_attr) # criterion(out, data.y)
+    loss = criterion(out, data.y) # ac(out, data.x, data.edge_index, data.edge_attr)
     loss.backward()
     optimizer.step()
     return loss
@@ -73,5 +73,5 @@ def train_batch(data, model, optimizer, criterion, device='cpu', ac=None):
 def evaluate_batch(data, model, criterion, device='cpu', ac=None):
     model.to(device)
     out = model(data)
-    loss = ac(out, data.y, data.edge_index, data.edge_attr) # criterion(out, data.y)
+    loss = criterion(out, data.y) # ac(out, data.x, data.edge_index, data.edge_attr)
     return loss
