@@ -1,5 +1,6 @@
 from torch_geometric.loader import DataLoader as pyg_DataLoader
 import tqdm
+import	torch as th
 from utils import get_gnn, get_optim, get_criterion
 
 
@@ -60,9 +61,19 @@ def train_model(arguments, train, val):
 
 
 def train_batch(data, model, optimizer, criterion, device='cpu'):
+
+
     model.to(device)
     optimizer.zero_grad()
     out = model(data)
+    # out = th.div(out,data.y)
+    # out = th.nan_to_num(out)
+    # # label = th.div(data.y,data.y)
+    # label = th.ones(data.y.shape)
+    
+    # # error = criterion(out, data.y)
+    # # loss = th.div(error, data.y)
+    # # loss = criterion(out, data.y)
     loss = criterion(out, data.y)
     loss.backward()
     optimizer.step()

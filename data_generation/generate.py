@@ -28,11 +28,11 @@ def get_arguments():
     )
     parser.add_argument("network", choices=['case4gs', 'case5', 'case6ww', 'case9', 'case14', 'case24_ieee_rts', 'case30', 'case_ieee30', 'case39', 'case57', 'case89pegase', 'case118', 'case145', 'case_illinois200', 'case300', 'case1354pegase', 'case1888rte', 'case2848rte', 'case2869pegase', 'case3120sp', 'case6470rte', 'case6495rte', 'case6515rte', 'case9241', 'GBnetwork', 'GBreducednetwork', 'iceland'])
     parser.add_argument("-n", "--num_subgraphs", type=int, default=10)
-    parser.add_argument("-s", "--save_dir", default="./Data")    
+    parser.add_argument("-s", "--save_dir", default="./Data_test")    
     parser.add_argument("--min_size", type=int, default=5)
     parser.add_argument("--max_size", type=int, default=30)
     parser.add_argument("--n_1", type=bool, default=False)
-    parser.add_argument("--subgraphing_method", choices=['rnd_neighbor', 'bfs', 'rnd_walk'], default='rnd_neighbor')
+    parser.add_argument("--subgraphing_method", choices=['rnd_neighbor', 'bfs', 'rnd_walk', 'num_change'], default='rnd_neighbor')
     args = parser.parse_args()
     print(args)
     return args
@@ -100,6 +100,8 @@ def get_subgraphing_method(method_name):
         return subgraphs_methods.bfs_neighbor_selection
     elif method_name == 'rnd_walk':
         return subgraphs_methods.random_walk_neighbor_selection
+    elif method_name == 'num_change':
+        return subgraphs_methods.value_changes
 
 
 def create_networks(arguments):
@@ -112,47 +114,53 @@ def create_networks(arguments):
 
     subgraphing_method = get_subgraphing_method(arguments.subgraphing_method)
     # A starting point is any bus that is connected to a generator to ensure that subgraphs contain at least one generator
+
     starting_points = full_net.gen.bus
     i = 0
     while i < arguments.num_subgraphs:
         print(f"generating network {i + 1}")
-        
-        subgraph_length = np.random.randint(arguments.min_size, min(arguments.max_size, len(full_net.bus)))
-        initial_bus = starting_points[np.random.randint(0, len(starting_points))]
-        
-        if arguments.n_1:
-            subgraph_busses = list(full_net.bus.index)
-            downed_bus = np.random.randint(0, len(subgraph_busses))
-            del subgraph_busses[downed_bus]
-    
+        if(arguments.subgraphing_method == 'num_change'):
+            subgraph_net = subgraphing_method(full_net, None, None)
+            solve_and_save(subgraph_net,arguments,len(full_net.bus))
+            i += 1
         else:
-            subgraph_busses = subgraphing_method(full_net, initial_bus, subgraph_length)
+            subgraph_length = np.random.randint(arguments.min_size, min(arguments.max_size, len(full_net.bus)))
+            initial_bus = starting_points[np.random.randint(0, len(starting_points))]
+            
+            if arguments.n_1:
+                subgraph_busses = list(full_net.bus.index)
+                downed_bus = np.random.randint(0, len(subgraph_busses))
+                del subgraph_busses[downed_bus]
         
-        subgraph_net = tb.select_subnet(full_net, subgraph_busses)
+            else:
+                subgraph_busses = subgraphing_method(full_net, initial_bus, subgraph_length)
+            
+            subgraph_net = tb.select_subnet(full_net, subgraph_busses)
+            solve_and_save(subgraph_net,arguments,subgraph_length)
 
-        try:
-            pp.runpp(subgraph_net)
-            # ppl.simple_plot(subgraph_net, plot_loads=True, plot_gens=True, trafo_color="r", switch_color="g") 
-
-        except:
-            print(f"Network not solvable trying a new one")
-            continue
-
-        uid = ''.join([random.choice(string.ascii_letters
-                + string.digits) for _ in range(8)])
-        
-        Path(f"{arguments.save_dir}/x").mkdir(parents=True, exist_ok=True)
-        Path(f"{arguments.save_dir}/y").mkdir(parents=True, exist_ok=True)
-        
-        pp.to_json(subgraph_net, f"{arguments.save_dir}/x/{arguments.network}_{subgraph_length}_{arguments.subgraphing_method}_{uid}.json")
-        subgraph_net.res_gen.to_csv(f"{arguments.save_dir}/y/{arguments.network}_{subgraph_length}_{arguments.subgraphing_method}_{uid}_gen.csv")
-        subgraph_net.res_line.to_csv(f"{arguments.save_dir}/y/{arguments.network}_{subgraph_length}_{arguments.subgraphing_method}_{uid}_line.csv")
-        subgraph_net.res_bus.to_csv(f"{arguments.save_dir}/y/{arguments.network}_{subgraph_length}_{arguments.subgraphing_method}_{uid}_bus.csv")
-
-        i += 1
+            i += 1
     end = time.perf_counter()
     return i, end - start
 
+def solve_and_save(subgraph_net,arguments,subgraph_length):
+    try:
+        pp.runpp(subgraph_net)
+        # ppl.simple_plot(subgraph_net, plot_loads=True, plot_gens=True, trafo_color="r", switch_color="g") 
+
+    except:
+        print(f"Network not solvable trying a new one")
+        return
+
+    uid = ''.join([random.choice(string.ascii_letters
+            + string.digits) for _ in range(8)])
+    
+    Path(f"{arguments.save_dir}/x").mkdir(parents=True, exist_ok=True)
+    Path(f"{arguments.save_dir}/y").mkdir(parents=True, exist_ok=True)
+    
+    pp.to_json(subgraph_net, f"{arguments.save_dir}/x/{arguments.network}_{subgraph_length}_{arguments.subgraphing_method}_{uid}.json")
+    subgraph_net.res_gen.to_csv(f"{arguments.save_dir}/y/{arguments.network}_{subgraph_length}_{arguments.subgraphing_method}_{uid}_gen.csv")
+    subgraph_net.res_line.to_csv(f"{arguments.save_dir}/y/{arguments.network}_{subgraph_length}_{arguments.subgraphing_method}_{uid}_line.csv")
+    subgraph_net.res_bus.to_csv(f"{arguments.save_dir}/y/{arguments.network}_{subgraph_length}_{arguments.subgraphing_method}_{uid}_bus.csv")
 
 if __name__ == "__main__":
     generate()

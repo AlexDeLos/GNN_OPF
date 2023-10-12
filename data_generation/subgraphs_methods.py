@@ -101,4 +101,20 @@ def random_walk_neighbor_selection(full_net, starting_bus, subgraph_length):
 
     return subgraph_busses
 
+def value_changes(fullnet,starting_bus,subgraph_length):
+    test = fullnet.copy()
+    # We vary every value based on how big they are aroudn their point
+    for i in range(len(fullnet.bus)):
+        fullnet.bus.at[i,'vn_kv'] = np.random.normal(fullnet.bus.at[i,'vn_kv'], np.sqrt(abs(fullnet.bus.at[i,'vn_kv'])))
+        fullnet.bus.at[i,'max_vm_pu'] = np.random.normal(fullnet.bus.at[i,'max_vm_pu'], np.sqrt(abs(fullnet.bus.at[i,'max_vm_pu'])))
+        fullnet.bus.at[i,'min_vm_pu'] = np.random.normal(fullnet.bus.at[i,'min_vm_pu'], np.sqrt(abs(fullnet.bus.at[i,'min_vm_pu'])))
+    for i in range(len(fullnet.gen)):
+        fullnet.gen.at[i,'p_vm_pumw'] = np.random.normal(fullnet.gen.at[i,'p_mw'], np.sqrt(abs(fullnet.gen.at[i,'p_mw'])))
+        # fullnet.gen.at[i,''] = np.random.normal(fullnet.gen.at[i,'vm_pu'], np.sqrt(abs(fullnet.gen.at[i,'vm_pu'])))
+        fullnet.gen.at[i,'min_q_mvar'] = np.random.normal(fullnet.gen.at[i,'min_q_mvar'], np.sqrt(abs(fullnet.gen.at[i,'min_q_mvar'])))
+        fullnet.gen.at[i,'max_q_mvar'] = np.random.normal(fullnet.gen.at[i,'max_q_mvar'], np.sqrt(abs(fullnet.gen.at[i,'max_q_mvar'])))
+        fullnet.gen.at[i,'min_p_mw'] = np.random.normal(fullnet.gen.at[i,'min_p_mw'], np.sqrt(abs(fullnet.gen.at[i,'min_p_mw'])))
+        fullnet.gen.at[i,'max_p_mw'] = np.random.normal(fullnet.gen.at[i,'max_p_mw'], np.sqrt(abs(fullnet.gen.at[i,'max_p_mw'])))
+    return fullnet
+
 # other methods to try: k-hop neighborhood, Community Detection, random walk laplacian,graphSAINT partitioning, ...
