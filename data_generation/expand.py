@@ -10,6 +10,11 @@ import random
 import string
 from pathlib import Path
 
+import warnings
+
+# Suppress FutureWarning
+warnings.filterwarnings("ignore", category=FutureWarning)
+
 def main():
     args = get_args()
     n, t = expand(args)
@@ -20,8 +25,10 @@ def get_args():
         prog="power network subgraph generator",
         description="Generates a specified number of subnetworks from a power network"
     )
-    parser.add_argument("-d", "--data_path", default="./Data/train")
-    parser.add_argument("-s", "--save_dir", default="./Data/expand")
+    # if file is moved in another directory (currently in root/data_generation), this needs to be changed
+    root_directory = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    parser.add_argument("-d", "--data_path", default=root_directory + "/Data/train")
+    parser.add_argument("-s", "--save_dir", default=root_directory + "/Data/expand")
     args = parser.parse_args()
     print(args)
     return args

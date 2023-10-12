@@ -23,9 +23,11 @@ def get_arguments():
                                      description="Run a GNN to solve an inductive power system problem (power flow only for now)")
     
     parser.add_argument("gnn", choices=["GAT", "MessagePassing", "GraphSAGE", "GINE"], default="GAT")
-    parser.add_argument("--train", default="./Data/train")
-    parser.add_argument("--val", default="./Data/val")
-    parser.add_argument("--test", default="./Data/test")
+    
+    root_directory = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    parser.add_argument("--train", default=root_directory + "/Data/train")
+    parser.add_argument("--val", default=root_directory + "/Data/val")
+    parser.add_argument("--test", default=root_directory + "/Data/test")
     parser.add_argument("-s", "--save_model", action="store_true", default=True)
     parser.add_argument("-m", "--model_name", default=''.join([random.choice(string.ascii_letters + string.digits) for _ in range(8)]))
     parser.add_argument("-p", "--plot", action="store_true", default=True)
@@ -44,9 +46,9 @@ def get_arguments():
 
 def load_data(train_dir, val_dir, test_dir):
     try:
-        train = read_from_pkl("../data_generation/loaded_data/train.pkl")
-        val = read_from_pkl("../data_generation/loaded_data/val.pkl")
-        test = read_from_pkl("../data_generation/loaded_data/test.pkl")
+        train = read_from_pkl(f"{train_dir}/pickled.pkl")
+        val = read_from_pkl(f"{val_dir}/pickled.pkl")
+        test = read_from_pkl(f"{test_dir}/pickled.pkl")
         print("Data Loaded from pkl files")
     except:
         print("Data not found, loading from json files...")
@@ -57,14 +59,10 @@ def load_data(train_dir, val_dir, test_dir):
         print("Testing Data...")
         test = load_data_helper(test_dir)
 
-        # create folder if it doesn't exist
-        if not os.path.exists("../data_generation/loaded_data"):
-            os.makedirs("../data_generation/loaded_data")
-
         # save data to pkl
-        write_to_pkl(train, "../data_generation/loaded_data/train.pkl")
-        write_to_pkl(val, "../data_generation/loaded_data/val.pkl")
-        write_to_pkl(test, "../data_generation/loaded_data/test.pkl")
+        write_to_pkl(train, f"{train_dir}/pickled.pkl")
+        write_to_pkl(val, f"{val_dir}/pickled.pkl")
+        write_to_pkl(test, f"{test_dir}/pickled.pkl")
 
         print("Data Loaded and saved to pkl files")
 
@@ -242,7 +240,12 @@ def save_model(model, model_name):
     }
     # timestamp = pd.Timestamp.now().strftime("%Y-%m-%d")
     model_name = model_name + "_" + model.class_name # + "_" + str(timestamp)
-    th.save(model.state_dict(), f"./trained_models/{model_name}.pt")
+    # if file is moved in another directory (currently in root/src), this needs to be changed
+    root_directory = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    save_directory = root_directory + "/trained_models"
+    if not os.path.exists(save_directory):
+        os.mkdir(save_directory)
+    th.save(model.state_dict(), f"{save_directory}/{model_name}.pt")
     
 
 def load_model(gnn_type, path, data):
