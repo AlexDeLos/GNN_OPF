@@ -1,6 +1,7 @@
 from torch_geometric.loader import DataLoader as pyg_DataLoader
 import torch_geometric.utils as pyg_util
 import tqdm
+import sys
 import torch as th
 import numpy as np
 from utils import get_gnn, get_optim, get_criterion
@@ -44,8 +45,8 @@ def train_model(arguments, train, val, test):
 
         if epoch % 10 == 0:
             print(f'Epoch: {epoch:03d}, trn_Loss: {avg_epoch_loss:.3f}, val_loss: {avg_epoch_val_loss:.3f}')
-        
-        #Early stopping
+
+        # Early stopping
         try:  
             if val_losses[-1]>=val_losses[-2]:
                 early_stop += 1
@@ -64,7 +65,6 @@ def train_batch(data, model, optimizer, criterion, physics_crit=True, device='cp
     model.to(device)
     optimizer.zero_grad()
     out = model(data)
-    # out_clone = out.clone().detach()
     if physics_crit:
         loss = physics_loss(data, out)
     else:
@@ -83,6 +83,7 @@ def physics_loss(network, output, log_loss=True):
                     Expected to contain nodes list and edges between nodes with features:
                         - resistance r over the line
                         - reactance x over the line
+                        - line length (km)
     @param output:  Model outputs for each node. Node indices expected to match order in input graph.
                     Expected to contain:
                         - Active power p_mw
@@ -93,17 +94,7 @@ def physics_loss(network, output, log_loss=True):
 
     @return:    Returns total power imbalance over all the nodes.
     """
-    # Get predicted power levels from the model outputs
-    # active_imbalance = output.p_mw #output[:, 0]
-    # reactive_imbalance = output.q_mvar #output[:, 1]
-    active_imbalance = output[:, 0]  # th.zeros(output_r.shape[0])
-    reactive_imbalance = output[:, 1]  # th.zeros(output_r.shape[0])
-    #output = [[0,1,2,3]]*network.num_edges
-    #output[:][2] = output_r
-
-
     # Calculate admittance values (conductance, susceptance) from impedance values (edges)
-    # edge_att[:, 0] should contain resistances r, edge_att[:, 1] should contain reactances x, edge_attr[:,-1] line length (km)
     resist_line_total = network.edge_attr[:, 0] * network.edge_attr[:, -1]
     react_line_total = network.edge_attr[:, 1] * network.edge_attr[:, -1]
 
@@ -112,41 +103,63 @@ def physics_loss(network, output, log_loss=True):
     conductances = resist_line_total / denom
     susceptances = -1.0 * react_line_total / denom
 
-    # Tensor operations instead of edges loop
-    from_nodes = pyg_util.select(output, network.edge_index[0], 0)  # list of duplicated node outputs based on edges
-    to_nodes = pyg_util.select(output, network.edge_index[1], 0)
+    # Combine the fixed input values and predicted missing values
+    combined_output = th.zeros(output.shape)
+
+    # slack bus:
+    idx_list = (network.x[:, 2] > 0.5)    # get slack node id's
+    combined_output[idx_list, 2] += network.x[idx_list, 6]    # Add fixed vm_pu from input; va_degree is 0 for slacks
+    combined_output[idx_list, 0] += output[idx_list, 0]    # Add predicted p_mw
+    combined_output[idx_list, 1] += output[idx_list, 1]    # Add predicted q_mvar
+
+    # generator + load busses:
+    idx_list = (th.logical_and(network.x[:, 0] > 0.5, network.x[:, 1] > 0.5))  # get generator + load node id's
+    combined_output[idx_list, 0] += network.x[idx_list, 4]  # Add fixed p_mw from input (already contains value of load p_mw - gen p_mw, so we add instead of subtract)
+    combined_output[idx_list, 2] += network.x[idx_list, 6]  # Add fixed vm_pu from input (should be same for both load and gen)
+    combined_output[idx_list, 1] += output[idx_list, 1]  # Add predicted q_mvar
+    combined_output[idx_list, 3] += output[idx_list, 3]  # Add predicted va_degree
+
+    # generator:
+    idx_list = (th.logical_and(network.x[:, 0] < 0.5, network.x[:, 1] > 0.5))  # get generator (not gen + load) node id's
+    combined_output[idx_list, 0] -= network.x[idx_list, 4]  # Subtract fixed p_mw from input
+                                                            # Because loads and gens both have > 0 power in PandaPower data (gen busses have negative power flow in expected outputs)
+    combined_output[idx_list, 2] += network.x[idx_list, 6]  # Add fixed vm_pu from input
+    combined_output[idx_list, 1] -= output[idx_list, 1]  # Subtract predicted q_mvar (same reason as above; generators have negative power values in expected outputs)
+    combined_output[idx_list, 3] += output[idx_list, 3]  # Add predicted va_degree
+
+    # load + none types (modeled as 0 power demand loads):
+    load_no_gen = th.logical_and(network.x[:, 0] > 0.5, network.x[:, 1] < 0.5)
+    idx_list = (th.logical_or(th.logical_and(load_no_gen, network.x[:, 2] < 0.5), network.x[:, 3] > 0.5))  # get load + none node id's
+    combined_output[idx_list, 0] += network.x[idx_list, 4]  # Add fixed p_mw from input
+    combined_output[idx_list, 1] += network.x[idx_list, 5]  # Add fixed q_mvar from input
+    combined_output[idx_list, 2] += output[idx_list, 2]  # Add predicted vm_pu
+    combined_output[idx_list, 3] += output[idx_list, 3]  # Add predicted va_degree
+
+    # combined_output = output
+
+    # Combine node features with corresponding edges
+    from_nodes = pyg_util.select(combined_output, network.edge_index[0], 0)  # list of duplicated node outputs based on edges
+    to_nodes = pyg_util.select(combined_output, network.edge_index[1], 0)
     angle_diffs = from_nodes[:, 3] - to_nodes[:, 3]  # list of angle differences for all edges
 
-    # Inplace operation error:
-    # act_imb = th.abs_(from_nodes[:, 2]) * th.abs_(to_nodes[:, 2]) * (conductances * th.cos(angle_diffs) + susceptances * th.sin(angle_diffs))  # per edge power flow into/out of from_nodes
-    # rea_imb = th.abs_(from_nodes[:, 2]) * th.abs_(to_nodes[:, 2]) * (conductances * th.sin(angle_diffs) - susceptances * th.cos(angle_diffs))
-
-    # .clone() fixes error and should keep gradients flowing as expected
     act_imb = th.abs_(from_nodes.clone()[:, 2]) * th.abs_(to_nodes.clone()[:, 2]) * (conductances * th.cos(angle_diffs) + susceptances * th.sin(angle_diffs))  # per edge power flow into/out of from_nodes
     rea_imb = th.abs_(from_nodes.clone()[:, 2]) * th.abs_(to_nodes.clone()[:, 2]) * (conductances * th.sin(angle_diffs) - susceptances * th.cos(angle_diffs))
+    # act_imb = to_nodes[:, 2] * (conductances * th.cos(angle_diffs) + susceptances * th.sin(angle_diffs))  # per edge power flow into/out of from_nodes
+    # rea_imb = to_nodes[:, 2] * (conductances * th.sin(angle_diffs) - susceptances * th.cos(angle_diffs))
 
     aggr_act_imb = pyg_util.scatter(act_imb, network.edge_index[0])  # aggregate all active powers per from_node
     aggr_rea_imb = pyg_util.scatter(rea_imb, network.edge_index[0])
-    active_imbalance = output[:, 0] - aggr_act_imb  # subtract from power at each node to find imbalance
-    reactive_imbalance = output[:, 1] - aggr_rea_imb
 
-
-    # Initial loop version instead of tensor operations
-    # Go over all edges and update the power imbalances for each node accordingly
-    # for i, x in enumerate(th.transpose(network.edge_index, 0, 1)):
-    #     # x contains node indices [from, to]
-    #     angle_diff = output[x[0], 3] - output[x[1], 3]
-    #
-    #     active_imbalance[x[0]] -= th.abs_(output[x[0], 2]).detach() * th.abs_(output[x[1], 2]).detach() \
-    #                               * (conductances[i] * th.cos(angle_diff) + susceptances[i] * th.sin(angle_diff))
-    #     reactive_imbalance[x[0]] -= th.abs_(output[x[0], 2]).detach() * th.abs_(output[x[1], 2]).detach() \
-    #                                 * (conductances[i] * th.sin(angle_diff) - susceptances[i] * th.cos(angle_diff))
+    active_imbalance = combined_output[:, 0] - aggr_act_imb  # subtract from power at each node to find imbalance
+    reactive_imbalance = combined_output[:, 1] - aggr_rea_imb
+    # active_imbalance = combined_output[:, 0] - combined_output[:, 2] * aggr_act_imb  # subtract from power at each node to find imbalance
+    # reactive_imbalance = combined_output[:, 1] - combined_output[:, 2] * aggr_rea_imb
 
     # Use either sum of absolute imbalances or log of squared imbalances
     if log_loss:
         tot_loss = th.log(1.0 + th.sum(active_imbalance * active_imbalance + reactive_imbalance * reactive_imbalance))
     else:
-        tot_loss = th.sum(np.abs(active_imbalance) + np.abs(reactive_imbalance))
+        tot_loss = th.sum(th.abs(active_imbalance) + th.abs(reactive_imbalance))
 
     return tot_loss
 
