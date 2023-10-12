@@ -8,6 +8,7 @@ import random
 import argparse
 from collections import Counter
 import time
+import copy
 from pathlib import Path
 import subgraphs_methods
 
@@ -120,8 +121,8 @@ def create_networks(arguments):
     while i < arguments.num_subgraphs:
         print(f"generating network {i + 1}")
         if(arguments.subgraphing_method == 'num_change'):
-            subgraph_net = subgraphing_method(full_net, None, None)
-            solve_and_save(subgraph_net,arguments,len(full_net.bus))
+            subgraph_net = subgraphing_method(copy.deepcopy(full_net), None, None)
+            solve_and_save(subgraph_net,arguments,len(subgraph_net.bus))
             i += 1
         else:
             subgraph_length = np.random.randint(arguments.min_size, min(arguments.max_size, len(full_net.bus)))

@@ -12,13 +12,13 @@ echo "running script in " $SCRIPT_DIR
 echo "saving in " $1
 
 echo "Generating Training Set"
-echo "Generating from case24_ieee_rts"
-python $SCRIPT_DIR/generate.py case24_ieee_rts -n 100 -s $1/train --subgraphing_method num_change  >/dev/null
+echo "Generating from case1888rte"
+python $SCRIPT_DIR/generate.py case1888rte -n 1000 -s $1/train --subgraphing_method num_change  >/dev/null
 
 
 echo "Generating Val Set"
-echo "Generating from case24_ieee_rts"
-python $SCRIPT_DIR/generate.py case24_ieee_rts -n 100 -s $1/val --subgraphing_method num_change  >/dev/null
+echo "Generating from case1888rte"
+python $SCRIPT_DIR/generate.py case1888rte -n 100 -s $1/val --subgraphing_method num_change  >/dev/null
 # echo "Generating from case30"
 # python $SCRIPT_DIR/generate.py case30 -n 15 -s $1/train  >/dev/null
 # echo "Generating from case_ieee30"
