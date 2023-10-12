@@ -104,7 +104,7 @@ def random_walk_neighbor_selection(full_net, starting_bus, subgraph_length):
 
     return subgraph_busses
 
-def value_changes(full_net,starting_bus,subgraph_length):
+def number_changes(full_net,starting_bus,subgraph_length):
     test_net = pp.pandapowerNet(full_net.copy())
     # We vary every value based on how big they are around their point
     for i in range(len(test_net.bus)):

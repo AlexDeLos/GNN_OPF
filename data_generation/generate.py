@@ -102,7 +102,7 @@ def get_subgraphing_method(method_name):
     elif method_name == 'rnd_walk':
         return subgraphs_methods.random_walk_neighbor_selection
     elif method_name == 'num_change':
-        return subgraphs_methods.value_changes
+        return subgraphs_methods.number_changes
 
 
 def create_networks(arguments):
