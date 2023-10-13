@@ -144,24 +144,19 @@ def physics_loss(network, output, log_loss=True):
     angle_diffs = (from_nodes[:, 3] - to_nodes[:, 3]) * math.pi / 180.0  # list of angle differences for all edges
 
     # calculate incoming/outgoing values based on the edges connected to each node and the node's + neighbour's values
-    act_imb = th.abs(from_nodes[:, 2]) * th.abs(to_nodes[:, 2]) * (
-                conductances * th.cos(angle_diffs) + susceptances * th.sin(
-            angle_diffs))  # per edge power flow into/out of from_nodes
-    rea_imb = th.abs(from_nodes[:, 2]) * th.abs(to_nodes[:, 2]) * (
-                conductances * th.sin(angle_diffs) - susceptances * th.cos(angle_diffs))
+    act_imb = th.abs(from_nodes[:, 2]) * th.abs(to_nodes[:, 2]) * (conductances * th.cos(angle_diffs) + susceptances * th.sin(angle_diffs))  # per edge power flow into/out of from_nodes
+    rea_imb = th.abs(from_nodes[:, 2]) * th.abs(to_nodes[:, 2]) * (conductances * th.sin(angle_diffs) - susceptances * th.cos(angle_diffs))
 
     aggr_act_imb = pyg_util.scatter(act_imb, network.edge_index[0])  # aggregate all active powers for each node
     aggr_rea_imb = pyg_util.scatter(rea_imb, network.edge_index[0])  # same for reactive
 
     # add diagonal (self-admittance) elements of each node as well (angle diff is 0; only cos sections have an effect)
-    aggr_act_imb += combined_output[:, 2] * combined_output[:, 2] * pyg_util.scatter(network.edge_attr[:, 0],
-                                                                                     network.edge_index[0])
-    aggr_rea_imb += combined_output[:, 2] * combined_output[:, 2] * (
-                -1.0 * pyg_util.scatter(network.edge_attr[:, 1], network.edge_index[0]))
+    aggr_act_imb += combined_output[:, 2] * combined_output[:, 2] * pyg_util.scatter(network.edge_attr[:, 0], network.edge_index[0])
+    aggr_rea_imb += combined_output[:, 2] * combined_output[:, 2] * (-1.0 * pyg_util.scatter(network.edge_attr[:, 1], network.edge_index[0]))
 
-    # subtract from power at each node to find imbalance
-    active_imbalance = combined_output[:, 0] - aggr_act_imb
-    reactive_imbalance = combined_output[:, 1] - aggr_rea_imb
+    # subtract from power at each node to find imbalance. negate power output values due to pos/neg conventions for loads/gens
+    active_imbalance = -1.0 * combined_output[:, 0] - aggr_act_imb
+    reactive_imbalance = -1.0 * combined_output[:, 1] - aggr_rea_imb
 
     # Use either sum of absolute imbalances or log of squared imbalances
     if log_loss:
