@@ -180,3 +180,4 @@ loaded_data/
 plots/
 
 Data/
+*.pkl
