@@ -19,6 +19,7 @@ python $SCRIPT_DIR/generate.py case1888rte -n 1000 -s $1/train --subgraphing_met
 
 echo "Generating Val Set"
 echo "Generating from case1888rte"
+
 # python $SCRIPT_DIR/generate.py case1888rte -n 100 -s $1/val --subgraphing_method num_change  >/dev/null
 # python $SCRIPT_DIR/generate.py case1888rte -n 100 -s $1/val --subgraphing_method rnd_walk  >/dev/null
 # echo "Generating from case30"

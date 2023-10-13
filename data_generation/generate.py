@@ -126,9 +126,8 @@ def create_networks(arguments):
     while i < arguments.num_subgraphs:
         print(f"generating network {i + 1}")
         if(arguments.subgraphing_method == 'num_change'):
-            subgraph_net = subgraphing_method(copy.deepcopy(full_net), None, None)
-            solve_and_save(subgraph_net,arguments,len(subgraph_net.bus),full_net,None)
-            i += 1
+            graph_net = subgraphing_method(copy.deepcopy(full_net))
+            solve_and_save(graph_net,arguments,len(graph_net.bus),full_net,None)
         else:
             subgraph_length = np.random.randint(arguments.min_size, min(arguments.max_size, len(full_net.bus)))
             initial_bus = starting_points[np.random.randint(0, len(starting_points))]
@@ -144,14 +143,14 @@ def create_networks(arguments):
             subgraph_net = tb.select_subnet(full_net, subgraph_busses)
             solve_and_save(subgraph_net,arguments,subgraph_length,full_net,subgraph_busses)
 
-            i += 1
+        i += 1
     end = time.perf_counter()
     return i, end - start
 
 def solve_and_save(subgraph_net,arguments,subgraph_length,full_net,subgraph_busses):
     try:
         # check if the subgraph contains a slack bus, if not add one by setting the slack bus to a random bus
-        if arguments.subgraphing_method != 'num_change' and full_net.ext_grid.bus.item() not in subgraph_busses:
+        if  full_net.ext_grid.bus.item() not in subgraph_busses:
             slack_bus = subgraph_busses[np.random.randint(0, len(subgraph_busses))]
             # https://pandapower.readthedocs.io/en/v2.1.0/elements/ext_grid.html#pandapower.create_ext_grid
             pp.create_ext_grid(subgraph_net, slack_bus)

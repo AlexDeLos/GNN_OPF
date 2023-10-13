@@ -181,3 +181,4 @@ plots/
 
 Data/
 *.pkl
+data_generation/data_generation_playground.sh

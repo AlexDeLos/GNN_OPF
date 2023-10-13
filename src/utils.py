@@ -34,7 +34,7 @@ def get_arguments():
     parser.add_argument("-o", "--optimizer", default="Adam")
     parser.add_argument("-c", "--criterion", default="MSELoss")
     parser.add_argument("-b", "--batch_size", default=16)
-    parser.add_argument("-n", "--n_epochs", default=500)
+    parser.add_argument("-n", "--n_epochs", default=200)
     parser.add_argument("-l", "--learning_rate", default=1e-4)
     parser.add_argument("-w", "--weight_decay", default=0.05)
     parser.add_argument("--patience", default=40)
