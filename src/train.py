@@ -5,6 +5,7 @@ import sys
 import torch as th
 import numpy as np
 from utils import get_gnn, get_optim, get_criterion
+import math
 
 
 def train_model(arguments, train, val, test):
@@ -81,9 +82,8 @@ def physics_loss(network, output, log_loss=True):
 
     @param network:    Input graph used for the NN model.
                     Expected to contain nodes list and edges between nodes with features:
-                        - resistance r over the line
-                        - reactance x over the line
-                        - line length (km)
+                        - conductance over the line
+                        - susceptance over the line
     @param output:  Model outputs for each node. Node indices expected to match order in input graph.
                     Expected to contain:
                         - Active power p_mw
@@ -94,14 +94,16 @@ def physics_loss(network, output, log_loss=True):
 
     @return:    Returns total power imbalance over all the nodes.
     """
-    # Calculate admittance values (conductance, susceptance) from impedance values (edges)
-    resist_line_total = network.edge_attr[:, 0] * network.edge_attr[:, -1]
-    react_line_total = network.edge_attr[:, 1] * network.edge_attr[:, -1]
-
-    denom = resist_line_total * resist_line_total
-    denom += react_line_total * react_line_total
-    conductances = resist_line_total / denom
-    susceptances = -1.0 * react_line_total / denom
+    # # Calculate admittance values (conductance, susceptance) from impedance values (edges)
+    # resist_line_total = network.edge_attr[:, 0] * network.edge_attr[:, -1]
+    # react_line_total = network.edge_attr[:, 1] * network.edge_attr[:, -1]
+    #
+    # denom = resist_line_total * resist_line_total
+    # denom += react_line_total * react_line_total
+    # conductances = resist_line_total / denom
+    # susceptances = -1.0 * react_line_total / denom
+    conductances = -1.0 * network.edge_attr[:, 0]
+    susceptances = -1.0 * network.edge_attr[:, 1]
 
     # Combine the fixed input values and predicted missing values
     combined_output = th.zeros(output.shape)
@@ -135,25 +137,31 @@ def physics_loss(network, output, log_loss=True):
     combined_output[idx_list, 2] += output[idx_list, 2]  # Add predicted vm_pu
     combined_output[idx_list, 3] += output[idx_list, 3]  # Add predicted va_degree
 
-    # combined_output = output
-
     # Combine node features with corresponding edges
-    from_nodes = pyg_util.select(combined_output, network.edge_index[0], 0)  # list of duplicated node outputs based on edges
+    from_nodes = pyg_util.select(combined_output, network.edge_index[0],
+                                 0)  # list of duplicated node outputs based on edges
     to_nodes = pyg_util.select(combined_output, network.edge_index[1], 0)
-    angle_diffs = (from_nodes[:, 3] - to_nodes[:, 3]) * math.pi / 180.0  # list of angle (rad.) differences for all edges
+    angle_diffs = (from_nodes[:, 3] - to_nodes[:, 3]) * math.pi / 180.0  # list of angle differences for all edges
 
-    act_imb = th.abs_(from_nodes.clone()[:, 2]) * th.abs_(to_nodes.clone()[:, 2]) * (conductances * th.cos(angle_diffs) + susceptances * th.sin(angle_diffs))  # per edge power flow into/out of from_nodes
-    rea_imb = th.abs_(from_nodes.clone()[:, 2]) * th.abs_(to_nodes.clone()[:, 2]) * (conductances * th.sin(angle_diffs) - susceptances * th.cos(angle_diffs))
-    # act_imb = to_nodes[:, 2] * (conductances * th.cos(angle_diffs) + susceptances * th.sin(angle_diffs))  # per edge power flow into/out of from_nodes
-    # rea_imb = to_nodes[:, 2] * (conductances * th.sin(angle_diffs) - susceptances * th.cos(angle_diffs))
+    # calculate incoming/outgoing values based on the edges connected to each node and the node's + neighbour's values
+    act_imb = th.abs(from_nodes[:, 2]) * th.abs(to_nodes[:, 2]) * (
+                conductances * th.cos(angle_diffs) + susceptances * th.sin(
+            angle_diffs))  # per edge power flow into/out of from_nodes
+    rea_imb = th.abs(from_nodes[:, 2]) * th.abs(to_nodes[:, 2]) * (
+                conductances * th.sin(angle_diffs) - susceptances * th.cos(angle_diffs))
 
-    aggr_act_imb = pyg_util.scatter(act_imb, network.edge_index[0])  # aggregate all active powers per from_node
-    aggr_rea_imb = pyg_util.scatter(rea_imb, network.edge_index[0])
+    aggr_act_imb = pyg_util.scatter(act_imb, network.edge_index[0])  # aggregate all active powers for each node
+    aggr_rea_imb = pyg_util.scatter(rea_imb, network.edge_index[0])  # same for reactive
 
-    active_imbalance = combined_output[:, 0] - aggr_act_imb  # subtract from power at each node to find imbalance
+    # add diagonal (self-admittance) elements of each node as well (angle diff is 0; only cos sections have an effect)
+    aggr_act_imb += combined_output[:, 2] * combined_output[:, 2] * pyg_util.scatter(network.edge_attr[:, 0],
+                                                                                     network.edge_index[0])
+    aggr_rea_imb += combined_output[:, 2] * combined_output[:, 2] * (
+                -1.0 * pyg_util.scatter(network.edge_attr[:, 1], network.edge_index[0]))
+
+    # subtract from power at each node to find imbalance
+    active_imbalance = combined_output[:, 0] - aggr_act_imb
     reactive_imbalance = combined_output[:, 1] - aggr_rea_imb
-    # active_imbalance = combined_output[:, 0] - combined_output[:, 2] * aggr_act_imb  # subtract from power at each node to find imbalance
-    # reactive_imbalance = combined_output[:, 1] - combined_output[:, 2] * aggr_rea_imb
 
     # Use either sum of absolute imbalances or log of squared imbalances
     if log_loss:
@@ -162,6 +170,7 @@ def physics_loss(network, output, log_loss=True):
         tot_loss = th.sum(th.abs(active_imbalance) + th.abs(reactive_imbalance))
 
     return tot_loss
+
 
 def evaluate_batch(data, model, criterion, device='cpu'):
     model.to(device)
