@@ -127,6 +127,10 @@ def create_networks(arguments):
         print(f"generating network {i + 1}")
         if(arguments.subgraphing_method == 'num_change'):
             graph_net = subgraphing_method(copy.deepcopy(full_net))
+            # when calling it in this case the sub graph is not actually a sub graph but the full graph
+            # the reason for this is because when running the num_change data generation we don't actually make a sub graph
+            # we just change the values of the full graph
+            # I belive this is the best way to do it in order to avoid code duplication.
             solve_and_save(graph_net,arguments,len(graph_net.bus),full_net,None)
         else:
             subgraph_length = np.random.randint(arguments.min_size, min(arguments.max_size, len(full_net.bus)))
