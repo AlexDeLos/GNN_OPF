@@ -156,9 +156,17 @@ def create_data_instance(graph, y_bus, y_gen, y_line):
     gen['is_gen'] = 1
     gen.set_index('bus', inplace=True)
 
+    # https://pandapower.readthedocs.io/en/latest/elements/sgen.html
+    sgen = graph.sgen[['bus', 'p_mw', 'q_mvar']]
+    sgen.rename(columns={'p_mw': 'p_mw_sgen'}, inplace=True)
+    sgen.rename(columns={'q_mvar': 'q_mvar_sgen'}, inplace=True)
+    sgen['is_sgen'] = 1
+    sgen.set_index('bus', inplace=True)
+
     # https://pandapower.readthedocs.io/en/latest/elements/load.html
     load = graph.load[['bus', 'p_mw', 'q_mvar']]
     load.rename(columns={'p_mw': 'p_mw_load'}, inplace=True)
+    load.rename(columns={'q_mvar': 'q_mvar_load'}, inplace=True)
     load['is_load'] = 1
     load.set_index('bus', inplace=True)
 
@@ -173,18 +181,27 @@ def create_data_instance(graph, y_bus, y_gen, y_line):
 
     # make sure all nodes (bus, gen, load) have the same number of features (namely the union of all features)
     node_feat = node_feat.merge(gen, left_index=True, right_index=True, how='outer')
+    node_feat = node_feat.merge(sgen, left_index=True, right_index=True, how='outer')
     node_feat = node_feat.merge(load, left_index=True, right_index=True, how='outer')
     node_feat = node_feat.merge(ext, left_index=True, right_index=True, how='outer')
 
     # fill missing feature values with 0
     node_feat.fillna(0.0, inplace=True)
     node_feat['vm_pu'] = node_feat['vm_pu'] + node_feat['vm_pu_ext']
-    node_feat['p_mw'] = node_feat['p_mw_load'] - node_feat['p_mw_gen']
+    node_feat['p_mw'] = node_feat['p_mw_load'] - node_feat['p_mw_gen'] - node_feat['p_mw_sgen']
+    node_feat['q_mvar'] = node_feat['q_mvar_load'] - node_feat['q_mvar_sgen']
+
+    # static generators are modeled as loads in PandaPower
+    node_feat['is_load'] = (node_feat['is_sgen'] != 0) | (node_feat['is_load'] != 0)
 
     del node_feat['vm_pu_ext']
     del node_feat['p_mw_gen']
+    del node_feat['p_mw_sgen']
     del node_feat['p_mw_load']
+    del node_feat['q_mvar_load']
+    del node_feat['q_mvar_sgen']
     del node_feat['vn_kv']
+    del node_feat['is_sgen']
 
     # remove duplicate columns/indices
     node_feat = node_feat[~node_feat.index.duplicated(keep='first')]
@@ -226,6 +243,7 @@ def create_data_instance(graph, y_bus, y_gen, y_line):
     for trafos in graph.trafo.itertuples():
         r_tot = float(trafos.vkr_percent / (trafos.sn_mva / (trafos.vn_lv_kv * math.sqrt(3))))
         x_tot = float(math.sqrt((trafos.vk_percent ** 2) - (trafos.vkr_percent) ** 2)) / (trafos.sn_mva / (trafos.vn_lv_kv * math.sqrt(3)))
+
         conductance, susceptance = impedance_to_admittance(r_tot, x_tot, trafos.vn_lv_kv, graph.sn_mva)
         g.edges[trafos.lv_bus, trafos.hv_bus, ('trafo', trafos.Index)]['edge_attr'] = [conductance, susceptance]
 
@@ -233,6 +251,8 @@ def create_data_instance(graph, y_bus, y_gen, y_line):
 
 
 def impedance_to_admittance(r_ohm, x_ohm, base_volt, rated_power):
+    # Need to first convert everything to per-unit system:
+    # https://pandapower.readthedocs.io/en/v2.4.0/about/units.html
     z_base = base_volt ** 2 / rated_power  # Z_base used to convert impedance to per-unit
     r_tot = r_ohm / z_base  # Convert to per unit metrics before converting to admittance
     x_tot = x_ohm / z_base
