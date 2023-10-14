@@ -25,9 +25,12 @@ def get_arguments():
                                      description="Run a GNN to solve an inductive power system problem (power flow only for now)")
 
     parser.add_argument("gnn", choices=["GAT", "MessagePassing", "GraphSAGE", "GINE"], default="GAT")
-    parser.add_argument("--train", default="./Data/train")
-    parser.add_argument("--val", default="./Data/val")
-    parser.add_argument("--test", default="./Data/test")
+    # parser.add_argument("--train", default="./Data/train")
+    parser.add_argument("--train", default="./data_generation/train")
+    # parser.add_argument("--val", default="./Data/val")
+    parser.add_argument("--val", default="./data_generation/val")
+    # parser.add_argument("--test", default="./Data/test")
+    parser.add_argument("--test", default="./data_generation/test")
     parser.add_argument("-s", "--save_model", action="store_true", default=True)
     parser.add_argument("-m", "--model_name",
                         default=''.join([random.choice(string.ascii_letters + string.digits) for _ in range(8)]))
@@ -207,62 +210,37 @@ def create_data_instance(graph, y_bus, y_gen, y_line):
                                     float(node.is_gen),
                                     float(node.is_ext),
                                     float(node.is_none),
-                                    float(node.p_mw),
-                                    float(node.q_mvar),
+                                    float(node.p_mw / graph.sn_mva),
+                                    float(node.q_mvar / graph.sn_mva),
                                     float(node.vm_pu)]
 
-        g.nodes[node.Index]['y'] = [float(y_bus['p_mw'][node.Index]),
-                                    float(y_bus['q_mvar'][node.Index]),
+        g.nodes[node.Index]['y'] = [float(y_bus['p_mw'][node.Index] / graph.sn_mva),
+                                    float(y_bus['q_mvar'][node.Index] / graph.sn_mva),
                                     float(y_bus['vm_pu'][node.Index]),
                                     float(y_bus['va_degree'][node.Index])]
-        # set each node label by type
-        # if node.is_load:
-        #     g.nodes[node.Index]['y'] = [float(y_bus['va_degree'][node.Index]),
-        #                                 float(y_bus['vm_pu'][node.Index])]
-        #     # g.nodes[node.Index]['reals'] = [float(y_bus['p_mw'][node.Index]),
-        #     #                                 float(y_bus['q_mvar'][node.Index])]
-        # elif node.is_gen:
-        #     g.nodes[node.Index]['y'] = [float(y_bus['q_mvar'][node.Index]),
-        #                                 float(y_bus['va_degree'][node.Index])]
-        #     # g.nodes[node.Index]['reals'] = [float(y_bus['p_mw'][node.Index]),
-        #     #                                 float(y_bus['vm_pu'][node.Index])]
-        # elif node.is_ext:
-        #     g.nodes[node.Index]['y'] = [float(y_bus['p_mw'][node.Index]),
-        #                                 float(y_bus['q_mvar'][node.Index])]
-        #     # g.nodes[node.Index]['reals'] = [float(y_bus['vm_pu'][node.Index]),
-        #     #                                 float(y_bus['va_degree'][node.Index])]
-        # else:
-        #     g.nodes[node.Index]['y'] = [float(y_bus['va_degree'][node.Index]),
-        #                                 float(y_bus['vm_pu'][node.Index])]
-        #     # g.nodes[node.Index]['reals'] = [float(y_bus['p_mw'][node.Index]),
-        #     #                                 float(y_bus['q_mvar'][node.Index])]
 
     first = True
     for edges in graph.line.itertuples():
         if first:
             common_edge = edges
             first = False
-        g.edges[edges.from_bus, edges.to_bus, ('line', edges.Index)]['edge_attr'] = [float(edges.r_ohm_per_km),
-                                                                                     float(edges.x_ohm_per_km),
-                                                                                     float(edges.length_km)]
-        #  float(edges.c_nf_per_km),
-        #  float(edges.g_us_per_km),
-        #  float(edges.max_i_ka),
-        #  float(edges.parallel),
-        #  float(edges.df),
+        z_base = graph.bus['vn_kv'][edges.from_bus]**2 / graph.sn_mva  # Zbase to convert impedance to per-unit
+        r_tot = float(edges.r_ohm_per_km) * float(edges.length_km) / z_base  # Convert to per unit metrics before converting to admittance
+        x_tot = float(edges.x_ohm_per_km) * float(edges.length_km) / z_base
+        denom = r_tot**2 + x_tot**2
+        conductance = r_tot / denom
+        susceptance = -x_tot / denom
+
+        g.edges[edges.from_bus, edges.to_bus, ('line', edges.Index)]['edge_attr'] = [float(conductance),
+                                                                                     float(susceptance)]
 
     # print(common_edge)
     for trafos in graph.trafo.itertuples():
         g.edges[trafos.lv_bus, trafos.hv_bus, ('trafo', trafos.Index)]['edge_attr'] = [
             float(trafos.vkr_percent / (trafos.sn_mva / (trafos.vn_lv_kv * math.sqrt(3)))),
             float(math.sqrt((trafos.vk_percent ** 2) - (trafos.vkr_percent) ** 2)) / (
-                        trafos.sn_mva / (trafos.vn_lv_kv * math.sqrt(3))),
-            1.0]
-        #  float(common_edge.c_nf_per_km),
-        #  float(common_edge.g_us_per_km),
-        #  float(common_edge.max_i_ka),
-        #  float(common_edge.parallel),
-        #  float(common_edge.df),
+                        trafos.sn_mva / (trafos.vn_lv_kv * math.sqrt(3)))]
+
     return from_networkx(g)
 
 
