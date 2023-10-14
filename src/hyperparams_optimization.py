@@ -4,7 +4,7 @@ import numpy as np
 from torch_geometric.loader import DataLoader as pyg_DataLoader
 import tqdm
 from train import train_batch, evaluate_batch
-from utils import get_gnn, load_data, get_criterion
+from utils import get_gnn, load_data, get_criterion, normalize_data
 
 import warnings
 # Suppress FutureWarning
@@ -13,9 +13,9 @@ warnings.filterwarnings("ignore", category=FutureWarning)
 # Hyperparameter optimization
 def hyperparams_optimization(
         train,
-        model_class_name="GAT", 
+        model_class_name="GraphSAGE", 
         n_trials=100, 
-        learning_rate_range=(0.01, 0.1), # ranges for hyperparameters
+        learning_rate_range=(0.000001, 0.1), # ranges for hyperparameters
         batch_size_values=[32, 64], 
         dropout_rate_range = (0.1, 0.6),
         num_epochs=200, 
@@ -148,15 +148,20 @@ def hyperparams_optimization(
 
 
 if __name__ == "__main__":
+    print("Loading Data")
+    # Make sure to change it to the correct path on your data
+    data = load_data("./Data_sanity3(rnd_walk)/train","./Data_sanity3(rnd_walk)/val","./Data_sanity3(rnd_walk)/val")
     print("Loading Training Data")
-    train = load_data("./data_generation/train")
+    train = data[0]
     print("Loading Validation Data")
-    val = load_data("./data_generation/val")
+    val = data[1]
     print("Loading Testing Data")
-    test = load_data("./data_generation/test")
+    test = data[2]
+    
+    train, val, test = normalize_data(train, val, test)
     print(f"Data Loaded \n",
           f"Number of training samples = {len(train)}\n",
-          f"Number of validation samples = {len(val)}\n",
-          f"Number of testing samples = {len(test)}\n",)
+          f"Number of validation samples = {len(train)}\n",
+          f"Number of testing samples = {len(train)}\n",)
     
-    hyperparams_optimization(train=train, model_class_name="GAT")
+    hyperparams_optimization(train=train, model_class_name="GraphSAGE")
