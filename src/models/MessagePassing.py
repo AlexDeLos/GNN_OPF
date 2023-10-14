@@ -15,7 +15,7 @@ class MessagePassingGNN(MessagePassing):
             output_dim, 
             edge_attr_dim, 
             hidden_dim=64,
-            num_layers=1,
+            num_layers=2,
             dropout_rate=0.1, 
             aggr='mean', 
         ):

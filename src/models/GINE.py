@@ -8,7 +8,7 @@ class GINE(torch.nn.Module):
 
     class_name = "GINE"
     
-    def __init__(self, input_dim, output_dim, edge_dim, hidden_gine_dim=16, hidden_lin_dim=64):
+    def __init__(self, input_dim, output_dim, edge_dim, n_hidden_dim=0, hidden_gine_dim=64, n_hidden_lin = 0, hidden_lin_dim=64):
         super(GINE, self).__init__()
         self.conv1 = GINEConv(
             Sequential(Linear(input_dim, hidden_gine_dim),
