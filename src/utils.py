@@ -25,12 +25,9 @@ def get_arguments():
                                      description="Run a GNN to solve an inductive power system problem (power flow only for now)")
 
     parser.add_argument("gnn", choices=["GAT", "MessagePassing", "GraphSAGE", "GINE"], default="GAT")
-    # parser.add_argument("--train", default="./Data/train")
-    parser.add_argument("--train", default="./data_generation/train")
-    # parser.add_argument("--val", default="./Data/val")
-    parser.add_argument("--val", default="./data_generation/val")
-    # parser.add_argument("--test", default="./Data/test")
-    parser.add_argument("--test", default="./data_generation/test")
+    parser.add_argument("--train", default="./Data/train")
+    parser.add_argument("--val", default="./Data/val")
+    parser.add_argument("--test", default="./Data/test")
     parser.add_argument("-s", "--save_model", action="store_true", default=False)
     parser.add_argument("-m", "--model_name",
                         default=''.join([random.choice(string.ascii_letters + string.digits) for _ in range(8)]))
@@ -219,23 +216,18 @@ def create_data_instance(graph, y_bus, y_gen, y_line):
                                     float(y_bus['vm_pu'][node.Index]),
                                     float(y_bus['va_degree'][node.Index])]
 
-    first = True
     for edges in graph.line.itertuples():
-        if first:
-            common_edge = edges
-            first = False
         r_tot = float(edges.r_ohm_per_km) * float(edges.length_km)
         x_tot = float(edges.x_ohm_per_km) * float(edges.length_km)
         conductance, susceptance = impedance_to_admittance(r_tot, x_tot, graph.bus['vn_kv'][edges.from_bus], graph.sn_mva)
         g.edges[edges.from_bus, edges.to_bus, ('line', edges.Index)]['edge_attr'] = [float(conductance),
                                                                                      float(susceptance)]
 
-    # print(common_edge)
     for trafos in graph.trafo.itertuples():
-        g.edges[trafos.lv_bus, trafos.hv_bus, ('trafo', trafos.Index)]['edge_attr'] = [
-            float(trafos.vkr_percent / (trafos.sn_mva / (trafos.vn_lv_kv * math.sqrt(3)))),
-            float(math.sqrt((trafos.vk_percent ** 2) - (trafos.vkr_percent) ** 2)) / (
-                        trafos.sn_mva / (trafos.vn_lv_kv * math.sqrt(3)))]
+        r_tot = float(trafos.vkr_percent / (trafos.sn_mva / (trafos.vn_lv_kv * math.sqrt(3))))
+        x_tot = float(math.sqrt((trafos.vk_percent ** 2) - (trafos.vkr_percent) ** 2)) / (trafos.sn_mva / (trafos.vn_lv_kv * math.sqrt(3)))
+        conductance, susceptance = impedance_to_admittance(r_tot, x_tot, trafos.vn_lv_kv, graph.sn_mva)
+        g.edges[trafos.lv_bus, trafos.hv_bus, ('trafo', trafos.Index)]['edge_attr'] = [conductance, susceptance]
 
     return from_networkx(g)
 
