@@ -22,7 +22,8 @@ def train_model(arguments, train, val):
     gnn_class = get_gnn(arguments.gnn)
     gnn = gnn_class(input_dim, output_dim, edge_attr_dim)
     print(f"GNN: \n{gnn}")
-    ac = ACLoss()
+    # ac = ACLoss()
+    ac = None
 
     optimizer_class = get_optim(arguments.optimizer)
     optimizer = optimizer_class(gnn.parameters(), lr=arguments.learning_rate)
@@ -65,7 +66,7 @@ def train_model(arguments, train, val):
     return gnn, losses, val_losses, last_batch
 
 
-def train_batch(data, model, optimizer, criterion, physics_crit=True, device='cpu'):
+def train_batch(data, model, optimizer, criterion, physics_crit=True, device='cpu', ac=None):
     model.to(device)
     optimizer.zero_grad()
     out = model(data)
@@ -97,15 +98,6 @@ def physics_loss(network, output, log_loss=True):
 
     @return:    Returns total power imbalance over all the nodes.
     """
-    # # Calculate admittance values (conductance, susceptance) from impedance values (edges)
-    # resist_line_total = network.edge_attr[:, 0] * network.edge_attr[:, -1]
-    # react_line_total = network.edge_attr[:, 1] * network.edge_attr[:, -1]
-    #
-    # denom = resist_line_total * resist_line_total
-    # denom += react_line_total * react_line_total
-    # conductances = resist_line_total / denom
-    # susceptances = -1.0 * react_line_total / denom
-
     # conductances and susceptances of the lines are multiplied by -1.0 in the nodal admittance diagram
     # for diagonal elements they stay positive (used further down the code)
     conductances = -1.0 * network.edge_attr[:, 0]
@@ -128,8 +120,7 @@ def physics_loss(network, output, log_loss=True):
     combined_output[idx_list, 3] += output[idx_list, 3]  # Add predicted va_degree
 
     # generator:
-    idx_list = (
-        th.logical_and(network.x[:, 0] < 0.5, network.x[:, 1] > 0.5))  # get generator (not gen + load) node id's
+    idx_list = (th.logical_and(network.x[:, 0] < 0.5, network.x[:, 1] > 0.5))  # get generator (not gen + load) node id's
     combined_output[idx_list, 0] += network.x[idx_list, 4]  # Add fixed p_mw from input (already set to neg. in data gen.)
     combined_output[idx_list, 2] += network.x[idx_list, 6]  # Add fixed vm_pu from input
     combined_output[idx_list, 1] += output[idx_list, 1]  # Add predicted q_mvar
@@ -142,8 +133,6 @@ def physics_loss(network, output, log_loss=True):
     combined_output[idx_list, 1] += network.x[idx_list, 5]  # Add fixed q_mvar from input
     combined_output[idx_list, 2] += output[idx_list, 2]  # Add predicted vm_pu
     combined_output[idx_list, 3] += output[idx_list, 3]  # Add predicted va_degree
-
-    # combined_output = output
 
     # Combine node features with corresponding edges
     from_nodes = pyg_util.select(combined_output, network.edge_index[0], 0)  # list of duplicated node outputs based on edges
@@ -174,7 +163,7 @@ def physics_loss(network, output, log_loss=True):
     return tot_loss
 
 
-def evaluate_batch(data, model, criterion, device='cpu'):
+def evaluate_batch(data, model, criterion, device='cpu', ac=None):
     model.to(device)
     out = model(data)
     loss = criterion(out, data.y) # ac(out, data.x, data.edge_index, data.edge_attr)
