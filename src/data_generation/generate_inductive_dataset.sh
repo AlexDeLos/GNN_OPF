@@ -18,8 +18,6 @@ echo "Generating from case30"
 python $SCRIPT_DIR/generate.py case30 -n 15 -s $SCRIPT_DIR/train  >/dev/null
 echo "Generating from case_ieee30"
 python $SCRIPT_DIR/generate.py case_ieee30 -n 15 -s $SCRIPT_DIR/train  >/dev/null
-echo "Generating from case33bw"
-python $SCRIPT_DIR/generate.py case33bw -n 15 -s $SCRIPT_DIR/train  >/dev/null
 echo "Generating from case39"
 python $SCRIPT_DIR/generate.py case39 -n 15 -s $SCRIPT_DIR/train  >/dev/null
 echo "Generating from case57"
@@ -44,7 +42,7 @@ echo "Generating from case2869pegase"
 python $SCRIPT_DIR/generate.py case2869pegase -n 15 -s $SCRIPT_DIR/train  >/dev/null
 
 echo "Generating Validation Set"
-python $SCRIPT_DIR/generate.py GBnetwork -n 100 -s $SCRIPT_DIR/val  >/dev/null
+python $SCRIPT_DIR/generate.py GBnetwork -n 100 --max_size 200 -s $SCRIPT_DIR/val  >/dev/null
 
 echo "Generating Testing Set"
 python $SCRIPT_DIR/generate.py GBnetwork -n 100 -s $SCRIPT_DIR/test  >/dev/null
