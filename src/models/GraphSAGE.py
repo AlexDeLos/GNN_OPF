@@ -12,10 +12,10 @@ class GraphSAGE(torch.nn.Module):
             input_dim, 
             output_dim, 
             edge_attr_dim=0, # not used by SAGEConv, necessary for compatibility with models that use edge attributes
-            n_hidden_conv=8, 
-            hidden_conv_dim=64, 
-            n_hidden_lin=4, 
-            hidden_lin_dim=64,  
+            n_hidden_conv=0, 
+            hidden_conv_dim=16, 
+            n_hidden_lin=2, 
+            hidden_lin_dim=16,  
             dropout=0.1,
         ):
         
@@ -26,6 +26,7 @@ class GraphSAGE(torch.nn.Module):
         self.convs.append(SAGEConv(in_channels=input_dim, out_channels=hidden_conv_dim))
         for _ in range(n_hidden_conv):
             self.convs.append(SAGEConv(in_channels=hidden_conv_dim, out_channels=hidden_conv_dim))
+        # self.convs.append(SAGEConv(hidden_conv_dim, output_dim))
         
         self.lins.append(nn.Linear(hidden_conv_dim, hidden_lin_dim))
         for _ in range(n_hidden_lin):
@@ -44,6 +45,7 @@ class GraphSAGE(torch.nn.Module):
             x = c(x=x, edge_index=edge_index)
             x = F.dropout(x, p=self.dropout_rate, training=self.training)
             x = F.elu(x)
+        # x = self.convs[-1](x, edge_index=edge_index)
 
         for l in self.lins[:-1]:
             x = l(x)

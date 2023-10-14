@@ -9,20 +9,20 @@ from utils import load_data_helper, load_model, read_from_pkl, write_to_pkl
 
 def main():
     args = parse_args()
-    try:
-        data = read_from_pkl(f"{args.data_path}/pickled.pkl")
-    except:
-        data = load_data_helper(f"{args.data_path}/pickled.pkl")
-        write_to_pkl(data, f"{args.data_path}/pickled.pkl")
-    model = load_model(args.gnn_type, args.model_path, data)
+    data = read_from_pkl(f"{args.data_path}/pickled.pkl")
+    model = load_model(args.gnn_type, args.model_path, data, args)
     model.eval()
-    new_test(model, data)
+    test(model, data)
 
 def parse_args():
     parser = argparse.ArgumentParser("Testing powerfloww GNN models")
     parser.add_argument("-g", "--gnn_type", required=True)
     parser.add_argument("-m", "--model_path", required=True)
     parser.add_argument("-d", "--data_path", required=True)
+    parser.add_argument("--n_hidden_gnn", default=2, type=int)
+    parser.add_argument("--gnn_hidden_dim", default=32, type=int)
+    parser.add_argument("--n_hidden_lin", default=2, type=int)
+    parser.add_argument("--lin_hidden_dim", default=32, type=int)
     args = parser.parse_args()
     return args
 
@@ -30,21 +30,26 @@ def test(model, data):
     loader = DataLoader(data)
     errors = []
     p_errors = []
+    first = True
     for g in loader:
         out = model(g)
-        # print(g.y)
-        # print(out)
-        # quit()
-        error = th.sub(g.y, out)
+        # if first:
+            # print("Y")
+            # print(g.y)
+            # print("Pred")
+            # print(out)
+            # print(th.cat([g.y, out], dim=1))
+        error = th.abs(th.sub(g.y, out))
         p_error = th.div(error, g.y) * 100
         errors.append(error.detach().numpy())
         p_errors.append(p_error.detach().numpy())
 
     errors = np.concatenate(errors)
-    errors = errors.reshape((-1, 4))
+    errors = errors.reshape((-1, 2))
 
     p_errors = np.concatenate(p_errors)
-    p_errors = p_errors.reshape((-1, 4))
+    p_errors = p_errors.reshape((-1, 2))
+    print(np.shape(p_errors))
 
     mask = np.isinf(p_errors)
     p_errors[mask] = 0
@@ -54,9 +59,13 @@ def test(model, data):
     # plt.hist(p_errors)
     # plt.show()
 
-    num_correct = np.sum(abs(p_errors) < 5, axis=0)
     
-    print("within", num_correct / len(p_errors))
+    print("within 5%", np.sum(abs(p_errors) < 5, axis=0) / len(p_errors))
+    print("within 10%", np.sum(abs(p_errors) < 10, axis=0) / len(p_errors))
+    print("within 15%", np.sum(abs(p_errors) < 15, axis=0) / len(p_errors))
+    print("within 25%", np.sum(abs(p_errors) < 25, axis=0) / len(p_errors))
+    print("within 50%", np.sum(abs(p_errors) < 50, axis=0) / len(p_errors))
+
     return errors, p_errors
 
 def new_test(model, data):

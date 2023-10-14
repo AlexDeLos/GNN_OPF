@@ -14,9 +14,12 @@ import random
 import string
 import torch as th
 import torch.nn as nn
+from torch_geometric.data import HeteroData
 from torch_geometric.utils.convert import from_networkx
 import tqdm
 import math
+import networkx as nx
+from copy import deepcopy
 
 
 def get_arguments():
@@ -29,13 +32,17 @@ def get_arguments():
     parser.add_argument("--test", default="./Data/test")
     parser.add_argument("-s", "--save_model", action="store_true", default=True)
     parser.add_argument("-m", "--model_name", default=''.join([random.choice(string.ascii_letters + string.digits) for _ in range(8)]))
-    parser.add_argument("-p", "--plot", action="store_true", default=True)
+    parser.add_argument("-p", "--plot", action="store_true", default=False)
     parser.add_argument("-o", "--optimizer", default="Adam")
     parser.add_argument("-c", "--criterion", default="MSELoss")
     parser.add_argument("-b", "--batch_size", default=16)
-    parser.add_argument("-n", "--n_epochs", default=200)
+    parser.add_argument("-n", "--n_epochs", default=100)
     parser.add_argument("-l", "--learning_rate", default=1e-4)
     parser.add_argument("-w", "--weight_decay", default=0.05)
+    parser.add_argument("--n_hidden_gnn", default=2, type=int)
+    parser.add_argument("--gnn_hidden_dim", default=32, type=int)
+    parser.add_argument("--n_hidden_lin", default=2, type=int)
+    parser.add_argument("--lin_hidden_dim", default=8, type=int)
     parser.add_argument("--patience", default=40)
     parser.add_argument("--plot_node_error", action="store_true", default=False)
     parser.add_argument("--normalize", action="store_true", default=False)
@@ -80,7 +87,7 @@ def load_data_helper(dir):
         y_gen = pd.read_csv(f"{sol_path}/{sol_paths[i * 3 + 1]}", index_col=0)
         y_line = pd.read_csv(f"{sol_path}/{sol_paths[i * 3 + 2]}", index_col=0)
 
-        instance = create_data_instance(graph, y_bus, y_gen, y_line)
+        instance = new_create_data_instance(graph, y_bus, y_gen, y_line)
         data.append(instance)
 
     return data
@@ -137,6 +144,192 @@ def normalize_data(train, val, test, standard_normalizaton=True):
 
     return train, val, test
 
+def new_create_data_instance(graph, y_bus, xxx, y_line):
+    # ppl.simple_plot(graph, plot_gens=True, plot_loads=True)
+    gen = graph.gen[['bus', 'p_mw', 'vm_pu']]
+    gen.rename(columns={'p_mw': 'p_mw_gen'}, inplace=True)
+    gen['gen'] = 1
+    gen.set_index('bus', inplace=True)
+
+    load = graph.load[['bus', 'p_mw', 'q_mvar']]
+    load.rename(columns={'p_mw': 'p_mw_load'}, inplace=True)
+    load['load'] = 1
+    load.set_index('bus', inplace=True)
+
+    ext = graph.ext_grid[['bus', 'vm_pu', 'va_degree']]
+    ext.rename(columns={'vm_pu': 'vm_pu_ext'}, inplace=True)
+    ext['ext'] = 1
+    ext.set_index('bus', inplace=True)
+    
+    node_feat = graph.bus[['vn_kv']]
+    node_feat = node_feat.merge(gen, left_index=True, right_index=True, how='outer')
+    node_feat = node_feat.merge(load, left_index=True, right_index=True, how='outer')
+    node_feat = node_feat.merge(ext, left_index=True, right_index=True, how='outer')
+
+    # fill missing feature values with 0
+    node_feat.fillna(0.0, inplace=True)
+    node_feat['vm_pu'] = node_feat['vm_pu'] + node_feat['vm_pu_ext']
+    node_feat['p_mw'] = node_feat['p_mw_load'] - node_feat['p_mw_gen']
+
+    del node_feat['vm_pu_ext']
+    del node_feat['p_mw_gen']
+    del node_feat['p_mw_load']
+    del node_feat['vn_kv']
+
+    # remove duplicate columns/indices
+    node_feat = node_feat[~node_feat.index.duplicated(keep='first')]
+    node_feat['none'] = ((node_feat['gen'] == 0) & (node_feat['ext'] == 0) & (node_feat['load'] == 0)).astype(float)
+    node_feat['load'] = node_feat['load'] + node_feat['none']
+    node_feat['load_gen'] = ((node_feat['load'] == 1) & (node_feat['gen'] == 1)).astype(float)
+    node_feat['load'] = ((node_feat['load'] == 1) & (node_feat['load_gen'] == 0)).astype(float)
+    node_feat['gen'] = ((node_feat['gen'] == 1) & (node_feat['load_gen'] == 0)).astype(float)
+    node_feat = node_feat[['load', 'gen', 'load_gen', 'ext', 'p_mw', 'q_mvar', 'vm_pu', 'va_degree']]
+    print()
+    print(f"pre sort\n{node_feat}")
+    # print(node_feat['load'] + node_feat['gen'] + node_feat['ext'] + node_feat['load_gen'])
+    node_feat = pd.concat([
+        node_feat[node_feat['load'] == 1],
+        node_feat[node_feat['gen'] == 1],
+        node_feat[node_feat['load_gen'] == 1],
+        node_feat[node_feat['ext'] == 1]
+        ], ignore_index=False)
+    print("node feat post sort")
+    print(node_feat)
+    # print("graph lines")
+    # print(graph.line)
+    index_mapping = {old_idx: new_idx for new_idx, old_idx in enumerate(node_feat.index)}
+    node_feat = node_feat.reset_index(drop=True)
+    print('node feat after reindexing')
+    print(node_feat)
+    y = y_bus
+    print(f'y before reindexing: \n{y}')
+    y.index = y.index.map(index_mapping)
+    print(f'y after reindexing: \n{y}')
+
+    y_load = y[['va_degree', 'vm_pu']]
+    y_gen = y[['va_degree']]
+    y_load_gen = y[['va_degree']]
+
+        # Creating HeteroData object
+    data = HeteroData()
+    feature_map = {
+        'load': ['p_mw', 'q_mvar'],
+        'gen': ['p_mw', 'vm_pu'],
+        'load_gen': ['p_mw', 'q_mvar', 'vm_pu'],
+        'ext': ['vm_pu', 'va_degree']
+    }
+    y_map = {
+        'load': y_load,
+        'gen': y_gen,
+        'load_gen': y_load_gen,
+        'ext': None
+    }
+    
+    edge_index = graph.line[['from_bus', 'to_bus']].reset_index(drop=True)
+    edge_index['from_bus'] = edge_index['from_bus'].map(index_mapping)
+    edge_index['to_bus'] = edge_index['to_bus'].map(index_mapping)
+    swapped = deepcopy(edge_index)
+    swapped[['from_bus', 'to_bus']] = edge_index[['to_bus', 'from_bus']]
+    bidirectional_edge_index = pd.concat([edge_index, swapped], axis=0)
+
+    print('bi')
+    print(bidirectional_edge_index)
+
+    edge_attr = graph.line[['r_ohm_per_km',
+                           'x_ohm_per_km',
+                           'c_nf_per_km',
+                           'g_us_per_km',
+                           'max_i_ka',
+                           'parallel',
+                           'df',
+                           'length_km']].reset_index(drop=True)
+    print("attr")
+    print(edge_attr)
+    bidirectional_edge_attr = pd.concat([edge_attr, edge_attr], axis=0)
+    print('bi attr')
+    print(bidirectional_edge_attr)
+    for node_type in feature_map.keys():
+        print(node_type)
+        mask = node_feat[node_type] == 1
+        sub_df = node_feat[mask]
+        features = feature_map[node_type]
+
+        x = th.tensor(sub_df[features].values, dtype=th.float)
+        data[node_type].x = x
+        y_df = y_map[node_type]
+        print(f"x attributes {x}")
+        if y_df is not None:
+            y = th.tensor(y_df[mask].values, dtype=float)
+            data[node_type].y = y 
+            print(f"y attributes: {y}")
+
+    print(data)
+    print('error causing')
+    print(th.tensor(edge_index.values, dtype=th.long).t().contiguous())
+    print(th.tensor(edge_index.values, dtype=th.long).t().contiguous().shape)
+    data['connects'].edge_index = th.tensor(bidirectional_edge_index.values, dtype=th.long).t().contiguous()
+    data['connects'].edge_attributes = th.tensor(bidirectional_edge_attr.values, dtype=th.float)
+    print(data)
+    print(type(data))
+    print("quantity")
+    print(data['load'].num_nodes)
+    print(data['gen'].num_nodes)
+    print(data['ext'].num_nodes)
+    print(data['load', 'gen', 'est'].num_edges)
+    visualize_hetero(data)
+    # print(node_feat[feature_map['load']])
+    # print(y_map['load'])
+    # print(edge_df)
+    # print(edge_attr)
+    quit()
+
+def visualize_hetero(hetero):
+    G = nx.Graph()
+
+    # Adding nodes (adjust 'node_type' and 'node_feature' as per your actual data)
+    print(hetero.keys)
+    print(hetero.node_types)
+    print(hetero.edge_types)
+    color_map = []
+    total_nodes = 0
+    for node_type in hetero.node_types:
+        if node_type != 'connects':
+            num_nodes = hetero[node_type].num_nodes
+            print(f"node type: {node_type} num nodes: {num_nodes}")
+            print(f"G nodes before {len(G.nodes)}")
+            G.add_nodes_from(range(total_nodes, total_nodes + num_nodes), node_type=node_type)
+            print(f"G nodes after {len(G.nodes)}")
+            total_nodes += num_nodes
+            if node_type == 'load':
+                color_map.extend(['red'] * num_nodes)
+            elif node_type == 'gen':
+                color_map.extend(['green'] * num_nodes)
+            elif node_type == 'load_gen':
+                color_map.extend(['blue'] * num_nodes)
+            elif node_type == 'ext':
+                color_map.extend(['gray'] * num_nodes)
+            else:
+                color_map.extend(['yellow'] * num_nodes)
+    # Adding edges
+    edge_index = hetero['connects'].edge_index.t().numpy()
+    G.add_edges_from(edge_index)
+    print(f"len color map {len(color_map)}")
+    print(color_map)
+    print(f"len nodes {len(G.nodes)}")
+    print(G.nodes)
+    # Draw the graph
+    pos = nx.spring_layout(G)  # Compute position of nodes
+    nx.draw(G, pos, with_labels=True, node_size=200, node_color=color_map, font_size=15, font_weight="bold")
+    plt.show()
+
+def get_connection_type(row):
+    types_from = ['load', 'gen', 'load_gen', 'ext']
+    types_to = [t + '_to' for t in types_from]
+    print(f"row: {row}")
+    type_from = next((t for t in types_from if row[t] == 1), None)
+    type_to = next((t for t in types_to if row[t] == 1), None)
+    
+    return type_from + '_to_' + type_to.split('_')[0] if type_from and type_to else None
 
 # return a torch_geometric.data.Data object for each instance
 def create_data_instance(graph, y_bus, y_gen, y_line):
@@ -145,19 +338,17 @@ def create_data_instance(graph, y_bus, y_gen, y_line):
     # https://pandapower.readthedocs.io/en/latest/elements/gen.html
     gen = graph.gen[['bus', 'p_mw', 'vm_pu']]
     gen.rename(columns={'p_mw': 'p_mw_gen'}, inplace=True)
-    gen['is_gen'] = 1
+    gen['gen'] = 1
     gen.set_index('bus', inplace=True)
 
     # https://pandapower.readthedocs.io/en/latest/elements/load.html
     load = graph.load[['bus', 'p_mw', 'q_mvar']]
     load.rename(columns={'p_mw': 'p_mw_load'}, inplace=True)
-    load['is_load'] = 1
     load.set_index('bus', inplace=True)
 
     ext = graph.ext_grid[['bus', 'vm_pu', 'va_degree']]
     ext.rename(columns={'vm_pu': 'vm_pu_ext'}, inplace=True)
-    ext['va_degree'] = 1
-    ext['is_ext'] = 1
+    ext['ext'] = 1
     ext.set_index('bus', inplace=True)
 
     # https://pandapower.readthedocs.io/en/latest/elements/bus.html
@@ -180,45 +371,56 @@ def create_data_instance(graph, y_bus, y_gen, y_line):
 
     # remove duplicate columns/indices
     node_feat = node_feat[~node_feat.index.duplicated(keep='first')]
-    node_feat['is_none'] = (node_feat['is_gen'] == 0) & (node_feat['is_load'] == 0) & (node_feat['is_ext'] == 0)
-    node_feat['is_none'] = node_feat['is_none'].astype(float)
-    node_feat = node_feat[['is_load', 'is_gen', 'is_ext', 'is_none', 'p_mw', 'q_mvar', 'vm_pu']]
-    zero_check = node_feat[(node_feat['is_load'] == 0) & (node_feat['is_gen'] == 0) & (node_feat['is_ext'] == 0) & (node_feat['is_none'] == 0)]
+    node_feat['load'] = (node_feat['gen'] == 0) & (node_feat['ext'] == 0)
+    node_feat['load'] = node_feat['load'].astype(float)
+    node_feat = node_feat[['load', 'gen', 'ext', 'p_mw', 'q_mvar', 'vm_pu', 'va_degree']]
+    # zero_check = node_feat[(node_feat['load'] == 0) & (node_feat['gen'] == 0) & (node_feat['ext'] == 0) & (node_feat['is_none'] == 0)]
+    # load_ext_check = node_feat[(node_feat['load'] == 1) & (node_feat['ext'] == 1)]
 
-    if not zero_check.empty:
-        print("zero check failed")
-        print(node_feat)
-        print("zero check results")
-        print(zero_check)
-        quit()
+    # if not zero_check.empty:
+    #     print("zero check failed")
+    #     print(node_feat)
+    #     print("zero check results")
+    #     print(zero_check)
+    #     quit()
+    
+    # if not load_ext_check.empty:
+    #     print("load ext check failed")
+    #     print(node_feat)
+    #     print("load ext check results")
+    #     print(zero_check)
+    #     quit()
     
 
     for node in node_feat.itertuples():
         # set each node features
-        g.nodes[node.Index]['x'] = [float(node.is_load), 
-                                    float(node.is_gen), 
-                                    float(node.is_ext), 
-                                    float(node.is_none), 
+        g.nodes[node.Index]['x'] = [float(node.load), 
+                                    float(node.gen), 
+                                    float(node.ext), 
                                     float(node.p_mw), 
                                     float(node.q_mvar), 
-                                    float(node.vm_pu)]
+                                    float(node.vm_pu),
+                                    float(node.va_degree)]
         
-        g.nodes[node.Index]['y'] = [float(y_bus['p_mw'][node.Index]),
-                                    float(y_bus['q_mvar'][node.Index]),
-                                    float(y_bus['vm_pu'][node.Index]),
-                                    float(y_bus['va_degree'][node.Index])]
+        g.nodes[node.Index]['y'] = [float(y_bus['va_degree'][node.Index]),
+                                    float(y_bus['vm_pu'][node.Index])]
+        
+        # g.nodes[node.Index]['y'] = [float(y_bus['p_mw'][node.Index]),
+        #                             float(y_bus['q_mvar'][node.Index]),
+        #                             float(y_bus['vm_pu'][node.Index]),
+        #                             float(y_bus['va_degree'][node.Index])]
         # set each node label by type
-        # if node.is_load:
+        # if node.load:
         #     g.nodes[node.Index]['y'] = [float(y_bus['va_degree'][node.Index]),
         #                                 float(y_bus['vm_pu'][node.Index])]
         #     # g.nodes[node.Index]['reals'] = [float(y_bus['p_mw'][node.Index]),
         #     #                                 float(y_bus['q_mvar'][node.Index])]
-        # elif node.is_gen:
+        # elif node.gen:
         #     g.nodes[node.Index]['y'] = [float(y_bus['q_mvar'][node.Index]),
         #                                 float(y_bus['va_degree'][node.Index])]
         #     # g.nodes[node.Index]['reals'] = [float(y_bus['p_mw'][node.Index]),
         #     #                                 float(y_bus['vm_pu'][node.Index])]
-        # elif node.is_ext:
+        # elif node.ext:
         #     g.nodes[node.Index]['y'] = [float(y_bus['p_mw'][node.Index]),
         #                                 float(y_bus['q_mvar'][node.Index])]
         #     # g.nodes[node.Index]['reals'] = [float(y_bus['vm_pu'][node.Index]),
@@ -287,16 +489,22 @@ def save_model(model, model_name):
         'state_dict': model.state_dict(),
     }
     # timestamp = pd.Timestamp.now().strftime("%Y-%m-%d")
-    model_name = model_name + "_" + model.class_name # + "_" + str(timestamp)
+    model_name = model_name + "-" + model.class_name # + "_" + str(timestamp)
     th.save(model.state_dict(), f"./trained_models/{model_name}.pt")
     
 
-def load_model(gnn_type, path, data):
+def load_model(gnn_type, path, data, arguments):
     input_dim = data[0].x.shape[1]
     edge_attr_dim = data[0].edge_attr.shape[1] 
     output_dim = data[0].y.shape[1]
     gnn_class = get_gnn(gnn_type)
-    model = gnn_class(input_dim, output_dim, edge_attr_dim)
+    model = gnn_class(input_dim, 
+                      output_dim, 
+                      edge_attr_dim,
+                      arguments.n_hidden_gnn, 
+                      arguments.gnn_hidden_dim, 
+                      arguments.n_hidden_lin, 
+                      arguments.lin_hidden_dim)
     model.load_state_dict(th.load(path))
     return model
 

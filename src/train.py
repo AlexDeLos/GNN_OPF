@@ -1,8 +1,8 @@
 from torch_geometric.loader import DataLoader as pyg_DataLoader
 import tqdm
 from utils import get_gnn, get_optim, get_criterion
-from models.pl import ACLoss
-
+from models.pl import ACLoss    
+import optuna
 
 def train_model(arguments, train, val):
     input_dim = train[0].x.shape[1]
@@ -15,7 +15,13 @@ def train_model(arguments, train, val):
     train_dataloader = pyg_DataLoader(train, batch_size=batch_size, shuffle=True)
     val_dataloader = pyg_DataLoader(val, batch_size=batch_size, shuffle=False)
     gnn_class = get_gnn(arguments.gnn)
-    gnn = gnn_class(input_dim, output_dim, edge_attr_dim)
+    gnn = gnn_class(input_dim,
+                    output_dim, 
+                    edge_attr_dim, 
+                    arguments.n_hidden_gnn, 
+                    arguments.gnn_hidden_dim, 
+                    arguments.n_hidden_lin, 
+                    arguments.lin_hidden_dim)
     print(f"GNN: \n{gnn}")
     ac = ACLoss()
 
@@ -26,7 +32,7 @@ def train_model(arguments, train, val):
     losses = []
     val_losses = []
     last_batch = None
-    for epoch in tqdm.tqdm(range(arguments.n_epochs)): #args epochs
+    for epoch in range(arguments.n_epochs): #tqdm.tqdm(range(arguments.n_epochs)): #args epochs
         epoch_loss = 0.0
         epoch_val_loss = 0.0
         gnn.train()
@@ -42,8 +48,8 @@ def train_model(arguments, train, val):
         losses.append(avg_epoch_loss)
         val_losses.append(avg_epoch_val_loss)
 
-        if epoch % 10 == 0:
-            print(f'Epoch: {epoch:03d}, trn_Loss: {avg_epoch_loss:.6f}, val_loss: {avg_epoch_val_loss:.6f}')
+        # if epoch % 10 == 0:
+        #     print(f'Epoch: {epoch:03d}, trn_Loss: {avg_epoch_loss:.6f}, val_loss: {avg_epoch_val_loss:.6f}')
         
         #Early stopping
         try:  
@@ -56,8 +62,10 @@ def train_model(arguments, train, val):
                 early_stop = 0
         except:
             early_stop = 0
-    
+    print(f"Min loss: {min(val_losses)} last loss: {val_losses[-1]}")
     return gnn, losses, val_losses, last_batch
+
+
 
 
 def train_batch(data, model, optimizer, criterion, device='cpu', ac=None):
