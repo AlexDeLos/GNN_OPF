@@ -1,4 +1,7 @@
+import numba
 import numpy as np
+import pandapower as pp
+
 
 
 def random_neighbor_selection(full_net, initial_bus, subgraph_length):
@@ -100,5 +103,17 @@ def random_walk_neighbor_selection(full_net, starting_bus, subgraph_length):
         stuck_iteration = 0
 
     return subgraph_busses
+
+def number_changes(full_net):
+    test_net = pp.pandapowerNet(full_net.copy())
+    # We vary every value based on how big they are around their point
+    for i in range(len(test_net.gen)):
+        test_net.gen.at[i,'p_mw'] = np.abs(np.random.normal(test_net.gen.at[i,'p_mw'], np.sqrt(abs(test_net.gen.at[i,'p_mw'])/100))) #goes from 0 - 1000
+        test_net.gen.at[i,'vm_pu'] = np.abs(np.random.normal(1, 1/100)) #goes from 0 - 1.1
+    for i in range(len(test_net.load)):
+        test_net.load.at[i,'p_mw'] = np.abs(np.random.normal(test_net.load.at[i,'p_mw'], np.sqrt(abs(test_net.load.at[i,'p_mw']))))# goes from 0 - 500 (most under 100)
+        test_net.load.at[i,'q_mvar'] =np.abs(np.random.normal(test_net.load.at[i,'q_mvar'], np.sqrt(abs(test_net.load.at[i,'q_mvar'])))) # goes from -50 to about 300
+
+    return test_net
 
 # other methods to try: k-hop neighborhood, Community Detection, random walk laplacian,graphSAINT partitioning, ...
