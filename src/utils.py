@@ -31,7 +31,7 @@ def get_arguments():
     parser.add_argument("--val", default="./data_generation/val")
     # parser.add_argument("--test", default="./Data/test")
     parser.add_argument("--test", default="./data_generation/test")
-    parser.add_argument("-s", "--save_model", action="store_true", default=True)
+    parser.add_argument("-s", "--save_model", action="store_true", default=False)
     parser.add_argument("-m", "--model_name",
                         default=''.join([random.choice(string.ascii_letters + string.digits) for _ in range(8)]))
     parser.add_argument("-p", "--plot", action="store_true", default=True)
@@ -224,13 +224,9 @@ def create_data_instance(graph, y_bus, y_gen, y_line):
         if first:
             common_edge = edges
             first = False
-        z_base = graph.bus['vn_kv'][edges.from_bus]**2 / graph.sn_mva  # Zbase to convert impedance to per-unit
-        r_tot = float(edges.r_ohm_per_km) * float(edges.length_km) / z_base  # Convert to per unit metrics before converting to admittance
-        x_tot = float(edges.x_ohm_per_km) * float(edges.length_km) / z_base
-        denom = r_tot**2 + x_tot**2
-        conductance = r_tot / denom
-        susceptance = -x_tot / denom
-
+        r_tot = float(edges.r_ohm_per_km) * float(edges.length_km)
+        x_tot = float(edges.x_ohm_per_km) * float(edges.length_km)
+        conductance, susceptance = impedance_to_admittance(r_tot, x_tot, graph.bus['vn_kv'][edges.from_bus], graph.sn_mva)
         g.edges[edges.from_bus, edges.to_bus, ('line', edges.Index)]['edge_attr'] = [float(conductance),
                                                                                      float(susceptance)]
 
@@ -242,6 +238,16 @@ def create_data_instance(graph, y_bus, y_gen, y_line):
                         trafos.sn_mva / (trafos.vn_lv_kv * math.sqrt(3)))]
 
     return from_networkx(g)
+
+
+def impedance_to_admittance(r_ohm, x_ohm, base_volt, rated_power):
+    z_base = base_volt ** 2 / rated_power  # Z_base used to convert impedance to per-unit
+    r_tot = r_ohm / z_base  # Convert to per unit metrics before converting to admittance
+    x_tot = x_ohm / z_base
+    denom = r_tot ** 2 + x_tot ** 2
+    conductance = r_tot / denom
+    susceptance = -x_tot / denom
+    return conductance, susceptance
 
 
 def get_gnn(gnn_name):
