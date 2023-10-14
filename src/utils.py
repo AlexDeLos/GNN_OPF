@@ -16,19 +16,21 @@ import torch as th
 import torch.nn as nn
 from torch_geometric.utils.convert import from_networkx
 import tqdm
+import sys
 import math
 
 
 def get_arguments():
     parser = argparse.ArgumentParser(prog="GNN script",
                                      description="Run a GNN to solve an inductive power system problem (power flow only for now)")
-    
+
     parser.add_argument("gnn", choices=["GAT", "MessagePassing", "GraphSAGE", "GINE"], default="GAT")
     parser.add_argument("--train", default="./Data/train")
     parser.add_argument("--val", default="./Data/val")
     parser.add_argument("--test", default="./Data/test")
     parser.add_argument("-s", "--save_model", action="store_true", default=True)
-    parser.add_argument("-m", "--model_name", default=''.join([random.choice(string.ascii_letters + string.digits) for _ in range(8)]))
+    parser.add_argument("-m", "--model_name",
+                        default=''.join([random.choice(string.ascii_letters + string.digits) for _ in range(8)]))
     parser.add_argument("-p", "--plot", action="store_true", default=True)
     parser.add_argument("-o", "--optimizer", default="Adam")
     parser.add_argument("-c", "--criterion", default="MSELoss")
@@ -42,6 +44,7 @@ def get_arguments():
 
     args = parser.parse_args()
     return args
+
 
 def load_data(train_dir, val_dir, test_dir):
     try:
@@ -67,6 +70,7 @@ def load_data(train_dir, val_dir, test_dir):
 
     return train, val, test
 
+
 def load_data_helper(dir):
     graph_path = f"{dir}/x"
     sol_path = f"{dir}/y"
@@ -85,6 +89,7 @@ def load_data_helper(dir):
 
     return data
 
+
 def normalize_data(train, val, test, standard_normalizaton=True):
     # train, val and test are lists of torch_geometric.data.Data objects
     # create a tensor for x, y and edge_attr for all data (train, val, test)
@@ -101,10 +106,10 @@ def normalize_data(train, val, test, standard_normalizaton=True):
         mean_x = th.mean(combined_x, dim=0)
         std_x = th.std(combined_x, dim=0)
 
-        mean_y = th.mean(combined_y, dim=0) 
+        mean_y = th.mean(combined_y, dim=0)
         std_y = th.std(combined_y, dim=0)
 
-        mean_edge_attr = th.mean(combined_edge_attr, dim=0) 
+        mean_edge_attr = th.mean(combined_edge_attr, dim=0)
         std_edge_attr = th.std(combined_edge_attr, dim=0)
 
         # normalize data
@@ -112,22 +117,25 @@ def normalize_data(train, val, test, standard_normalizaton=True):
             data.x = (data.x - mean_x) / (std_x + epsilon)
             data.y = (data.y - mean_y) / (std_y + epsilon)
             data.edge_attr = (data.edge_attr - mean_edge_attr) / (std_edge_attr + epsilon)
-    
-    else: # Use min max normalization to normalize data between 0 and 1 
+
+    else:  # Use min max normalization to normalize data between 0 and 1
         # https://en.wikipedia.org/wiki/Feature_scaling#Rescaling_(min-max_normalization)
-        
+
         # find min value and max for all columns
         # x: vn_kv, p_mw_gen, vm_pu, p_mw_load, q_mvar
-        min_x = th.min(combined_x, dim=0).values # tensor([     0.6000,   -681.7000,      0.0000,      0.0000,   -171.5000])
-        max_x = th.max(combined_x, dim=0).values # tensor([  500.0000, 56834.0000,     1.1550, 57718.0000, 13936.0000])
+        min_x = th.min(combined_x,
+                       dim=0).values  # tensor([     0.6000,   -681.7000,      0.0000,      0.0000,   -171.5000])
+        max_x = th.max(combined_x, dim=0).values  # tensor([  500.0000, 56834.0000,     1.1550, 57718.0000, 13936.0000])
 
         # y: p_mw, q_mvar, va_degree, vm_pu
-        min_y = th.min(combined_y, dim=0).values # tensor([-11652.4385,  -5527.3564,   -156.9993,      0.0579])
-        max_y = th.max(combined_y, dim=0).values # tensor([ 5844.1426,  1208.3413,   160.0282,     1.9177])
+        min_y = th.min(combined_y, dim=0).values  # tensor([-11652.4385,  -5527.3564,   -156.9993,      0.0579])
+        max_y = th.max(combined_y, dim=0).values  # tensor([ 5844.1426,  1208.3413,   160.0282,     1.9177])
 
         # edge_attr: r_ohm_per_km, x_ohm_per_km, c_nf_per_km, g_us_per_km, max_i_ka, parallel, df, length_km
-        min_edge_attr = th.min(combined_edge_attr, dim=0).values # tensor([  -296.9000,      0.0306,      0.0000,      0.0000,      0.0684,   1.0000,      1.0000,      1.0000])
-        max_edge_attr = th.max(combined_edge_attr, dim=0).values # tensor([ 1152.5000,  1866.5001,  4859.9951,     0.0000, 99999.0000,     1.0000,   1.0000,     1.0000])
+        min_edge_attr = th.min(combined_edge_attr,
+                               dim=0).values  # tensor([  -296.9000,      0.0306,      0.0000,      0.0000,      0.0684,   1.0000,      1.0000,      1.0000])
+        max_edge_attr = th.max(combined_edge_attr,
+                               dim=0).values  # tensor([ 1152.5000,  1866.5001,  4859.9951,     0.0000, 99999.0000,     1.0000,   1.0000,     1.0000])
 
         # normalize data
         for data in train + val + test:
@@ -183,7 +191,8 @@ def create_data_instance(graph, y_bus, y_gen, y_line):
     node_feat['is_none'] = (node_feat['is_gen'] == 0) & (node_feat['is_load'] == 0) & (node_feat['is_ext'] == 0)
     node_feat['is_none'] = node_feat['is_none'].astype(float)
     node_feat = node_feat[['is_load', 'is_gen', 'is_ext', 'is_none', 'p_mw', 'q_mvar', 'vm_pu']]
-    zero_check = node_feat[(node_feat['is_load'] == 0) & (node_feat['is_gen'] == 0) & (node_feat['is_ext'] == 0) & (node_feat['is_none'] == 0)]
+    zero_check = node_feat[(node_feat['is_load'] == 0) & (node_feat['is_gen'] == 0) & (node_feat['is_ext'] == 0) & (
+                node_feat['is_none'] == 0)]
 
     if not zero_check.empty:
         print("zero check failed")
@@ -191,23 +200,42 @@ def create_data_instance(graph, y_bus, y_gen, y_line):
         print("zero check results")
         print(zero_check)
         quit()
-    
 
     for node in node_feat.itertuples():
         # set each node features
-        g.nodes[node.Index]['x'] = [float(node.is_load), 
-                                    float(node.is_gen), 
-                                    float(node.is_ext), 
-                                    float(node.is_none), 
-                                    float(node.p_mw), 
-                                    float(node.q_mvar), 
+        g.nodes[node.Index]['x'] = [float(node.is_load),
+                                    float(node.is_gen),
+                                    float(node.is_ext),
+                                    float(node.is_none),
+                                    float(node.p_mw),
+                                    float(node.q_mvar),
                                     float(node.vm_pu)]
-        
+
         g.nodes[node.Index]['y'] = [float(y_bus['p_mw'][node.Index]),
                                     float(y_bus['q_mvar'][node.Index]),
                                     float(y_bus['vm_pu'][node.Index]),
                                     float(y_bus['va_degree'][node.Index])]
-        
+        # set each node label by type
+        # if node.is_load:
+        #     g.nodes[node.Index]['y'] = [float(y_bus['va_degree'][node.Index]),
+        #                                 float(y_bus['vm_pu'][node.Index])]
+        #     # g.nodes[node.Index]['reals'] = [float(y_bus['p_mw'][node.Index]),
+        #     #                                 float(y_bus['q_mvar'][node.Index])]
+        # elif node.is_gen:
+        #     g.nodes[node.Index]['y'] = [float(y_bus['q_mvar'][node.Index]),
+        #                                 float(y_bus['va_degree'][node.Index])]
+        #     # g.nodes[node.Index]['reals'] = [float(y_bus['p_mw'][node.Index]),
+        #     #                                 float(y_bus['vm_pu'][node.Index])]
+        # elif node.is_ext:
+        #     g.nodes[node.Index]['y'] = [float(y_bus['p_mw'][node.Index]),
+        #                                 float(y_bus['q_mvar'][node.Index])]
+        #     # g.nodes[node.Index]['reals'] = [float(y_bus['vm_pu'][node.Index]),
+        #     #                                 float(y_bus['va_degree'][node.Index])]
+        # else:
+        #     g.nodes[node.Index]['y'] = [float(y_bus['va_degree'][node.Index]),
+        #                                 float(y_bus['vm_pu'][node.Index])]
+        #     # g.nodes[node.Index]['reals'] = [float(y_bus['p_mw'][node.Index]),
+        #     #                                 float(y_bus['q_mvar'][node.Index])]
 
     first = True
     for edges in graph.line.itertuples():
@@ -217,62 +245,66 @@ def create_data_instance(graph, y_bus, y_gen, y_line):
         g.edges[edges.from_bus, edges.to_bus, ('line', edges.Index)]['edge_attr'] = [float(edges.r_ohm_per_km),
                                                                                      float(edges.x_ohm_per_km),
                                                                                      float(edges.length_km)]
-                                                                                    #  float(edges.c_nf_per_km),
-                                                                                    #  float(edges.g_us_per_km),
-                                                                                    #  float(edges.max_i_ka),
-                                                                                    #  float(edges.parallel),
-                                                                                    #  float(edges.df),
+        #  float(edges.c_nf_per_km),
+        #  float(edges.g_us_per_km),
+        #  float(edges.max_i_ka),
+        #  float(edges.parallel),
+        #  float(edges.df),
 
     # print(common_edge)
     for trafos in graph.trafo.itertuples():
-        g.edges[trafos.lv_bus, trafos.hv_bus, ('trafo', trafos.Index)]['edge_attr'] = [float(trafos.vkr_percent / (trafos.sn_mva / (trafos.vn_lv_kv * math.sqrt(3)))),
-                                                                                       float(math.sqrt((trafos.vk_percent ** 2) - (trafos.vkr_percent) ** 2)) / (trafos.sn_mva / (trafos.vn_lv_kv * math.sqrt(3))),
-                                                                                       1.0]
-                                                                                    #  float(common_edge.c_nf_per_km),
-                                                                                    #  float(common_edge.g_us_per_km),
-                                                                                    #  float(common_edge.max_i_ka),
-                                                                                    #  float(common_edge.parallel),
-                                                                                    #  float(common_edge.df),
+        g.edges[trafos.lv_bus, trafos.hv_bus, ('trafo', trafos.Index)]['edge_attr'] = [
+            float(trafos.vkr_percent / (trafos.sn_mva / (trafos.vn_lv_kv * math.sqrt(3)))),
+            float(math.sqrt((trafos.vk_percent ** 2) - (trafos.vkr_percent) ** 2)) / (
+                        trafos.sn_mva / (trafos.vn_lv_kv * math.sqrt(3))),
+            1.0]
+        #  float(common_edge.c_nf_per_km),
+        #  float(common_edge.g_us_per_km),
+        #  float(common_edge.max_i_ka),
+        #  float(common_edge.parallel),
+        #  float(common_edge.df),
     return from_networkx(g)
 
 
 def get_gnn(gnn_name):
     if gnn_name == "GAT":
         return GAT
-    
+
     if gnn_name == "MessagePassing":
         return MessagePassingGNN
-    
+
     if gnn_name == "GraphSAGE":
         return GraphSAGE
-    
+
     if gnn_name == "GINE":
         return GINE
+
 
 def get_optim(optim_name):
     if optim_name == "Adam":
         return th.optim.Adam
-    
+
 
 def get_criterion(criterion_name):
     if criterion_name == "MSELoss":
         return nn.MSELoss()
     if criterion_name == "L1Loss":
         return nn.L1Loss()
-    
+
+
 def save_model(model, model_name):
     state = {
-        'model': model, # save the model object with some of its parameters
+        'model': model,  # save the model object with some of its parameters
         'state_dict': model.state_dict(),
     }
     # timestamp = pd.Timestamp.now().strftime("%Y-%m-%d")
-    model_name = model_name + "_" + model.class_name # + "_" + str(timestamp)
+    model_name = model_name + "_" + model.class_name  # + "_" + str(timestamp)
     th.save(model.state_dict(), f"./trained_models/{model_name}.pt")
-    
+
 
 def load_model(gnn_type, path, data):
     input_dim = data[0].x.shape[1]
-    edge_attr_dim = data[0].edge_attr.shape[1] 
+    edge_attr_dim = data[0].edge_attr.shape[1]
     output_dim = data[0].y.shape[1]
     gnn_class = get_gnn(gnn_type)
     model = gnn_class(input_dim, output_dim, edge_attr_dim)
@@ -283,6 +315,7 @@ def load_model(gnn_type, path, data):
 def write_to_pkl(data, path):
     with open(path, 'wb') as f:
         pickle.dump(data, f)
+
 
 def read_from_pkl(path):
     with open(path, 'rb') as f:

@@ -105,6 +105,9 @@ def physics_loss(network, output, log_loss=True):
     # denom += react_line_total * react_line_total
     # conductances = resist_line_total / denom
     # susceptances = -1.0 * react_line_total / denom
+
+    # conductances and susceptances of the lines are multiplied by -1.0 in the nodal admittance diagram
+    # for diagonal elements they stay positive (used further down the code)
     conductances = -1.0 * network.edge_attr[:, 0]
     susceptances = -1.0 * network.edge_attr[:, 1]
 
@@ -112,10 +115,10 @@ def physics_loss(network, output, log_loss=True):
     combined_output = th.zeros(output.shape)
 
     # slack bus:
-    idx_list = (network.x[:, 2] > 0.5)    # get slack node id's
-    combined_output[idx_list, 2] += network.x[idx_list, 6]    # Add fixed vm_pu from input; va_degree is 0 for slacks
-    combined_output[idx_list, 0] += output[idx_list, 0]    # Add predicted p_mw
-    combined_output[idx_list, 1] += output[idx_list, 1]    # Add predicted q_mvar
+    idx_list = (network.x[:, 2] > 0.5)  # get slack node id's
+    combined_output[idx_list, 2] += network.x[idx_list, 6]  # Add fixed vm_pu from input; va_degree is 0 for slacks
+    combined_output[idx_list, 0] += output[idx_list, 0]  # Add predicted p_mw
+    combined_output[idx_list, 1] += output[idx_list, 1]  # Add predicted q_mvar
 
     # generator + load busses:
     idx_list = (th.logical_and(network.x[:, 0] > 0.5, network.x[:, 1] > 0.5))  # get generator + load node id's
@@ -125,11 +128,11 @@ def physics_loss(network, output, log_loss=True):
     combined_output[idx_list, 3] += output[idx_list, 3]  # Add predicted va_degree
 
     # generator:
-    idx_list = (th.logical_and(network.x[:, 0] < 0.5, network.x[:, 1] > 0.5))  # get generator (not gen + load) node id's
-    combined_output[idx_list, 0] -= network.x[idx_list, 4]  # Subtract fixed p_mw from input
-                                                            # Because loads and gens both have > 0 power in PandaPower data (gen busses have negative power flow in expected outputs)
+    idx_list = (
+        th.logical_and(network.x[:, 0] < 0.5, network.x[:, 1] > 0.5))  # get generator (not gen + load) node id's
+    combined_output[idx_list, 0] += network.x[idx_list, 4]  # Add fixed p_mw from input (already set to neg. in data gen.)
     combined_output[idx_list, 2] += network.x[idx_list, 6]  # Add fixed vm_pu from input
-    combined_output[idx_list, 1] -= output[idx_list, 1]  # Subtract predicted q_mvar (same reason as above; generators have negative power values in expected outputs)
+    combined_output[idx_list, 1] += output[idx_list, 1]  # Add predicted q_mvar
     combined_output[idx_list, 3] += output[idx_list, 3]  # Add predicted va_degree
 
     # load + none types (modeled as 0 power demand loads):
@@ -140,9 +143,10 @@ def physics_loss(network, output, log_loss=True):
     combined_output[idx_list, 2] += output[idx_list, 2]  # Add predicted vm_pu
     combined_output[idx_list, 3] += output[idx_list, 3]  # Add predicted va_degree
 
+    # combined_output = output
+
     # Combine node features with corresponding edges
-    from_nodes = pyg_util.select(combined_output, network.edge_index[0],
-                                 0)  # list of duplicated node outputs based on edges
+    from_nodes = pyg_util.select(combined_output, network.edge_index[0], 0)  # list of duplicated node outputs based on edges
     to_nodes = pyg_util.select(combined_output, network.edge_index[1], 0)
     angle_diffs = (from_nodes[:, 3] - to_nodes[:, 3]) * math.pi / 180.0  # list of angle differences for all edges
 
