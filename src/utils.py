@@ -148,8 +148,10 @@ def normalize_data(train, val, test, standard_normalizaton=True):
 
 # return a torch_geometric.data.Data object for each instance
 def create_data_instance(graph, y_bus, y_gen, y_line):
+    # Convert PandaPower graph to NetworkX graph and set it to be directed (for directed transformer edges further down)
     g = ppl.create_nxgraph(graph, include_trafos=True)
-    # []
+    g = g.to_directed()
+
     # https://pandapower.readthedocs.io/en/latest/elements/gen.html
     gen = graph.gen[['bus', 'p_mw', 'vm_pu']]
     gen.rename(columns={'p_mw': 'p_mw_gen'}, inplace=True)
@@ -237,15 +239,21 @@ def create_data_instance(graph, y_bus, y_gen, y_line):
         r_tot = float(edges.r_ohm_per_km) * float(edges.length_km)
         x_tot = float(edges.x_ohm_per_km) * float(edges.length_km)
         conductance, susceptance = impedance_to_admittance(r_tot, x_tot, graph.bus['vn_kv'][edges.from_bus], graph.sn_mva)
-        g.edges[edges.from_bus, edges.to_bus, ('line', edges.Index)]['edge_attr'] = [float(conductance),
-                                                                                     float(susceptance)]
+        g.edges[edges.from_bus, edges.to_bus, ('line', edges.Index)]['edge_attr'] = [float(conductance), float(susceptance)]
+        g.edges[edges.to_bus, edges.from_bus, ('line', edges.Index)]['edge_attr'] = [float(conductance), float(susceptance)]
 
     for trafos in graph.trafo.itertuples():
+        # First calculate values from low to high voltage bus
         r_tot = float(trafos.vkr_percent / (trafos.sn_mva / (trafos.vn_lv_kv * math.sqrt(3))))
         x_tot = float(math.sqrt((trafos.vk_percent ** 2) - (trafos.vkr_percent) ** 2)) / (trafos.sn_mva / (trafos.vn_lv_kv * math.sqrt(3)))
-
         conductance, susceptance = impedance_to_admittance(r_tot, x_tot, trafos.vn_lv_kv, graph.sn_mva)
         g.edges[trafos.lv_bus, trafos.hv_bus, ('trafo', trafos.Index)]['edge_attr'] = [conductance, susceptance]
+
+        # Now high to low voltage bus values
+        r_tot = float(trafos.vkr_percent / (trafos.sn_mva / (trafos.vn_hv_kv * math.sqrt(3))))
+        x_tot = float(math.sqrt((trafos.vk_percent ** 2) - (trafos.vkr_percent) ** 2)) / (trafos.sn_mva / (trafos.vn_hv_kv * math.sqrt(3)))
+        conductance, susceptance = impedance_to_admittance(r_tot, x_tot, trafos.vn_hv_kv, graph.sn_mva)
+        g.edges[trafos.hv_bus, trafos.lv_bus, ('trafo', trafos.Index)]['edge_attr'] = [conductance, susceptance]
 
     return from_networkx(g)
 
