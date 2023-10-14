@@ -14,10 +14,10 @@ warnings.filterwarnings("ignore", category=FutureWarning)
 def hyperparams_optimization(
         train,
         model_class_name="GraphSAGE", 
-        n_trials=100, 
-        learning_rate_range=(0.001, 0.1), # ranges for hyperparameters
+        n_trials=50, 
+        learning_rate_range=(0.005, 0.1), # ranges for hyperparameters
         batch_size_values=[32, 64], 
-        dropout_rate_range = (0.1, 0.6),
+        dropout_rate_range = (0.1, 0.3),
         num_epochs=200, 
         patience=30, 
         optimizer_class=torch.optim.Adam,
@@ -94,8 +94,8 @@ def hyperparams_optimization(
                             dropout=dropout_rate,
                             )
         elif model_class_name == "GINE":       
-            hidden_gine_dim = trial.suggest_int('hidden_gine_dim', 6, 20)
-            hidden_lin_dim = trial.suggest_int('hidden_lin_dim', 32, 128)
+            hidden_gine_dim = trial.suggest_int('hidden_gine_dim', 15, 40)
+            hidden_lin_dim = trial.suggest_int('hidden_lin_dim', 32, 50)
 
             gnn = gnn_class(input_dim=input_dim,
                             output_dim=output_dim,
@@ -159,18 +159,11 @@ def hyperparams_optimization(
 if __name__ == "__main__":
     print("Loading Data")
     # Make sure to change it to the correct path on your data
-    data = load_data("./Data_sanity3(rnd_walk)/train","./Data_sanity3(rnd_walk)/val","./Data_sanity3(rnd_walk)/val")
-    print("Loading Training Data")
-    train = data[0]
-    print("Loading Validation Data")
-    val = data[1]
-    print("Loading Testing Data")
-    test = data[2]
-    
+    train, val, test = load_data("./Data_sanity3(rnd_walk)/train","./Data_sanity3(rnd_walk)/val","./Data_sanity3(rnd_walk)/val")
     train, val, test = normalize_data(train, val, test)
     print(f"Data Loaded \n",
           f"Number of training samples = {len(train)}\n",
-          f"Number of validation samples = {len(train)}\n",
-          f"Number of testing samples = {len(train)}\n",)
+          f"Number of validation samples = {len(val)}\n",
+          f"Number of testing samples = {len(test)}\n",)
     
     hyperparams_optimization(train=train, model_class_name="GINE")
