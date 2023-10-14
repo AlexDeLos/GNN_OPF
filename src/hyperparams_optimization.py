@@ -15,7 +15,7 @@ def hyperparams_optimization(
         train,
         model_class_name="GraphSAGE", 
         n_trials=100, 
-        learning_rate_range=(0.000001, 0.1), # ranges for hyperparameters
+        learning_rate_range=(0.001, 0.1), # ranges for hyperparameters
         batch_size_values=[32, 64], 
         dropout_rate_range = (0.1, 0.6),
         num_epochs=200, 
@@ -27,7 +27,7 @@ def hyperparams_optimization(
     def objective(trial):
 
         input_dim = train[0].x.shape[1]
-        edge_attr_dim = train[0].edge_attr.shape
+        edge_attr_dim = train[0].edge_attr.shape[1]
         output_dim = train[0].y.shape[1]
 
         print(f"Input shape: {input_dim}\nOutput shape: {output_dim}")
@@ -93,7 +93,16 @@ def hyperparams_optimization(
                             hidden_lin_dim=hidden_lin_dim,
                             dropout=dropout_rate,
                             )
+        elif model_class_name == "GINE":       
+            hidden_gine_dim = trial.suggest_int('hidden_gine_dim', 6, 20)
+            hidden_lin_dim = trial.suggest_int('hidden_lin_dim', 32, 128)
 
+            gnn = gnn_class(input_dim=input_dim,
+                            output_dim=output_dim,
+                            edge_dim=edge_attr_dim,
+                            hidden_gine_dim=hidden_gine_dim,
+                            hidden_lin_dim=hidden_lin_dim,
+                            )
 
         print(f"GNN: \n{gnn}")
 
@@ -164,4 +173,4 @@ if __name__ == "__main__":
           f"Number of validation samples = {len(train)}\n",
           f"Number of testing samples = {len(train)}\n",)
     
-    hyperparams_optimization(train=train, model_class_name="GraphSAGE")
+    hyperparams_optimization(train=train, model_class_name="GINE")
