@@ -1,6 +1,7 @@
 import torch.nn as nn
 import torch.nn.functional as F
 from torch_geometric.nn import GATConv
+from torch_geometric.nn.models import JumpingKnowledge
 
 class GAT(nn.Module):
 
@@ -17,6 +18,7 @@ class GAT(nn.Module):
             hidden_lin_dim=64, 
             dropout_rate=0.1, 
             heads=1,
+            jumping_knowledge=False,
             *args, 
             **kwargs
         ):
@@ -36,14 +38,23 @@ class GAT(nn.Module):
         self.lins.append(nn.Linear(hidden_lin_dim, output_dim))
         self.dropout_rate = dropout_rate
 
+        # https://pytorch-geometric.readthedocs.io/en/latest/generated/torch_geometric.nn.models.JumpingKnowledge.html
+        if jumping_knowledge:
+            # if setting mode to 'cat', change the channels of the first lins to hidden_conv_dim * heads * n_hidden_conv
+            self.jumping_knowledge = JumpingKnowledge(mode='lstm', channels=hidden_conv_dim, num_layers=n_hidden_conv)
+
     def forward(self, data):
         x, edge_index, edge_attr = data.x, data.edge_index, data.edge_attr
-
+        xs = []
         for c in self.convs:
             x = c(x, edge_index, edge_attr)
             x = F.dropout(x, p=self.dropout_rate, training=self.training)
             x = F.leaky_relu(x, 0.2)
-                
+            xs.append(x)
+
+        if hasattr(self, 'jumping_knowledge'):
+            x = self.jumping_knowledge(xs)
+
         for l in self.lins[:-1]:
             x = l(x)
             x = F.dropout(x, p=self.dropout_rate, training=self.training)
