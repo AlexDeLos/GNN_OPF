@@ -15,11 +15,11 @@ def hyperparams_optimization(
         train,
         model_class_name="GraphSAGE", 
         n_trials=50, 
-        learning_rate_range=(0.005, 0.1), # ranges for hyperparameters
+        learning_rate_range=(0.01, 0.1), # ranges for hyperparameters
         batch_size_values=[32, 64], 
         dropout_rate_range = (0.1, 0.3),
         num_epochs=200, 
-        patience=30, 
+        patience=30,
         optimizer_class=torch.optim.Adam,
         criterion_function="MSELoss",
     ):
@@ -96,12 +96,16 @@ def hyperparams_optimization(
         elif model_class_name == "GINE":       
             hidden_gine_dim = trial.suggest_int('hidden_gine_dim', 15, 40)
             hidden_lin_dim = trial.suggest_int('hidden_lin_dim', 32, 50)
+            jumping_knowledge = trial.suggest_categorical('jumping_knowledge', [True, False])
+            n_of_convs_in = trial.suggest_int('n_of_convs_in', 1, 10)
 
             gnn = gnn_class(input_dim=input_dim,
                             output_dim=output_dim,
                             edge_dim=edge_attr_dim,
                             hidden_gine_dim=hidden_gine_dim,
                             hidden_lin_dim=hidden_lin_dim,
+                            jumping_knowledge=jumping_knowledge,
+                            n_of_convs_in=n_of_convs_in,
                             )
 
         print(f"GNN: \n{gnn}")
