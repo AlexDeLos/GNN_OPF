@@ -6,6 +6,8 @@ from models.pl import ACLoss
 import optuna
 
 def train_model(arguments, train, val):
+    hetero_input_shapes = [2, 2, 3]
+    hetero_output_shapes = [2, 1, 1]
     input_dim = train[0].x.shape[1]
     edge_attr_dim = train[0].edge_attr.shape[1] # why not [1]
     output_dim = train[0].y.shape[1]
@@ -24,7 +26,6 @@ def train_model(arguments, train, val):
                     arguments.n_hidden_lin, 
                     arguments.lin_hidden_dim)
     print(f"GNN: \n{gnn}")
-    ac = ACLoss()
 
     optimizer_class = get_optim(arguments.optimizer)
     optimizer = optimizer_class(gnn.parameters(), lr=arguments.learning_rate)

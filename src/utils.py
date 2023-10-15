@@ -66,7 +66,8 @@ def load_data(train_dir, val_dir, test_dir):
         val = load_data_helper(val_dir)
         print("Testing Data...")
         test = load_data_helper(test_dir)
-
+        print("hetero data can be loaded whooho")
+        quit()
         # save data to pkl
         write_to_pkl(train, f"{train_dir}/pickled.pkl")
         write_to_pkl(val, f"{val_dir}/pickled.pkl")
@@ -89,7 +90,7 @@ def load_data_helper(dir):
         y_gen = pd.read_csv(f"{sol_path}/{sol_paths[i * 3 + 1]}", index_col=0)
         y_line = pd.read_csv(f"{sol_path}/{sol_paths[i * 3 + 2]}", index_col=0)
 
-        instance = new_create_data_instance(graph, y_bus, y_gen, y_line)
+        instance = create_hetero_data_instance(graph, y_bus, y_gen, y_line)
         data.append(instance)
 
     return data
@@ -146,8 +147,8 @@ def normalize_data(train, val, test, standard_normalizaton=True):
 
     return train, val, test
 
-def new_create_data_instance(graph, y_bus, xxx, y_line):
-    # ppl.simple_plot(graph, plot_gens=True, plot_loads=True)
+def create_hetero_data_instance(graph, y_bus, xxx, y_line):
+    # Get relevant values from gens, loads, and external grids TODO static generators
     gen = graph.gen[['bus', 'p_mw', 'vm_pu']]
     gen.rename(columns={'p_mw': 'p_mw_gen'}, inplace=True)
     gen['gen'] = 1
@@ -163,6 +164,7 @@ def new_create_data_instance(graph, y_bus, xxx, y_line):
     ext['ext'] = 1
     ext.set_index('bus', inplace=True)
     
+    # Merge to one dataframe
     node_feat = graph.bus[['vn_kv']]
     node_feat = node_feat.merge(gen, left_index=True, right_index=True, how='outer')
     node_feat = node_feat.merge(load, left_index=True, right_index=True, how='outer')
@@ -173,11 +175,6 @@ def new_create_data_instance(graph, y_bus, xxx, y_line):
     node_feat['vm_pu'] = node_feat['vm_pu'] + node_feat['vm_pu_ext']
     node_feat['p_mw'] = node_feat['p_mw_load'] - node_feat['p_mw_gen']
 
-    del node_feat['vm_pu_ext']
-    del node_feat['p_mw_gen']
-    del node_feat['p_mw_load']
-    del node_feat['vn_kv']
-
     # remove duplicate columns/indices
     node_feat = node_feat[~node_feat.index.duplicated(keep='first')]
     node_feat['none'] = ((node_feat['gen'] == 0) & (node_feat['ext'] == 0) & (node_feat['load'] == 0)).astype(float)
@@ -185,35 +182,31 @@ def new_create_data_instance(graph, y_bus, xxx, y_line):
     node_feat['load_gen'] = ((node_feat['load'] == 1) & (node_feat['gen'] == 1)).astype(float)
     node_feat['load'] = ((node_feat['load'] == 1) & (node_feat['load_gen'] == 0)).astype(float)
     node_feat['gen'] = ((node_feat['gen'] == 1) & (node_feat['load_gen'] == 0)).astype(float)
+
+    # Select relevant columns
     node_feat = node_feat[['load', 'gen', 'load_gen', 'ext', 'p_mw', 'q_mvar', 'vm_pu', 'va_degree']]
-    print()
-    print(f"pre sort\n{node_feat}")
-    # print(node_feat['load'] + node_feat['gen'] + node_feat['ext'] + node_feat['load_gen'])
+
+    # Organize by type, but keep original indexing
     node_feat = pd.concat([
         node_feat[node_feat['load'] == 1],
         node_feat[node_feat['gen'] == 1],
         node_feat[node_feat['load_gen'] == 1],
         node_feat[node_feat['ext'] == 1]
         ], ignore_index=False)
-    print("node feat post sort")
-    print(node_feat)
-    # print("graph lines")
-    # print(graph.line)
+    
+    #Create index mapping to apply to target values and edges
     index_mapping = {old_idx: new_idx for new_idx, old_idx in enumerate(node_feat.index)}
     node_feat = node_feat.reset_index(drop=True)
-    print('node feat after reindexing')
-    print(node_feat)
-    y = y_bus
-    print(f'y before reindexing: \n{y}')
-    y.index = y.index.map(index_mapping)
-    print(f'y after reindexing: \n{y}')
 
+    # Extract relevant target data for each node type
+    y = y_bus
+    y.index = y.index.map(index_mapping)
+    y.sort_index(inplace=True)
     y_load = y[['va_degree', 'vm_pu']]
     y_gen = y[['va_degree']]
     y_load_gen = y[['va_degree']]
 
-        # Creating HeteroData object
-    data = HeteroData()
+    #Feature maps to get relevant x and y values
     feature_map = {
         'load': ['p_mw', 'q_mvar'],
         'gen': ['p_mw', 'vm_pu'],
@@ -227,6 +220,7 @@ def new_create_data_instance(graph, y_bus, xxx, y_line):
         'ext': None
     }
     
+    # Get edges, reindex and make bidirectional
     edge_index = graph.line[['from_bus', 'to_bus']].reset_index(drop=True)
     edge_index['from_bus'] = edge_index['from_bus'].map(index_mapping)
     edge_index['to_bus'] = edge_index['to_bus'].map(index_mapping)
@@ -234,9 +228,7 @@ def new_create_data_instance(graph, y_bus, xxx, y_line):
     swapped[['from_bus', 'to_bus']] = edge_index[['to_bus', 'from_bus']]
     bidirectional_edge_index = pd.concat([edge_index, swapped], axis=0)
 
-    print('bi')
-    print(bidirectional_edge_index)
-
+    # Get edge attributes, reset index to match edge_index, and make bidirectional
     edge_attr = graph.line[['r_ohm_per_km',
                            'x_ohm_per_km',
                            'c_nf_per_km',
@@ -245,62 +237,39 @@ def new_create_data_instance(graph, y_bus, xxx, y_line):
                            'parallel',
                            'df',
                            'length_km']].reset_index(drop=True)
-    print("attr")
-    print(edge_attr)
+    
     bidirectional_edge_attr = pd.concat([edge_attr, edge_attr], axis=0)
-    print('bi attr')
-    print(bidirectional_edge_attr)
+        
+    data = HeteroData()
+
+    #Add features for each node type
     for node_type in feature_map.keys():
-        print(node_type)
         mask = node_feat[node_type] == 1
+
         sub_df = node_feat[mask]
         features = feature_map[node_type]
 
         x = th.tensor(sub_df[features].values, dtype=th.float)
         data[node_type].x = x
         y_df = y_map[node_type]
-        print(f"x attributes {x}")
         if y_df is not None:
             y = th.tensor(y_df[mask].values, dtype=float)
             data[node_type].y = y 
-            print(f"y attributes: {y}")
 
-    print(data)
-    print('error causing')
-    print(th.tensor(edge_index.values, dtype=th.long).t().contiguous())
-    print(th.tensor(edge_index.values, dtype=th.long).t().contiguous().shape)
+    # Add connecitons as nodes with edge attributes
     data['connects'].edge_index = th.tensor(bidirectional_edge_index.values, dtype=th.long).t().contiguous()
     data['connects'].edge_attributes = th.tensor(bidirectional_edge_attr.values, dtype=th.float)
-    print(data)
-    print(type(data))
-    print("quantity")
-    print(data['load'].num_nodes)
-    print(data['gen'].num_nodes)
-    print(data['ext'].num_nodes)
-    print(data['load', 'gen', 'est'].num_edges)
-    visualize_hetero(data)
-    # print(node_feat[feature_map['load']])
-    # print(y_map['load'])
-    # print(edge_df)
-    # print(edge_attr)
-    quit()
 
+
+# Visualize a heterogenous graph (used for debugging)
 def visualize_hetero(hetero):
     G = nx.Graph()
-
-    # Adding nodes (adjust 'node_type' and 'node_feature' as per your actual data)
-    print(hetero.keys)
-    print(hetero.node_types)
-    print(hetero.edge_types)
     color_map = []
     total_nodes = 0
     for node_type in hetero.node_types:
         if node_type != 'connects':
             num_nodes = hetero[node_type].num_nodes
-            print(f"node type: {node_type} num nodes: {num_nodes}")
-            print(f"G nodes before {len(G.nodes)}")
             G.add_nodes_from(range(total_nodes, total_nodes + num_nodes), node_type=node_type)
-            print(f"G nodes after {len(G.nodes)}")
             total_nodes += num_nodes
             if node_type == 'load':
                 color_map.extend(['red'] * num_nodes)
@@ -315,23 +284,10 @@ def visualize_hetero(hetero):
     # Adding edges
     edge_index = hetero['connects'].edge_index.t().numpy()
     G.add_edges_from(edge_index)
-    print(f"len color map {len(color_map)}")
-    print(color_map)
-    print(f"len nodes {len(G.nodes)}")
-    print(G.nodes)
     # Draw the graph
     pos = nx.spring_layout(G)  # Compute position of nodes
     nx.draw(G, pos, with_labels=True, node_size=200, node_color=color_map, font_size=15, font_weight="bold")
     plt.show()
-
-def get_connection_type(row):
-    types_from = ['load', 'gen', 'load_gen', 'ext']
-    types_to = [t + '_to' for t in types_from]
-    print(f"row: {row}")
-    type_from = next((t for t in types_from if row[t] == 1), None)
-    type_to = next((t for t in types_to if row[t] == 1), None)
-    
-    return type_from + '_to_' + type_to.split('_')[0] if type_from and type_to else None
 
 # return a torch_geometric.data.Data object for each instance
 def create_data_instance(graph, y_bus, y_gen, y_line):
