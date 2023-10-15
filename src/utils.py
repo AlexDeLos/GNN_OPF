@@ -4,6 +4,7 @@ from models.GAT import GAT
 from models.MessagePassing import MessagePassingGNN
 from models.GraphSAGE import GraphSAGE
 from models.GINE import GINE
+from models.Hetero import HeteroGNN
 import os
 import pandapower.plotting as ppl
 import pandas as pd
@@ -429,6 +430,9 @@ def get_gnn(gnn_name):
     
     if gnn_name == "GINE":
         return GINE
+    
+    if gnn_name == "Hetero":
+        return HeteroGNN
 
 def get_optim(optim_name):
     if optim_name == "Adam":

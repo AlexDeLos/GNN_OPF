@@ -18,8 +18,8 @@ def train_model(arguments, train, val):
     train_dataloader = pyg_DataLoader(train, batch_size=batch_size, shuffle=True)
     val_dataloader = pyg_DataLoader(val, batch_size=batch_size, shuffle=False)
     gnn_class = get_gnn(arguments.gnn)
-    gnn = gnn_class(input_dim,
-                    output_dim, 
+    gnn = gnn_class(hetero_input_shapes if arguments.gnn == "Hetero" else input_dim,
+                    hetero_output_shapes if arguments.gnn == "Hetero" else output_dim, 
                     edge_attr_dim, 
                     arguments.n_hidden_gnn, 
                     arguments.gnn_hidden_dim, 
@@ -39,10 +39,10 @@ def train_model(arguments, train, val):
         epoch_val_loss = 0.0
         gnn.train()
         for batch in train_dataloader:
-            epoch_loss += train_batch(data=batch, model=gnn, optimizer=optimizer, criterion=criterion, ac=ac)
+            epoch_loss += train_batch(data=batch, model=gnn, optimizer=optimizer, criterion=criterion)
         gnn.eval()
         for batch in val_dataloader:
-            epoch_val_loss += evaluate_batch(data=batch, model=gnn, criterion=criterion, ac=ac)
+            epoch_val_loss += evaluate_batch(data=batch, model=gnn, criterion=criterion)
 
         avg_epoch_loss = epoch_loss.item() / len(train_dataloader)
         avg_epoch_val_loss = epoch_val_loss.item() / len(val_dataloader)
