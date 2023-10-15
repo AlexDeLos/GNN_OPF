@@ -200,12 +200,9 @@ def create_hetero_data_instance(graph, y_bus, xxx, y_line):
     node_feat = node_feat.reset_index(drop=True)
 
     # Extract relevant target data for each node type
-    y = y_bus
-    y.index = y.index.map(index_mapping)
-    y.sort_index(inplace=True)
-    y_load = y[['va_degree', 'vm_pu']]
-    y_gen = y[['va_degree']]
-    y_load_gen = y[['va_degree']]
+    target = y_bus
+    target.index = target.index.map(index_mapping)
+    target.sort_index(inplace=True)
 
     #Feature maps to get relevant x and y values
     feature_map = {
@@ -215,9 +212,9 @@ def create_hetero_data_instance(graph, y_bus, xxx, y_line):
         'ext': ['vm_pu', 'va_degree']
     }
     y_map = {
-        'load': y_load,
-        'gen': y_gen,
-        'load_gen': y_load_gen,
+        'load': ['va_degree', 'vm_pu'],
+        'gen': ['va_degree'],
+        'load_gen': ['va_degree'],
         'ext': None
     }
     
@@ -249,12 +246,13 @@ def create_hetero_data_instance(graph, y_bus, xxx, y_line):
 
         sub_df = node_feat[mask]
         features = feature_map[node_type]
-
         x = th.tensor(sub_df[features].values, dtype=th.float)
         data[node_type].x = x
-        y_df = y_map[node_type]
-        if y_df is not None:
-            y = th.tensor(y_df[mask].values, dtype=float)
+        
+        y_features = y_map[node_type]
+        if y_features is not None:
+            sub_df_y = target[mask]
+            y = th.tensor(sub_df_y[y_features].values, dtype=float)
             data[node_type].y = y 
 
     # Add connecitons as nodes with edge attributes
