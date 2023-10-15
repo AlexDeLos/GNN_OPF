@@ -243,15 +243,17 @@ def create_data_instance(graph, y_bus, y_gen, y_line):
         g.edges[edges.to_bus, edges.from_bus, ('line', edges.Index)]['edge_attr'] = [float(conductance), float(susceptance)]
 
     for trafos in graph.trafo.itertuples():
+        # Trafo to line approximations are done by only approximating a reactance on the line.
+        # Reactance value depends on whether the line is from the low to high or high to low voltage bus. 
         # First calculate values from low to high voltage bus
-        r_tot = float(trafos.vkr_percent / (trafos.sn_mva / (trafos.vn_lv_kv * math.sqrt(3))))
-        x_tot = float(math.sqrt((trafos.vk_percent ** 2) - (trafos.vkr_percent) ** 2)) / (trafos.sn_mva / (trafos.vn_lv_kv * math.sqrt(3)))
+        r_tot = 0.0
+        x_tot = trafos.vk_percent * (trafos.vn_lv_kv ** 2) / trafos.sn_mva
         conductance, susceptance = impedance_to_admittance(r_tot, x_tot, trafos.vn_lv_kv, graph.sn_mva)
         g.edges[trafos.lv_bus, trafos.hv_bus, ('trafo', trafos.Index)]['edge_attr'] = [conductance, susceptance]
 
         # Now high to low voltage bus values
-        r_tot = float(trafos.vkr_percent / (trafos.sn_mva / (trafos.vn_hv_kv * math.sqrt(3))))
-        x_tot = float(math.sqrt((trafos.vk_percent ** 2) - (trafos.vkr_percent) ** 2)) / (trafos.sn_mva / (trafos.vn_hv_kv * math.sqrt(3)))
+        r_tot = 0.0
+        x_tot = trafos.vk_percent * (trafos.vn_hv_kv ** 2) / trafos.sn_mva
         conductance, susceptance = impedance_to_admittance(r_tot, x_tot, trafos.vn_hv_kv, graph.sn_mva)
         g.edges[trafos.hv_bus, trafos.lv_bus, ('trafo', trafos.Index)]['edge_attr'] = [conductance, susceptance]
 
