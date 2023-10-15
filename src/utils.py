@@ -4,7 +4,7 @@ from models.GAT import GAT
 from models.MessagePassing import MessagePassingGNN
 from models.GraphSAGE import GraphSAGE
 from models.GINE import GINE
-from models.Hetero import HeteroGNN
+from models.GAT_hetero import HeteroGAT
 import os
 import pandapower.plotting as ppl
 import pandas as pd
@@ -27,7 +27,7 @@ def get_arguments():
     parser = argparse.ArgumentParser(prog="GNN script",
                                      description="Run a GNN to solve an inductive power system problem (power flow only for now)")
     
-    parser.add_argument("gnn", choices=["GAT", "MessagePassing", "GraphSAGE", "GINE"], default="GAT")
+    parser.add_argument("gnn", choices=["GAT", "MessagePassing", "GraphSAGE", "GINE", "HeteroGAT"], default="GAT")
     # if file is moved in another directory level relative to the root (currently in root/src), this needs to be changed
     root_directory = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     parser.add_argument("--train", default=root_directory + "/Data/train")
@@ -68,7 +68,6 @@ def load_data(train_dir, val_dir, test_dir):
         print("Testing Data...")
         test = load_data_helper(test_dir)
         print("hetero data can be loaded whooho")
-        quit()
         # save data to pkl
         write_to_pkl(train, f"{train_dir}/pickled.pkl")
         write_to_pkl(val, f"{val_dir}/pickled.pkl")
@@ -714,8 +713,8 @@ def get_gnn(gnn_name):
     if gnn_name == "GINE":
         return GINE
     
-    if gnn_name == "Hetero":
-        return HeteroGNN
+    if gnn_name == "HeteroGAT":
+        return HeteroGAT
 
 def get_optim(optim_name):
     if optim_name == "Adam":
