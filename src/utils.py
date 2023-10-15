@@ -236,36 +236,48 @@ def create_data_instance(graph, y_bus, y_gen, y_line):
                                     float(y_bus['va_degree'][node.Index])]
 
     for edges in graph.line.itertuples():
+        # Calculate line admittance from impedance and convert to per-unit system
         r_tot = float(edges.r_ohm_per_km) * float(edges.length_km)
         x_tot = float(edges.x_ohm_per_km) * float(edges.length_km)
-        conductance, susceptance = impedance_to_admittance(r_tot, x_tot, graph.bus['vn_kv'][edges.from_bus], graph.sn_mva)
-        g.edges[edges.from_bus, edges.to_bus, ('line', edges.Index)]['edge_attr'] = [float(conductance), float(susceptance)]
-        g.edges[edges.to_bus, edges.from_bus, ('line', edges.Index)]['edge_attr'] = [float(conductance), float(susceptance)]
+        conductance_line, susceptance_line = impedance_to_admittance(r_tot, x_tot, graph.bus['vn_kv'][edges.from_bus], graph.sn_mva)
+
+        # Also calculate line shunt reactances for the self-admittance of each bus (if there is capacitance on the line)
+        if edges.c_nf_per_km < 10**-6:
+            susceptance_shunt = 0
+        else:
+            # Obtain reactance using the capacitance. By default, the frequency is set to 50Hz in PandaPower networks.
+            capacitance_f = float(edges.c_nf_per_km) * float(edges.length_km) * (10**-9)
+            r_tot = 0.0
+            x_tot = 1.0 / (2 * math.pi * 50 * capacitance_f)
+            _, susceptance_shunt = impedance_to_admittance(r_tot, x_tot, graph.bus['vn_kv'][edges.from_bus], graph.sn_mva)
+        g.edges[edges.from_bus, edges.to_bus, ('line', edges.Index)]['edge_attr'] = [float(conductance_line), float(susceptance_line), float(susceptance_shunt)]
+        g.edges[edges.to_bus, edges.from_bus, ('line', edges.Index)]['edge_attr'] = [float(conductance_line), float(susceptance_line), float(susceptance_shunt)]
+
 
     for trafos in graph.trafo.itertuples():
-        # Trafo to line approximations are done by only approximating a reactance on the line.
-        # Reactance value depends on whether the line is from the low to high or high to low voltage bus. 
         # First calculate values from low to high voltage bus
         r_tot = 0.0
         x_tot = trafos.vk_percent * (trafos.vn_lv_kv ** 2) / trafos.sn_mva
-        conductance, susceptance = impedance_to_admittance(r_tot, x_tot, trafos.vn_lv_kv, graph.sn_mva)
-        g.edges[trafos.lv_bus, trafos.hv_bus, ('trafo', trafos.Index)]['edge_attr'] = [conductance, susceptance]
+        conductance, susceptance = impedance_to_admittance(r_tot, x_tot, trafos.vn_lv_kv, graph.sn_mva, per_unit_conversion=False)
+        g.edges[trafos.lv_bus, trafos.hv_bus, ('trafo', trafos.Index)]['edge_attr'] = [float(conductance), float(susceptance), 0.0]
 
         # Now high to low voltage bus values
         r_tot = 0.0
         x_tot = trafos.vk_percent * (trafos.vn_hv_kv ** 2) / trafos.sn_mva
-        conductance, susceptance = impedance_to_admittance(r_tot, x_tot, trafos.vn_hv_kv, graph.sn_mva)
-        g.edges[trafos.hv_bus, trafos.lv_bus, ('trafo', trafos.Index)]['edge_attr'] = [conductance, susceptance]
+        conductance, susceptance = impedance_to_admittance(r_tot, x_tot, trafos.vn_hv_kv, graph.sn_mva, per_unit_conversion=False)
+        g.edges[trafos.hv_bus, trafos.lv_bus, ('trafo', trafos.Index)]['edge_attr'] = [float(conductance), float(susceptance), 0.0]
 
     return from_networkx(g)
 
 
-def impedance_to_admittance(r_ohm, x_ohm, base_volt, rated_power):
-    # Need to first convert everything to per-unit system:
-    # https://pandapower.readthedocs.io/en/v2.4.0/about/units.html
-    z_base = base_volt ** 2 / rated_power  # Z_base used to convert impedance to per-unit
-    r_tot = r_ohm / z_base  # Convert to per unit metrics before converting to admittance
-    x_tot = x_ohm / z_base
+def impedance_to_admittance(r_ohm, x_ohm, base_volt, rated_power, per_unit_conversion=True):
+    if per_unit_conversion:
+        z_base = base_volt ** 2 / rated_power  # Z_base used to convert impedance to per-unit
+        r_tot = r_ohm / z_base  # Convert to per unit metrics before converting to admittance
+        x_tot = x_ohm / z_base
+    else:
+        r_tot = r_ohm
+        x_tot = x_ohm
     denom = r_tot ** 2 + x_tot ** 2
     conductance = r_tot / denom
     susceptance = -x_tot / denom

@@ -88,6 +88,7 @@ def physics_loss(network, output, log_loss=True):
                     Expected to contain nodes list and edges between nodes with features:
                         - conductance over the line
                         - susceptance over the line
+                        - susceptance of line shunt
     @param output:  Model outputs for each node. Node indices expected to match order in input graph.
                     Expected to contain:
                         - Active power p_mw
@@ -148,7 +149,8 @@ def physics_loss(network, output, log_loss=True):
 
     # add diagonal (self-admittance) elements of each node as well (angle diff is 0; only cos sections have an effect)
     aggr_act_imb += combined_output[:, 2] * combined_output[:, 2] * pyg_util.scatter(network.edge_attr[:, 0], network.edge_index[0])
-    aggr_rea_imb += combined_output[:, 2] * combined_output[:, 2] * (-1.0 * pyg_util.scatter(network.edge_attr[:, 1], network.edge_index[0]))
+    # for reactive self-admittance we also take into account the shunt reactances and not only line reactances
+    aggr_rea_imb += combined_output[:, 2] * combined_output[:, 2] * (-1.0 * th.sum(pyg_util.scatter(network.edge_attr[:, [1, 2]], network.edge_index[0]), dim=1))
 
     # subtract from power at each node to find imbalance. negate power output values due to pos/neg conventions for loads/gens
     active_imbalance = -1.0 * combined_output[:, 0] - aggr_act_imb
