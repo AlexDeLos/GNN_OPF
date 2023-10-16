@@ -302,7 +302,6 @@ def create_hetero_data_instance(graph, y_bus, xxx, y_line):
 
 
     # Add connections as edges with edge attributes
-
     from_bus_load = bidirectional_edge_index['from_bus'].isin(node_feat[node_feat['load'] == 1].index)
     to_bus_load = bidirectional_edge_index['to_bus'].isin(node_feat[node_feat['load'] == 1].index)
     bidirectional_edge_index_load_to_load = bidirectional_edge_index[from_bus_load & to_bus_load]
