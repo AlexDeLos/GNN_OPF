@@ -4,7 +4,6 @@ import tqdm
 import torch as th
 import numpy as np
 from utils import get_gnn, get_optim, get_criterion
-from models.pl import ACLoss
 import math
 
 
@@ -21,7 +20,6 @@ def train_model(arguments, train, val):
     gnn_class = get_gnn(arguments.gnn)
     gnn = gnn_class(input_dim, output_dim, edge_attr_dim)
     print(f"GNN: \n{gnn}")
-    # ac = ACLoss()
     ac = None
 
     optimizer_class = get_optim(arguments.optimizer)
