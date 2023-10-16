@@ -230,11 +230,12 @@ def create_physics_data_instance(graph, y_bus, y_gen, y_line):
     gen.set_index('bus', inplace=True)
 
     # https://pandapower.readthedocs.io/en/latest/elements/sgen.html
+    # Note: multiple static generators can be attached to 1 bus!
     sgen = graph.sgen[['bus', 'p_mw', 'q_mvar']]
     sgen.rename(columns={'p_mw': 'p_mw_sgen'}, inplace=True)
     sgen.rename(columns={'q_mvar': 'q_mvar_sgen'}, inplace=True)
+    sgen = sgen.groupby('bus')[['p_mw_sgen', 'q_mvar_sgen']].sum()  # Already resets index
     sgen['is_sgen'] = 1
-    sgen.set_index('bus', inplace=True)
 
     # https://pandapower.readthedocs.io/en/latest/elements/load.html
     load = graph.load[['bus', 'p_mw', 'q_mvar']]
