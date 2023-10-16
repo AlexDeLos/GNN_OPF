@@ -158,60 +158,103 @@ def create_data_instance(graph, y_bus, y_gen, y_line):
     # https://pandapower.readthedocs.io/en/latest/elements/gen.html
     gen = graph.gen[['bus', 'p_mw', 'vm_pu']]
     gen.rename(columns={'p_mw': 'p_mw_gen'}, inplace=True)
+    gen['is_gen'] = 1
     gen.set_index('bus', inplace=True)
+
+    # https://pandapower.readthedocs.io/en/latest/elements/sgen.html
+    # Note: multiple static generators can be attached to 1 bus!
+    sgen = graph.sgen[['bus', 'p_mw', 'q_mvar']]
+    sgen.rename(columns={'p_mw': 'p_mw_sgen'}, inplace=True)
+    sgen.rename(columns={'q_mvar': 'q_mvar_sgen'}, inplace=True)
+    sgen = sgen.groupby('bus')[['p_mw_sgen', 'q_mvar_sgen']].sum()  # Already resets index
+    sgen['is_sgen'] = 1
 
     # https://pandapower.readthedocs.io/en/latest/elements/load.html
     load = graph.load[['bus', 'p_mw', 'q_mvar']]
     load.rename(columns={'p_mw': 'p_mw_load'}, inplace=True)
+    load.rename(columns={'q_mvar': 'q_mvar_load'}, inplace=True)
+    load['is_load'] = 1
     load.set_index('bus', inplace=True)
 
+    # https://pandapower.readthedocs.io/en/latest/elements/ext_grid.html
+    ext = graph.ext_grid[['bus', 'vm_pu', 'va_degree']]
+    ext.rename(columns={'vm_pu': 'vm_pu_ext'}, inplace=True)
+    ext['va_degree'] = 1
+    ext['is_ext'] = 1
+    ext.set_index('bus', inplace=True)
+
+    # https://pandapower.readthedocs.io/en/latest/elements/shunt.html
+    shunt = graph.shunt[['bus', 'q_mvar']]
+    shunt.rename(columns={'q_mvar': 'q_mvar_shunt'}, inplace=True)
+    shunt.set_index('bus', inplace=True)
+
     # https://pandapower.readthedocs.io/en/latest/elements/bus.html
-    node_feat = graph.bus[['vn_kv', 'max_vm_pu', 'min_vm_pu']]
+    node_feat = graph.bus[['vn_kv']]
 
     # make sure all nodes (bus, gen, load) have the same number of features (namely the union of all features)
     node_feat = node_feat.merge(gen, left_index=True, right_index=True, how='outer')
+    node_feat = node_feat.merge(sgen, left_index=True, right_index=True, how='outer')
     node_feat = node_feat.merge(load, left_index=True, right_index=True, how='outer')
+    node_feat = node_feat.merge(ext, left_index=True, right_index=True, how='outer')
+    node_feat = node_feat.merge(shunt, left_index=True, right_index=True, how='outer')
+
     # fill missing feature values with 0
     node_feat.fillna(0.0, inplace=True)
+    node_feat['vm_pu'] = node_feat['vm_pu'] + node_feat['vm_pu_ext']
+    node_feat['p_mw'] = node_feat['p_mw_load'] - node_feat['p_mw_gen'] - node_feat['p_mw_sgen']
+    node_feat['q_mvar'] = node_feat['q_mvar_load'] + node_feat['q_mvar_shunt'] - node_feat['q_mvar_sgen']
+
+    # static generators are modeled as loads in PandaPower
+    node_feat['is_load'] = (node_feat['is_sgen'] != 0) | (node_feat['is_load'] != 0)
+
+    del node_feat['vm_pu_ext']
+    del node_feat['p_mw_gen']
+    del node_feat['p_mw_sgen']
+    del node_feat['p_mw_load']
+    del node_feat['q_mvar_load']
+    del node_feat['q_mvar_sgen']
+    del node_feat['q_mvar_shunt']
+    del node_feat['is_sgen']
+
     # remove duplicate columns/indices
     node_feat = node_feat[~node_feat.index.duplicated(keep='first')]
+    node_feat['is_none'] = (node_feat['is_gen'] == 0) & (node_feat['is_load'] == 0) & (node_feat['is_ext'] == 0)
+    node_feat['is_none'] = node_feat['is_none'].astype(float)
+    node_feat = node_feat[['is_load', 'is_gen', 'is_ext', 'is_none', 'p_mw', 'q_mvar', 'vm_pu']]
+    zero_check = node_feat[(node_feat['is_load'] == 0) & (node_feat['is_gen'] == 0) & (node_feat['is_ext'] == 0) & (
+            node_feat['is_none'] == 0)]
+
+    if not zero_check.empty:
+        print("zero check failed")
+        print(node_feat)
+        print("zero check results")
+        print(zero_check)
+        quit()
 
     for node in node_feat.itertuples():
         # set each node features
-        g.nodes[node.Index]['x'] = [float(node.vn_kv),  # bus, the grid voltage level.
-                                    float(node.p_mw_gen),  # gen, the active power of the generator
-                                    float(node.vm_pu),  # gen, the voltage magnitude of the generator.
-                                    float(node.p_mw_load),  # load, the active power of the load
-                                    float(node.q_mvar)]  # load, the reactive power of the load
+        g.nodes[node.Index]['x'] = [float(node.is_load),
+                                    float(node.is_gen),
+                                    float(node.is_ext),
+                                    float(node.is_none),
+                                    float(node.p_mw),
+                                    float(node.q_mvar),
+                                    float(node.vm_pu)]
 
-        # set each node label
         g.nodes[node.Index]['y'] = [float(y_bus['p_mw'][node.Index]),
                                     float(y_bus['q_mvar'][node.Index]),
-                                    float(y_bus['va_degree'][node.Index]),
-                                    float(y_bus['vm_pu'][node.Index])]
-    first = True
+                                    float(y_bus['vm_pu'][node.Index]),
+                                    float(y_bus['va_degree'][node.Index])]
+
     for edges in graph.line.itertuples():
-        if first:
-            common_edge = edges
-            first = False
         g.edges[edges.from_bus, edges.to_bus, ('line', edges.Index)]['edge_attr'] = [float(edges.r_ohm_per_km),
                                                                                      float(edges.x_ohm_per_km),
-                                                                                     float(edges.c_nf_per_km),
-                                                                                     float(edges.g_us_per_km),
-                                                                                     float(edges.max_i_ka),
-                                                                                     float(edges.parallel),
-                                                                                     float(edges.df),
                                                                                      float(edges.length_km)]
-    # print(common_edge)
+
     for trafos in graph.trafo.itertuples():
-        g.edges[trafos.lv_bus, trafos.hv_bus, ('trafo', trafos.Index)]['edge_attr'] = [float(common_edge.r_ohm_per_km),
-                                                                                       float(common_edge.x_ohm_per_km),
-                                                                                       float(common_edge.c_nf_per_km),
-                                                                                       float(common_edge.g_us_per_km),
-                                                                                       float(common_edge.max_i_ka),
-                                                                                       float(common_edge.parallel),
-                                                                                       float(common_edge.df),
-                                                                                       1]
+        g.edges[trafos.lv_bus, trafos.hv_bus, ('trafo', trafos.Index)]['edge_attr'] = [float(trafos.vkr_percent / (trafos.sn_mva / (trafos.vn_lv_kv * math.sqrt(3)))),
+                                                                                       float(math.sqrt((trafos.vk_percent ** 2) - (trafos.vkr_percent) ** 2)) / (trafos.sn_mva / (trafos.vn_lv_kv * math.sqrt(3))),
+                                                                                       1.0]
 
     return from_networkx(g)
 
