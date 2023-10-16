@@ -38,7 +38,7 @@ class HeteroGAT(torch.nn.Module):
                     lin_dict[node_type] = Linear(hidden_conv_dim, hidden_lin_dim)
                 else:
                     lin_dict[node_type] = Linear(hidden_lin_dim, hidden_lin_dim)
-            self.lins[i] = torch.nn.ModuleDict(lin_dict)
+            self.lins[str(i)] = torch.nn.ModuleDict(lin_dict)
         
         final_lin_dict = {}
         for node_type, out_channels in output_dim_dict.items():
@@ -47,7 +47,7 @@ class HeteroGAT(torch.nn.Module):
             else:
                 final_lin_dict[node_type] = Linear(hidden_lin_dim, out_channels)
 
-        self.lins[n_hidden_lin] = torch.nn.ModuleDict(final_lin_dict)
+        self.lins[str(n_hidden_lin)] = torch.nn.ModuleDict(final_lin_dict)
 
         self.dropout_rate = dropout_rate
        
@@ -60,10 +60,10 @@ class HeteroGAT(torch.nn.Module):
         
         for i in range(len(self.lins)-1):
             for node_type in x_dict.keys():
-                x_dict[node_type] = self.lins[i][node_type](x_dict[node_type].relu())
+                x_dict[node_type] = self.lins[str(i)][node_type](x_dict[node_type].relu())
 
         out_dict = {}
         for node_type, x in x_dict.items():
-            out_dict[node_type] = self.lins[len(self.lins)-1][node_type](x)
+            out_dict[node_type] = self.lins[str(len(self.lins)-1)][node_type](x)
 
         return out_dict

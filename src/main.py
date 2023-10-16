@@ -1,5 +1,5 @@
-from train import train_model
-from utils import get_arguments, load_data, normalize_data, save_model
+from train import train_model, train_model_hetero
+from utils import get_arguments, load_data, normalize_data, save_model, getFakeData
 from plot_utils import distance_plot, plot_losses
 import warnings
 
@@ -15,7 +15,7 @@ def main():
     
     train, val, test = load_data(arguments.train, arguments.val, arguments.test)  
 
-    if arguments.normalize:
+    if arguments.normalize and arguments.gnn != "HeteroGAT":
         print("Normalizing Data")
         train, val, test = normalize_data(train, val, test)
 
@@ -25,8 +25,10 @@ def main():
         #   f"Number of testing samples = {len(test)}\n",)
 
     print("Training Model")
-    
-    model, losses, val_losses, last_batch = train_model(arguments, train, val)
+    if arguments.gnn != "HeteroGAT":
+        model, losses, val_losses, last_batch = train_model(arguments, train, val)
+    else:
+        model, losses, val_losses, last_batch = train_model_hetero(arguments, train_data, val_data)
 
     if arguments.save_model:
         print("Saving Model")
