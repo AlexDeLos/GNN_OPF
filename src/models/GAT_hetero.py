@@ -21,7 +21,7 @@ class HeteroGAT(torch.nn.Module):
         # Apply n conv layers to each edge type
         self.convs = torch.nn.ModuleList()
         self.out_channels_dict = output_dim_dict
-        print(edge_types)
+
         for _ in range(n_hidden_conv):
             conv_dict = {}
             for edge_type in edge_types:
@@ -31,7 +31,7 @@ class HeteroGAT(torch.nn.Module):
 
         # Apply n lin layers to each node type
         self.lins = torch.nn.ModuleDict()
-        for i in range (n_hidden_lin):
+        for i in range(n_hidden_lin):
             lin_dict = {}
             for node_type in output_dim_dict.keys():
                 if i == 0:

@@ -21,7 +21,8 @@ import tqdm
 import math
 import networkx as nx
 from copy import deepcopy
-
+import warnings
+warnings.filterwarnings("ignore")
 
 def get_arguments():
     parser = argparse.ArgumentParser(prog="GNN script",
@@ -196,7 +197,7 @@ def create_hetero_data_instance(graph, y_bus, xxx, y_line):
     node_feat['none'] = ((node_feat['gen'] == 0) & (node_feat['ext'] == 0) & (node_feat['load'] == 0)).astype(float)
     node_feat['load'] = node_feat['load'] + node_feat['none']
     node_feat['load_gen'] = ((node_feat['load'] == 1) & (node_feat['gen'] == 1)).astype(float)
-    node_feat['load'] = ((node_feat['load'] == 1) & (node_feat['load_gen'] == 0)).astype(float)
+    node_feat['load'] = ((node_feat['load'] == 1) & (node_feat['load_gen'] == 0) & (node_feat['ext'] == 0)).astype(float)
     node_feat['gen'] = ((node_feat['gen'] == 1) & (node_feat['load_gen'] == 0)).astype(float)
 
     # Select relevant columns
@@ -299,6 +300,39 @@ def create_hetero_data_instance(graph, y_bus, xxx, y_line):
     # Add connecitons as nodes with edge attributes
     # data['connects'].edge_index = th.tensor(bidirectional_edge_index.values, dtype=th.long).t().contiguous()
     # data['connects'].edge_attributes = th.tensor(bidirectional_edge_attr.values, dtype=th.float)
+    # iterate through each the nodes of each node type, create a dictionary that maps each node index to an increasing number from 0 to n_nodes of that tpye
+    # then use that dictionary to map the edge_index and edge_attr to the new indices
+
+    gen_dict = {old_idx: new_idx for new_idx, old_idx in enumerate(node_feat[node_feat['gen'] == 1].index)}
+    load_dict = {old_idx: new_idx for new_idx, old_idx in enumerate(node_feat[node_feat['load'] == 1].index)}
+    load_gen_dict = {old_idx: new_idx for new_idx, old_idx in enumerate(node_feat[node_feat['load_gen'] == 1].index)}
+    ext_dict = {old_idx: new_idx for new_idx, old_idx in enumerate(node_feat[node_feat['ext'] == 1].index)}
+    
+    # print total entries in each dictionary
+    print("---")
+    print("total entries in each dictionary: ", len(gen_dict) + len(load_dict)+ len(load_gen_dict)+ len(ext_dict))
+    print("gen_dict ", gen_dict)
+    print("load_dict ", load_dict)
+    print("load_gen_dict ", load_gen_dict)
+    print("ext_dict ", ext_dict)
+    # make a union of all the dictionaries
+    new_dict = {}
+    new_dict.update(gen_dict)
+    new_dict.update(load_dict)
+    new_dict.update(load_gen_dict)
+    new_dict.update(ext_dict)
+    print("total entries in union dictionary:", len(new_dict))
+    print("new_dict", new_dict)
+    print("---")
+
+    def map_indices(dataframe, index_mapping):
+        # return a new dataframe where each column is mapped to the new indices
+        new_df = pd.DataFrame(columns=dataframe.columns)
+        for col in dataframe.columns:
+            new_df[col] = dataframe[col].map(index_mapping)
+
+        return new_df
+
     connection_types = [('connects', 'from_bus', 'to_bus', edge_index, edge_attr),
                          ('transformer', 'lv_bus', 'hv_bus', edge_index_trafo, edge_attr_trafo)]
     key_len = len(node_types)
@@ -310,7 +344,9 @@ def create_hetero_data_instance(graph, y_bus, xxx, y_line):
             bidirectional_edge_index_node_type = bei[from_node_type & to_node_type]
             bidirectional_edge_attr_node_type = bei_attr.loc[bidirectional_edge_index_node_type.index]
             if bidirectional_edge_index_node_type.shape[0] > 0:
-                data[node_type, con_type, node_type].edge_index = th.tensor(bidirectional_edge_index_node_type.values, dtype=th.long).t().contiguous()
+                # print(bidirectional_edge_index_node_type)
+                # print(map_indices(bidirectional_edge_index_node_type, new_dict))
+                data[node_type, con_type, node_type].edge_index = th.tensor(map_indices(bidirectional_edge_index_node_type, new_dict).values, dtype=th.long).t().contiguous()
                 data[node_type, con_type, node_type].edge_attr = th.tensor(bidirectional_edge_attr_node_type.values, dtype=th.float)
             else:
                 data[node_type, con_type, node_type].edge_index = th.tensor([], dtype=th.long).t().contiguous()
@@ -331,7 +367,7 @@ def create_hetero_data_instance(graph, y_bus, xxx, y_line):
                 bidirectional_edge_index_a_b_to_b = pd.concat([bidirectional_edge_index_a_to_b, bidirectional_edge_index_b_to_a], axis=0)
                 bidirectional_edge_attr_a_b = bei_attr.loc[bidirectional_edge_index_a_b_to_b.index]
                 if bidirectional_edge_index_a_b_to_b.shape[0] > 0:
-                    data[node_type_a, con_type, node_type_b].edge_index = th.tensor(bidirectional_edge_index_a_b_to_b.values, dtype=th.long).t().contiguous()
+                    data[node_type_a, con_type, node_type_b].edge_index = th.tensor(map_indices(bidirectional_edge_index_a_b_to_b, new_dict).values, dtype=th.long).t().contiguous()
                     data[node_type_a, con_type, node_type_b].edge_attr = th.tensor(bidirectional_edge_attr_a_b.values, dtype=th.float)
                 else:
                     data[node_type_a, con_type, node_type_b].edge_index = th.tensor([], dtype=th.long).t().contiguous()
