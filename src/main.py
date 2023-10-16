@@ -1,5 +1,5 @@
 from train import train_model, train_model_hetero
-from utils import get_arguments, load_data, normalize_data, save_model, getFakeData
+from utils import get_arguments, load_data, normalize_data, save_model
 from plot_utils import distance_plot, plot_losses
 import warnings
 
@@ -28,7 +28,7 @@ def main():
     if arguments.gnn != "HeteroGAT":
         model, losses, val_losses, last_batch = train_model(arguments, train, val)
     else:
-        model, losses, val_losses, last_batch = train_model_hetero(arguments, train_data, val_data)
+        model, losses, val_losses, last_batch = train_model_hetero(arguments, train, val)
 
     if arguments.save_model:
         print("Saving Model")
