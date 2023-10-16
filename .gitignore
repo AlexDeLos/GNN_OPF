@@ -181,3 +181,7 @@ trained_models/
 
 loaded_data/
 plots/
+
+Data/
+*.pkl
+data_generation/data_generation_playground.sh

@@ -25,12 +25,13 @@ def get_arguments():
                                      description="Run a GNN to solve an inductive power system problem (power flow only for now)")
 
     parser.add_argument("gnn", choices=["GAT", "MessagePassing", "GraphSAGE", "GINE"], default="GAT")
-    parser.add_argument("--train", default="./Data/train")
-    parser.add_argument("--val", default="./Data/val")
-    parser.add_argument("--test", default="./Data/test")
-    parser.add_argument("-s", "--save_model", action="store_true", default=False)
-    parser.add_argument("-m", "--model_name",
-                        default=''.join([random.choice(string.ascii_letters + string.digits) for _ in range(8)]))
+    # if file is moved in another directory level relative to the root (currently in root/src), this needs to be changed
+    root_directory = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    parser.add_argument("--train", default=root_directory + "/Data/train")
+    parser.add_argument("--val", default=root_directory + "/Data/val")
+    parser.add_argument("--test", default=root_directory + "/Data/test")
+    parser.add_argument("-s", "--save_model", action="store_true", default=True)
+    parser.add_argument("-m", "--model_name", default=''.join([random.choice(string.ascii_letters + string.digits) for _ in range(8)]))
     parser.add_argument("-p", "--plot", action="store_true", default=True)
     parser.add_argument("-o", "--optimizer", default="Adam")
     parser.add_argument("-c", "--criterion", default="MSELoss")
@@ -41,12 +42,13 @@ def get_arguments():
     parser.add_argument("--patience", default=40)
     parser.add_argument("--plot_node_error", action="store_true", default=False)
     parser.add_argument("--normalize", action="store_true", default=False)
+    parser.add_argument("--physics", action="store_true", default=False)
 
     args = parser.parse_args()
     return args
 
 
-def load_data(train_dir, val_dir, test_dir):
+def load_data(train_dir, val_dir, test_dir, load_physics=False):
     try:
         train = read_from_pkl(f"{train_dir}/pickled.pkl")
         val = read_from_pkl(f"{val_dir}/pickled.pkl")
@@ -55,11 +57,11 @@ def load_data(train_dir, val_dir, test_dir):
     except:
         print("Data not found, loading from json files...")
         print("Training Data...")
-        train = load_data_helper(train_dir)
+        train = load_data_helper(train_dir, physics_data=load_physics)
         print("Validation Data...")
-        val = load_data_helper(val_dir)
+        val = load_data_helper(val_dir, physics_data=load_physics)
         print("Testing Data...")
-        test = load_data_helper(test_dir)
+        test = load_data_helper(test_dir, physics_data=load_physics)
 
         # save data to pkl
         write_to_pkl(train, f"{train_dir}/pickled.pkl")
@@ -71,7 +73,7 @@ def load_data(train_dir, val_dir, test_dir):
     return train, val, test
 
 
-def load_data_helper(dir):
+def load_data_helper(dir, physics_data=True):
     graph_path = f"{dir}/x"
     sol_path = f"{dir}/y"
     graph_paths = sorted(os.listdir(graph_path))
@@ -84,7 +86,10 @@ def load_data_helper(dir):
         y_gen = pd.read_csv(f"{sol_path}/{sol_paths[i * 3 + 1]}", index_col=0)
         y_line = pd.read_csv(f"{sol_path}/{sol_paths[i * 3 + 2]}", index_col=0)
 
-        instance = create_data_instance(graph, y_bus, y_gen, y_line)
+        if physics_data:
+            instance = create_physics_data_instance(graph, y_bus, y_gen, y_line)
+        else:
+            instance = create_data_instance(graph, y_bus, y_gen, y_line)
         data.append(instance)
 
     return data
@@ -148,6 +153,72 @@ def normalize_data(train, val, test, standard_normalizaton=True):
 
 # return a torch_geometric.data.Data object for each instance
 def create_data_instance(graph, y_bus, y_gen, y_line):
+    g = ppl.create_nxgraph(graph, include_trafos=True)
+
+    # https://pandapower.readthedocs.io/en/latest/elements/gen.html
+    gen = graph.gen[['bus', 'p_mw', 'vm_pu']]
+    gen.rename(columns={'p_mw': 'p_mw_gen'}, inplace=True)
+    gen.set_index('bus', inplace=True)
+
+    # https://pandapower.readthedocs.io/en/latest/elements/load.html
+    load = graph.load[['bus', 'p_mw', 'q_mvar']]
+    load.rename(columns={'p_mw': 'p_mw_load'}, inplace=True)
+    load.set_index('bus', inplace=True)
+
+    # https://pandapower.readthedocs.io/en/latest/elements/bus.html
+    node_feat = graph.bus[['vn_kv', 'max_vm_pu', 'min_vm_pu']]
+
+    # make sure all nodes (bus, gen, load) have the same number of features (namely the union of all features)
+    node_feat = node_feat.merge(gen, left_index=True, right_index=True, how='outer')
+    node_feat = node_feat.merge(load, left_index=True, right_index=True, how='outer')
+    # fill missing feature values with 0
+    node_feat.fillna(0.0, inplace=True)
+    # remove duplicate columns/indices
+    node_feat = node_feat[~node_feat.index.duplicated(keep='first')]
+
+    for node in node_feat.itertuples():
+        # set each node features
+        g.nodes[node.Index]['x'] = [float(node.vn_kv),  # bus, the grid voltage level.
+                                    float(node.p_mw_gen),  # gen, the active power of the generator
+                                    float(node.vm_pu),  # gen, the voltage magnitude of the generator.
+                                    float(node.p_mw_load),  # load, the active power of the load
+                                    float(node.q_mvar)]  # load, the reactive power of the load
+
+        # set each node label
+        g.nodes[node.Index]['y'] = [float(y_bus['p_mw'][node.Index]),
+                                    float(y_bus['q_mvar'][node.Index]),
+                                    float(y_bus['va_degree'][node.Index]),
+                                    float(y_bus['vm_pu'][node.Index])]
+    first = True
+    for edges in graph.line.itertuples():
+        if first:
+            common_edge = edges
+            first = False
+        g.edges[edges.from_bus, edges.to_bus, ('line', edges.Index)]['edge_attr'] = [float(edges.r_ohm_per_km),
+                                                                                     float(edges.x_ohm_per_km),
+                                                                                     float(edges.c_nf_per_km),
+                                                                                     float(edges.g_us_per_km),
+                                                                                     float(edges.max_i_ka),
+                                                                                     float(edges.parallel),
+                                                                                     float(edges.df),
+                                                                                     float(edges.length_km)]
+    # print(common_edge)
+    for trafos in graph.trafo.itertuples():
+        g.edges[trafos.lv_bus, trafos.hv_bus, ('trafo', trafos.Index)]['edge_attr'] = [float(common_edge.r_ohm_per_km),
+                                                                                       float(common_edge.x_ohm_per_km),
+                                                                                       float(common_edge.c_nf_per_km),
+                                                                                       float(common_edge.g_us_per_km),
+                                                                                       float(common_edge.max_i_ka),
+                                                                                       float(common_edge.parallel),
+                                                                                       float(common_edge.df),
+                                                                                       1]
+
+    return from_networkx(g)
+
+
+# Create the data needed for the physics loss
+# return a torch_geometric.data.Data object for each instance
+def create_physics_data_instance(graph, y_bus, y_gen, y_line):
     # Convert PandaPower graph to NetworkX graph and set it to be directed (for directed transformer edges further down)
     g = ppl.create_nxgraph(graph, include_trafos=True)
     g = g.to_directed()
@@ -314,8 +385,14 @@ def save_model(model, model_name):
         'state_dict': model.state_dict(),
     }
     # timestamp = pd.Timestamp.now().strftime("%Y-%m-%d")
-    model_name = model_name + "_" + model.class_name  # + "_" + str(timestamp)
-    th.save(model.state_dict(), f"./trained_models/{model_name}.pt")
+    model_name = model_name + "_" + model.class_name # + "_" + str(timestamp)
+    # if file is moved in another directory level relative to the root (currently in root/src), this needs to be changed
+    root_directory = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    save_directory = root_directory + "/trained_models"
+    if not os.path.exists(save_directory):
+        os.mkdir(save_directory)
+    th.save(model.state_dict(), f"{save_directory}/{model_name}.pt")
+    
 
 
 def load_model(gnn_type, path, data):

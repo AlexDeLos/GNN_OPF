@@ -4,7 +4,7 @@ import numpy as np
 from torch_geometric.loader import DataLoader as pyg_DataLoader
 import tqdm
 from train import train_batch, evaluate_batch
-from utils import get_gnn, load_data, get_criterion
+from utils import get_gnn, load_data, get_criterion, normalize_data
 
 import warnings
 # Suppress FutureWarning
@@ -13,13 +13,13 @@ warnings.filterwarnings("ignore", category=FutureWarning)
 # Hyperparameter optimization
 def hyperparams_optimization(
         train,
-        model_class_name="GAT", 
-        n_trials=100, 
+        model_class_name="GraphSAGE", 
+        n_trials=50, 
         learning_rate_range=(0.01, 0.1), # ranges for hyperparameters
         batch_size_values=[32, 64], 
-        dropout_rate_range = (0.1, 0.6),
+        dropout_rate_range = (0.1, 0.3),
         num_epochs=200, 
-        patience=30, 
+        patience=30,
         optimizer_class=torch.optim.Adam,
         criterion_function="MSELoss",
     ):
@@ -27,7 +27,7 @@ def hyperparams_optimization(
     def objective(trial):
 
         input_dim = train[0].x.shape[1]
-        edge_attr_dim = train[0].edge_attr.shape
+        edge_attr_dim = train[0].edge_attr.shape[1]
         output_dim = train[0].y.shape[1]
 
         print(f"Input shape: {input_dim}\nOutput shape: {output_dim}")
@@ -93,7 +93,20 @@ def hyperparams_optimization(
                             hidden_lin_dim=hidden_lin_dim,
                             dropout=dropout_rate,
                             )
+        elif model_class_name == "GINE":       
+            hidden_gine_dim = trial.suggest_int('hidden_gine_dim', 15, 40)
+            hidden_lin_dim = trial.suggest_int('hidden_lin_dim', 32, 50)
+            jumping_knowledge = trial.suggest_categorical('jumping_knowledge', [True, False])
+            n_of_convs_in = trial.suggest_int('n_of_convs_in', 1, 10)
 
+            gnn = gnn_class(input_dim=input_dim,
+                            output_dim=output_dim,
+                            edge_dim=edge_attr_dim,
+                            hidden_gine_dim=hidden_gine_dim,
+                            hidden_lin_dim=hidden_lin_dim,
+                            jumping_knowledge=jumping_knowledge,
+                            n_of_convs_in=n_of_convs_in,
+                            )
 
         print(f"GNN: \n{gnn}")
 
@@ -148,15 +161,13 @@ def hyperparams_optimization(
 
 
 if __name__ == "__main__":
-    print("Loading Training Data")
-    train = load_data("./data_generation/train")
-    print("Loading Validation Data")
-    val = load_data("./data_generation/val")
-    print("Loading Testing Data")
-    test = load_data("./data_generation/test")
+    print("Loading Data")
+    # Make sure to change it to the correct path on your data
+    train, val, test = load_data("./Data_sanity3(rnd_walk)/train","./Data_sanity3(rnd_walk)/val","./Data_sanity3(rnd_walk)/val")
+    train, val, test = normalize_data(train, val, test)
     print(f"Data Loaded \n",
           f"Number of training samples = {len(train)}\n",
           f"Number of validation samples = {len(val)}\n",
           f"Number of testing samples = {len(test)}\n",)
     
-    hyperparams_optimization(train=train, model_class_name="GAT")
+    hyperparams_optimization(train=train, model_class_name="GINE")

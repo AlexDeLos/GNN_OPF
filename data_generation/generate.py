@@ -3,11 +3,13 @@ import pandapower.plotting as ppl
 import pandapower.networks as pn
 import pandapower.toolbox as tb
 import numpy as np
+import os
 import string
 import random
 import argparse
 from collections import Counter
 import time
+import copy
 from pathlib import Path
 import subgraphs_methods
 
@@ -28,11 +30,15 @@ def get_arguments():
     )
     parser.add_argument("network", choices=['case4gs', 'case5', 'case6ww', 'case9', 'case14', 'case24_ieee_rts', 'case30', 'case_ieee30', 'case39', 'case57', 'case89pegase', 'case118', 'case145', 'case_illinois200', 'case300', 'case1354pegase', 'case1888rte', 'case2848rte', 'case2869pegase', 'case3120sp', 'case6470rte', 'case6495rte', 'case6515rte', 'case9241', 'GBnetwork', 'GBreducednetwork', 'iceland'])
     parser.add_argument("-n", "--num_subgraphs", type=int, default=10)
-    parser.add_argument("-s", "--save_dir", default="./Data")    
+
+    # if file is moved in another directory level relative to the root (currently in root/data_generation), this needs to be changed
+    root_directory = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    parser.add_argument("-s", "--save_dir", default=root_directory + "/Data") 
+
     parser.add_argument("--min_size", type=int, default=5)
     parser.add_argument("--max_size", type=int, default=30)
     parser.add_argument("--n_1", type=bool, default=False)
-    parser.add_argument("--subgraphing_method", choices=['rnd_neighbor', 'bfs', 'rnd_walk'], default='rnd_neighbor')
+    parser.add_argument("--subgraphing_method", choices=['rnd_neighbor', 'bfs', 'rnd_walk', 'num_change'], default='rnd_neighbor')
     args = parser.parse_args()
     print(args)
     return args
@@ -100,6 +106,8 @@ def get_subgraphing_method(method_name):
         return subgraphs_methods.bfs_neighbor_selection
     elif method_name == 'rnd_walk':
         return subgraphs_methods.random_walk_neighbor_selection
+    elif method_name == 'num_change':
+        return subgraphs_methods.number_changes
 
 
 def create_networks(arguments):
@@ -112,47 +120,61 @@ def create_networks(arguments):
 
     subgraphing_method = get_subgraphing_method(arguments.subgraphing_method)
     # A starting point is any bus that is connected to a generator to ensure that subgraphs contain at least one generator
+
     starting_points = full_net.gen.bus
     i = 0
     while i < arguments.num_subgraphs:
         print(f"generating network {i + 1}")
-        
-        subgraph_length = np.random.randint(arguments.min_size, min(arguments.max_size, len(full_net.bus)))
-        initial_bus = starting_points[np.random.randint(0, len(starting_points))]
-        
-        if arguments.n_1:
-            subgraph_busses = list(full_net.bus.index)
-            downed_bus = np.random.randint(0, len(subgraph_busses))
-            del subgraph_busses[downed_bus]
-    
+        if(arguments.subgraphing_method == 'num_change'):
+            varied_full_net = subgraphing_method(copy.deepcopy(full_net))
+            # when calling it in this case the sub graph is not actually a sub graph but the full graph
+            # the reason for this is because when running the num_change data generation we don't actually make a sub graph
+            # we just change the values of the full graph
+            # I belive this is the best way to do it in order to avoid code duplication.
+            solve_and_save(full_net, varied_full_net, list(varied_full_net.bus.index), len(varied_full_net.bus), arguments)
         else:
-            subgraph_busses = subgraphing_method(full_net, initial_bus, subgraph_length)
+            subgraph_length = np.random.randint(arguments.min_size, min(arguments.max_size, len(full_net.bus)))
+            initial_bus = starting_points[np.random.randint(0, len(starting_points))]
+            
+            if arguments.n_1:
+                subgraph_busses = list(full_net.bus.index)
+                downed_bus = np.random.randint(0, len(subgraph_busses))
+                del subgraph_busses[downed_bus]
         
-        subgraph_net = tb.select_subnet(full_net, subgraph_busses)
-
-        try:
-            pp.runpp(subgraph_net)
-            # ppl.simple_plot(subgraph_net, plot_loads=True, plot_gens=True, trafo_color="r", switch_color="g") 
-
-        except:
-            print(f"Network not solvable trying a new one")
-            continue
-
-        uid = ''.join([random.choice(string.ascii_letters
-                + string.digits) for _ in range(8)])
-        
-        Path(f"{arguments.save_dir}/x").mkdir(parents=True, exist_ok=True)
-        Path(f"{arguments.save_dir}/y").mkdir(parents=True, exist_ok=True)
-        
-        pp.to_json(subgraph_net, f"{arguments.save_dir}/x/{arguments.network}_{subgraph_length}_{arguments.subgraphing_method}_{uid}.json")
-        subgraph_net.res_gen.to_csv(f"{arguments.save_dir}/y/{arguments.network}_{subgraph_length}_{arguments.subgraphing_method}_{uid}_gen.csv")
-        subgraph_net.res_line.to_csv(f"{arguments.save_dir}/y/{arguments.network}_{subgraph_length}_{arguments.subgraphing_method}_{uid}_line.csv")
-        subgraph_net.res_bus.to_csv(f"{arguments.save_dir}/y/{arguments.network}_{subgraph_length}_{arguments.subgraphing_method}_{uid}_bus.csv")
+            else:
+                subgraph_busses = subgraphing_method(full_net, initial_bus, subgraph_length)
+            
+            subgraph_net = tb.select_subnet(full_net, subgraph_busses)
+            solve_and_save(full_net, subgraph_net, subgraph_busses, subgraph_length, arguments)
 
         i += 1
     end = time.perf_counter()
     return i, end - start
 
+def solve_and_save(full_net, subgraph_net, subgraph_busses, subgraph_length, arguments):
+    try:
+        # check if the subgraph contains a slack bus, if not add one by setting the slack bus to a random bus
+        if full_net.ext_grid.bus.item() not in subgraph_busses:
+            slack_bus = subgraph_busses[np.random.randint(0, len(subgraph_busses))]
+            # https://pandapower.readthedocs.io/en/v2.1.0/elements/ext_grid.html#pandapower.create_ext_grid
+            pp.create_ext_grid(subgraph_net, slack_bus)
+        pp.runpp(subgraph_net, numba = False)
+        # ppl.simple_plot(subgraph_net, plot_loads=True, plot_gens=True, trafo_color="r", switch_color="g") 
+
+    except:
+        print(f"Network not solvable trying a new one")
+        return
+
+    uid = ''.join([random.choice(string.ascii_letters
+            + string.digits) for _ in range(8)])
+    
+    Path(f"{arguments.save_dir}/x").mkdir(parents=True, exist_ok=True)
+    Path(f"{arguments.save_dir}/y").mkdir(parents=True, exist_ok=True)
+    
+    pp.to_json(subgraph_net, f"{arguments.save_dir}/x/{arguments.network}_{subgraph_length}_{arguments.subgraphing_method}_{uid}.json")
+    subgraph_net.res_gen.to_csv(f"{arguments.save_dir}/y/{arguments.network}_{subgraph_length}_{arguments.subgraphing_method}_{uid}_gen.csv")
+    subgraph_net.res_line.to_csv(f"{arguments.save_dir}/y/{arguments.network}_{subgraph_length}_{arguments.subgraphing_method}_{uid}_line.csv")
+    subgraph_net.res_bus.to_csv(f"{arguments.save_dir}/y/{arguments.network}_{subgraph_length}_{arguments.subgraphing_method}_{uid}_bus.csv")
 
 if __name__ == "__main__":
     generate()

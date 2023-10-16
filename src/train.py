@@ -1,7 +1,6 @@
 from torch_geometric.loader import DataLoader as pyg_DataLoader
 import torch_geometric.utils as pyg_util
 import tqdm
-import sys
 import torch as th
 import numpy as np
 from utils import get_gnn, get_optim, get_criterion
@@ -37,10 +36,10 @@ def train_model(arguments, train, val):
         epoch_val_loss = 0.0
         gnn.train()
         for batch in train_dataloader:
-            epoch_loss += train_batch(data=batch, model=gnn, optimizer=optimizer, criterion=criterion, ac=ac)
+            epoch_loss += train_batch(data=batch, model=gnn, optimizer=optimizer, criterion=criterion, physics_crit=arguments.physics)
         gnn.eval()
         for batch in val_dataloader:
-            epoch_val_loss += evaluate_batch(data=batch, model=gnn, criterion=criterion, ac=ac)
+            epoch_val_loss += evaluate_batch(data=batch, model=gnn, criterion=criterion, physics_crit=arguments.physics)
 
         avg_epoch_loss = epoch_loss.item() / len(train_dataloader)
         avg_epoch_val_loss = epoch_val_loss.item() / len(val_dataloader)
@@ -66,7 +65,7 @@ def train_model(arguments, train, val):
     return gnn, losses, val_losses, last_batch
 
 
-def train_batch(data, model, optimizer, criterion, physics_crit=True, device='cpu', ac=None):
+def train_batch(data, model, optimizer, criterion, physics_crit=False, device='cpu'):
     model.to(device)
     optimizer.zero_grad()
     out = model(data)
@@ -165,8 +164,11 @@ def physics_loss(network, output, log_loss=True):
     return tot_loss
 
 
-def evaluate_batch(data, model, criterion, device='cpu', ac=None):
+def evaluate_batch(data, model, criterion, device='cpu', physics_crit=False):
     model.to(device)
     out = model(data)
-    loss = criterion(out, data.y) # ac(out, data.x, data.edge_index, data.edge_attr)
+    if physics_crit:
+        loss = physics_loss(data, out)
+    else:
+        loss = criterion(out, data.y) # ac(out, data.x, data.edge_index, data.edge_attr)
     return loss
