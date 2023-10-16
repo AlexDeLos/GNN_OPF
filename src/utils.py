@@ -172,11 +172,19 @@ def create_data_instance(graph, y_bus, y_gen, y_line):
     load['is_load'] = 1
     load.set_index('bus', inplace=True)
 
+    # https://pandapower.readthedocs.io/en/latest/elements/ext_grid.html
     ext = graph.ext_grid[['bus', 'vm_pu', 'va_degree']]
     ext.rename(columns={'vm_pu': 'vm_pu_ext'}, inplace=True)
     ext['va_degree'] = 1
     ext['is_ext'] = 1
     ext.set_index('bus', inplace=True)
+
+    # https://pandapower.readthedocs.io/en/latest/elements/shunt.html
+    shunt = graph.shunt[['bus', 'q_mvar', 'step']]
+    shunt['b_pu_shunt'] = shunt['q_mvar'] * shunt['step'] / graph.sn_mva
+    del shunt['q_mvar']
+    del shunt['step']
+    shunt.set_index('bus', inplace=True)
 
     # https://pandapower.readthedocs.io/en/latest/elements/bus.html
     node_feat = graph.bus[['vn_kv']]
@@ -186,6 +194,7 @@ def create_data_instance(graph, y_bus, y_gen, y_line):
     node_feat = node_feat.merge(sgen, left_index=True, right_index=True, how='outer')
     node_feat = node_feat.merge(load, left_index=True, right_index=True, how='outer')
     node_feat = node_feat.merge(ext, left_index=True, right_index=True, how='outer')
+    node_feat = node_feat.merge(shunt, left_index=True, right_index=True, how='outer')
 
     # fill missing feature values with 0
     node_feat.fillna(0.0, inplace=True)
@@ -202,14 +211,13 @@ def create_data_instance(graph, y_bus, y_gen, y_line):
     del node_feat['p_mw_load']
     del node_feat['q_mvar_load']
     del node_feat['q_mvar_sgen']
-    del node_feat['vn_kv']
     del node_feat['is_sgen']
 
     # remove duplicate columns/indices
     node_feat = node_feat[~node_feat.index.duplicated(keep='first')]
     node_feat['is_none'] = (node_feat['is_gen'] == 0) & (node_feat['is_load'] == 0) & (node_feat['is_ext'] == 0)
     node_feat['is_none'] = node_feat['is_none'].astype(float)
-    node_feat = node_feat[['is_load', 'is_gen', 'is_ext', 'is_none', 'p_mw', 'q_mvar', 'vm_pu']]
+    node_feat = node_feat[['is_load', 'is_gen', 'is_ext', 'is_none', 'p_mw', 'q_mvar', 'vm_pu', 'b_pu_shunt']]
     zero_check = node_feat[(node_feat['is_load'] == 0) & (node_feat['is_gen'] == 0) & (node_feat['is_ext'] == 0) & (
                 node_feat['is_none'] == 0)]
 
@@ -228,7 +236,8 @@ def create_data_instance(graph, y_bus, y_gen, y_line):
                                     float(node.is_none),
                                     float(node.p_mw / graph.sn_mva),
                                     float(node.q_mvar / graph.sn_mva),
-                                    float(node.vm_pu)]
+                                    float(node.vm_pu),
+                                    float(node.b_pu_shunt)]
 
         g.nodes[node.Index]['y'] = [float(y_bus['p_mw'][node.Index] / graph.sn_mva),
                                     float(y_bus['q_mvar'][node.Index] / graph.sn_mva),
@@ -240,32 +249,21 @@ def create_data_instance(graph, y_bus, y_gen, y_line):
         r_tot = float(edges.r_ohm_per_km) * float(edges.length_km)
         x_tot = float(edges.x_ohm_per_km) * float(edges.length_km)
         conductance_line, susceptance_line = impedance_to_admittance(r_tot, x_tot, graph.bus['vn_kv'][edges.from_bus], graph.sn_mva)
-
-        # Also calculate line shunt reactances for the self-admittance of each bus (if there is capacitance on the line)
-        if edges.c_nf_per_km < 10**-6:
-            susceptance_shunt = 0
-        else:
-            # Obtain reactance using the capacitance. By default, the frequency is set to 50Hz in PandaPower networks.
-            capacitance_f = float(edges.c_nf_per_km) * float(edges.length_km) * (10**-9)
-            r_tot = 0.0
-            x_tot = 1.0 / (2 * math.pi * 50 * capacitance_f)
-            _, susceptance_shunt = impedance_to_admittance(r_tot, x_tot, graph.bus['vn_kv'][edges.from_bus], graph.sn_mva)
-        g.edges[edges.from_bus, edges.to_bus, ('line', edges.Index)]['edge_attr'] = [float(conductance_line), float(susceptance_line), float(susceptance_shunt)]
-        g.edges[edges.to_bus, edges.from_bus, ('line', edges.Index)]['edge_attr'] = [float(conductance_line), float(susceptance_line), float(susceptance_shunt)]
-
+        g.edges[edges.from_bus, edges.to_bus, ('line', edges.Index)]['edge_attr'] = [float(conductance_line), float(susceptance_line)]
+        g.edges[edges.to_bus, edges.from_bus, ('line', edges.Index)]['edge_attr'] = [float(conductance_line), float(susceptance_line)]
 
     for trafos in graph.trafo.itertuples():
         # First calculate values from low to high voltage bus
         r_tot = 0.0
         x_tot = trafos.vk_percent * (trafos.vn_lv_kv ** 2) / trafos.sn_mva
-        conductance, susceptance = impedance_to_admittance(r_tot, x_tot, trafos.vn_lv_kv, graph.sn_mva, per_unit_conversion=False)
-        g.edges[trafos.lv_bus, trafos.hv_bus, ('trafo', trafos.Index)]['edge_attr'] = [float(conductance), float(susceptance), 0.0]
+        conductance, susceptance = impedance_to_admittance(r_tot, x_tot, trafos.vn_lv_kv, graph.sn_mva)
+        g.edges[trafos.lv_bus, trafos.hv_bus, ('trafo', trafos.Index)]['edge_attr'] = [float(conductance), float(susceptance)]
 
         # Now high to low voltage bus values
         r_tot = 0.0
         x_tot = trafos.vk_percent * (trafos.vn_hv_kv ** 2) / trafos.sn_mva
-        conductance, susceptance = impedance_to_admittance(r_tot, x_tot, trafos.vn_hv_kv, graph.sn_mva, per_unit_conversion=False)
-        g.edges[trafos.hv_bus, trafos.lv_bus, ('trafo', trafos.Index)]['edge_attr'] = [float(conductance), float(susceptance), 0.0]
+        conductance, susceptance = impedance_to_admittance(r_tot, x_tot, trafos.vn_hv_kv, graph.sn_mva)
+        g.edges[trafos.hv_bus, trafos.lv_bus, ('trafo', trafos.Index)]['edge_attr'] = [float(conductance), float(susceptance)]
 
     return from_networkx(g)
 
