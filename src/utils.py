@@ -68,7 +68,7 @@ def load_data(train_dir, val_dir, test_dir):
         print("Testing Data...")
         test = load_data_helper(test_dir)
         print("hetero data can be loaded whooho")
-        quit()
+        # quit()
         # save data to pkl
         write_to_pkl(train, f"{train_dir}/pickled.pkl")
         write_to_pkl(val, f"{val_dir}/pickled.pkl")
@@ -158,6 +158,7 @@ def create_hetero_data_instance(graph, y_bus, xxx, y_line):
     # ppl.simple_plot(graph, plot_loads=True, plot_gens=True, trafo_color="r", switch_color="g") 
     # print(f"\nNumber of nodes: {graph.bus.shape[0]}")
     # print(f"Number of edges: {graph.line.shape[0]}")
+    # print(f"Number of transformers: {graph.trafo.shape[0]}")
     # # print n of external grids, loads and generators
     # print(f"Number of external grids: {graph.ext_grid.shape[0]}")
     # print(f"Number of loads: {graph.load.shape[0]}")
@@ -200,7 +201,6 @@ def create_hetero_data_instance(graph, y_bus, xxx, y_line):
 
     # Select relevant columns
     node_feat = node_feat[['load', 'gen', 'load_gen', 'ext', 'p_mw', 'q_mvar', 'vm_pu', 'va_degree']]
-
     # Organize by type, but keep original indexing
     node_feat = pd.concat([
         node_feat[node_feat['load'] == 1],
@@ -218,6 +218,7 @@ def create_hetero_data_instance(graph, y_bus, xxx, y_line):
     target.index = target.index.map(index_mapping)
     target.sort_index(inplace=True)
 
+    node_types = ['load', 'gen', 'load_gen', 'ext']
     #Feature maps to get relevant x and y values
     feature_map = {
         'load': ['p_mw', 'q_mvar'],
@@ -276,12 +277,11 @@ def create_hetero_data_instance(graph, y_bus, xxx, y_line):
 
     # make the dataframe bidirectional
     bidirectional_edge_attr_trafo = pd.concat([edge_attr_trafo, edge_attr_trafo], axis=0)
-
         
     data = HeteroData()
 
     #Add features for each node type
-    for node_type in feature_map.keys():
+    for node_type in node_types:
         mask = node_feat[node_type] == 1
 
         sub_df = node_feat[mask]
@@ -299,170 +299,45 @@ def create_hetero_data_instance(graph, y_bus, xxx, y_line):
     # Add connecitons as nodes with edge attributes
     # data['connects'].edge_index = th.tensor(bidirectional_edge_index.values, dtype=th.long).t().contiguous()
     # data['connects'].edge_attributes = th.tensor(bidirectional_edge_attr.values, dtype=th.float)
+    connection_types = [('connects', 'from_bus', 'to_bus', edge_index, edge_attr),
+                         ('transformer', 'lv_bus', 'hv_bus', edge_index_trafo, edge_attr_trafo)]
+    key_len = len(node_types)
+    for (con_type, l, h, bei, bei_attr) in connection_types:
+        # Same class connections
+        for node_type in node_types:
+            from_node_type = bei[l].isin(node_feat[node_feat[node_type] == 1].index)
+            to_node_type = bei[h].isin(node_feat[node_feat[node_type] == 1].index)
+            bidirectional_edge_index_node_type = bei[from_node_type & to_node_type]
+            bidirectional_edge_attr_node_type = bei_attr.loc[bidirectional_edge_index_node_type.index]
+            if bidirectional_edge_index_node_type.shape[0] > 0:
+                data[node_type, con_type, node_type].edge_index = th.tensor(bidirectional_edge_index_node_type.values, dtype=th.long).t().contiguous()
+                data[node_type, con_type, node_type].edge_attr = th.tensor(bidirectional_edge_attr_node_type.values, dtype=th.float)
+            else:
+                data[node_type, con_type, node_type].edge_index = th.tensor([], dtype=th.long).t().contiguous()
+                data[node_type, con_type, node_type].edge_attr = th.tensor([], dtype=th.float)
 
 
-    # Add connections as edges with edge attributes
-    from_bus_load = bidirectional_edge_index['from_bus'].isin(node_feat[node_feat['load'] == 1].index)
-    to_bus_load = bidirectional_edge_index['to_bus'].isin(node_feat[node_feat['load'] == 1].index)
-    bidirectional_edge_index_load_to_load = bidirectional_edge_index[from_bus_load & to_bus_load]
-    bidirectional_edge_attr_load = bidirectional_edge_attr.loc[bidirectional_edge_index_load_to_load.index]
+        # Different class connections
+        for i in range(key_len):
+            node_type_a = node_types[i]
+            for j in range(i + 1, key_len):
+                node_type_b = node_types[j]
+                from_bus_a = bei[l].isin(node_feat[node_feat[node_type_a] == 1].index)
+                to_bus_b = bei[h].isin(node_feat[node_feat[node_type_b] == 1].index)
+                from_bus_b = bei[l].isin(node_feat[node_feat[node_type_b] == 1].index)
+                to_bus_a = bei[h].isin(node_feat[node_feat[node_type_a] == 1].index)
+                bidirectional_edge_index_a_to_b = bei[from_bus_a & to_bus_b]
+                bidirectional_edge_index_b_to_a = bei[from_bus_b & to_bus_a]
+                bidirectional_edge_index_a_b_to_b = pd.concat([bidirectional_edge_index_a_to_b, bidirectional_edge_index_b_to_a], axis=0)
+                bidirectional_edge_attr_a_b = bei_attr.loc[bidirectional_edge_index_a_b_to_b.index]
+                if bidirectional_edge_index_a_b_to_b.shape[0] > 0:
+                    data[node_type_a, con_type, node_type_b].edge_index = th.tensor(bidirectional_edge_index_a_b_to_b.values, dtype=th.long).t().contiguous()
+                    data[node_type_a, con_type, node_type_b].edge_attr = th.tensor(bidirectional_edge_attr_a_b.values, dtype=th.float)
+                else:
+                    data[node_type_a, con_type, node_type_b].edge_index = th.tensor([], dtype=th.long).t().contiguous()
+                    data[node_type_a, con_type, node_type_b].edge_attr = th.tensor([], dtype=th.float)
 
-    if bidirectional_edge_index_load_to_load.shape[0] > 0:
-        data['load', 'connects', 'load'].edge_index = th.tensor(bidirectional_edge_index_load_to_load.values, dtype=th.long).t().contiguous()
-        data['load', 'connects', 'load'].edge_attr = th.tensor(bidirectional_edge_attr_load.values, dtype=th.float)
-    else:
-        data['load', 'connects', 'load'].edge_index = th.tensor([], dtype=th.long).t().contiguous()
-        data['load', 'connects', 'load'].edge_attr = th.tensor([], dtype=th.float)
-
-    from_bus_gen = bidirectional_edge_index['from_bus'].isin(node_feat[node_feat['gen'] == 1].index)
-    to_bus_gen = bidirectional_edge_index['to_bus'].isin(node_feat[node_feat['gen'] == 1].index)
-    bidirectional_edge_index_gen_to_gen = bidirectional_edge_index[from_bus_gen & to_bus_gen]
-    bidirectional_edge_attr_gen = bidirectional_edge_attr.loc[bidirectional_edge_index_gen_to_gen.index]
-    if bidirectional_edge_index_gen_to_gen.shape[0] > 0:
-        data['gen', 'connects', 'gen'].edge_index = th.tensor(bidirectional_edge_index_gen_to_gen.values, dtype=th.long).t().contiguous()
-        data['gen', 'connects', 'gen'].edge_attr = th.tensor(bidirectional_edge_attr_gen.values, dtype=th.float)
-    else:
-        data['gen', 'connects', 'gen'].edge_index = th.tensor([], dtype=th.long).t().contiguous()
-        data['gen', 'connects', 'gen'].edge_attr = th.tensor([], dtype=th.float)
-
-
-    from_bus_load_gen = bidirectional_edge_index['from_bus'].isin(node_feat[node_feat['load_gen'] == 1].index)
-    to_bus_load_gen = bidirectional_edge_index['to_bus'].isin(node_feat[node_feat['load_gen'] == 1].index)
-    bidirectional_edge_index_load_gen_to_load_gen = bidirectional_edge_index[from_bus_load_gen & to_bus_load_gen]
-    bidirectional_edge_attr_load_gen = bidirectional_edge_attr.loc[bidirectional_edge_index_load_gen_to_load_gen.index]
-    if bidirectional_edge_index_load_gen_to_load_gen.shape[0] > 0:
-        data['load_gen', 'connects', 'load_gen'].edge_index = th.tensor(bidirectional_edge_index_load_gen_to_load_gen.values, dtype=th.long).t().contiguous()
-        data['load_gen', 'connects', 'load_gen'].edge_attr = th.tensor(bidirectional_edge_attr_load_gen.values, dtype=th.float)
-    else: 
-        data['load_gen', 'connects', 'load_gen'].edge_index = th.tensor([], dtype=th.long).t().contiguous()
-        data['load_gen', 'connects', 'load_gen'].edge_attr = th.tensor([], dtype=th.float)
-
-    from_bus_load = bidirectional_edge_index['from_bus'].isin(node_feat[node_feat['load'] == 1].index)
-    to_bus_gen = bidirectional_edge_index['to_bus'].isin(node_feat[node_feat['gen'] == 1].index)
-    from_bus_gen = bidirectional_edge_index['from_bus'].isin(node_feat[node_feat['gen'] == 1].index)
-    to_bus_load = bidirectional_edge_index['to_bus'].isin(node_feat[node_feat['load'] == 1].index)
-    bidirectional_edge_index_load_to_gen = bidirectional_edge_index[from_bus_load | to_bus_gen]
-    bidirectional_edge_index_gen_to_load = bidirectional_edge_index[from_bus_gen | to_bus_load]
-    bidirectional_edge_index_load_gen_to_gen = pd.concat([bidirectional_edge_index_load_to_gen, bidirectional_edge_index_gen_to_load], axis=0)
-    bidirectional_edge_attr_load_gen = bidirectional_edge_attr.loc[bidirectional_edge_index_load_gen_to_gen.index]
-    if bidirectional_edge_index_load_gen_to_gen.shape[0] > 0:
-        data['load', 'connects', 'gen'].edge_index = th.tensor(bidirectional_edge_index_load_gen_to_gen.values, dtype=th.long).t().contiguous()
-        data['load', 'connects', 'gen'].edge_attr = th.tensor(bidirectional_edge_attr_load_gen.values, dtype=th.float)
-    else:
-        data['load', 'connects', 'gen'].edge_index = th.tensor([], dtype=th.long).t().contiguous()
-        data['load', 'connects', 'gen'].edge_attr = th.tensor([], dtype=th.float)
-
-    from_bus_load = bidirectional_edge_index['from_bus'].isin(node_feat[node_feat['load'] == 1].index)
-    to_bus_ext = bidirectional_edge_index['to_bus'].isin(node_feat[node_feat['ext'] == 1].index)
-    from_bus_ext = bidirectional_edge_index['from_bus'].isin(node_feat[node_feat['ext'] == 1].index)
-    to_bus_load = bidirectional_edge_index['to_bus'].isin(node_feat[node_feat['load'] == 1].index)
-    bidirectional_edge_index_load_to_ext = bidirectional_edge_index[from_bus_load | to_bus_ext]
-    bidirectional_edge_index_ext_to_load = bidirectional_edge_index[from_bus_ext | to_bus_load]
-    bidirectional_edge_index_load_ext_to_ext = pd.concat([bidirectional_edge_index_load_to_ext, bidirectional_edge_index_ext_to_load], axis=0)
-    bidirectional_edge_attr_load_ext = bidirectional_edge_attr.loc[bidirectional_edge_index_load_ext_to_ext.index]
-    if bidirectional_edge_index_load_ext_to_ext.shape[0] > 0:
-        data['load', 'connects', 'ext'].edge_index = th.tensor(bidirectional_edge_index_load_ext_to_ext.values, dtype=th.long).t().contiguous()
-        data['load', 'connects', 'ext'].edge_attr = th.tensor(bidirectional_edge_attr_load_ext.values, dtype=th.float)
-    else:
-        data['load', 'connects', 'ext'].edge_index = th.tensor([], dtype=th.long).t().contiguous()
-        data['load', 'connects', 'ext'].edge_attr = th.tensor([], dtype=th.float)
-
-    from_bus_gen = bidirectional_edge_index['from_bus'].isin(node_feat[node_feat['gen'] == 1].index)
-    to_bus_ext = bidirectional_edge_index['to_bus'].isin(node_feat[node_feat['ext'] == 1].index)
-    from_bus_ext = bidirectional_edge_index['from_bus'].isin(node_feat[node_feat['ext'] == 1].index)
-    to_bus_gen = bidirectional_edge_index['to_bus'].isin(node_feat[node_feat['gen'] == 1].index)
-    bidirectional_edge_index_gen_to_ext = bidirectional_edge_index[from_bus_gen | to_bus_ext]
-    bidirectional_edge_index_ext_to_gen = bidirectional_edge_index[from_bus_ext | to_bus_gen]
-    bidirectional_edge_index_gen_ext_to_ext = pd.concat([bidirectional_edge_index_gen_to_ext, bidirectional_edge_index_ext_to_gen], axis=0)
-    bidirectional_edge_attr_gen_ext = bidirectional_edge_attr.loc[bidirectional_edge_index_gen_ext_to_ext.index]
-    if bidirectional_edge_index_gen_ext_to_ext.shape[0] > 0:
-        data['gen', 'connects', 'ext'].edge_index = th.tensor(bidirectional_edge_index_gen_ext_to_ext.values, dtype=th.long).t().contiguous()
-        data['gen', 'connects', 'ext'].edge_attr = th.tensor(bidirectional_edge_attr_gen_ext.values, dtype=th.float)
-    else:
-        data['gen', 'connects', 'ext'].edge_index = th.tensor([], dtype=th.long).t().contiguous()
-        data['gen', 'connects', 'ext'].edge_attr = th.tensor([], dtype=th.float)
-
-    # add the trafo edges and attributes to the connects node type
-    from_bus_load = bidirectional_edge_index_trafo['lv_bus'].isin(node_feat[node_feat['load'] == 1].index)
-    to_bus_gen = bidirectional_edge_index_trafo['lv_bus'].isin(node_feat[node_feat['gen'] == 1].index)
-    from_bus_gen = bidirectional_edge_index_trafo['hv_bus'].isin(node_feat[node_feat['gen'] == 1].index)
-    to_bus_load = bidirectional_edge_index_trafo['hv_bus'].isin(node_feat[node_feat['load'] == 1].index)
-    bidirectional_edge_index_trafo_load_to_gen = bidirectional_edge_index_trafo[from_bus_load | to_bus_gen]
-    bidirectional_edge_index_trafo_gen_to_load = bidirectional_edge_index_trafo[from_bus_gen | to_bus_load]
-    bidirectional_edge_index_trafo_load_gen_to_gen = pd.concat([bidirectional_edge_index_trafo_load_to_gen, bidirectional_edge_index_trafo_gen_to_load], axis=0)
-    bidirectional_edge_attr_trafo_to_load_gen = bidirectional_edge_attr_trafo.loc[bidirectional_edge_index_trafo_load_gen_to_gen.index]
-    if len(bidirectional_edge_index_trafo_load_gen_to_gen) > 0:
-        data['load', 'transformer', 'gen'].edge_index = th.tensor(bidirectional_edge_index_trafo_load_gen_to_gen.values, dtype=th.long).t().contiguous()
-        data['load', 'transformer', 'gen'].edge_attr = th.tensor(bidirectional_edge_attr_trafo_to_load_gen.values, dtype=th.float)
-    else:
-        data['load', 'transformer', 'gen'].edge_index = th.tensor([], dtype=th.long).t().contiguous()
-        data['load', 'transformer', 'gen'].edge_attr = th.tensor([], dtype=th.float)
-    
-
-    from_bus_load = bidirectional_edge_index_trafo['lv_bus'].isin(node_feat[node_feat['load'] == 1].index)
-    to_bus_ext = bidirectional_edge_index_trafo['lv_bus'].isin(node_feat[node_feat['ext'] == 1].index)
-    from_bus_ext = bidirectional_edge_index_trafo['hv_bus'].isin(node_feat[node_feat['ext'] == 1].index)
-    to_bus_load = bidirectional_edge_index_trafo['hv_bus'].isin(node_feat[node_feat['load'] == 1].index)
-    bidirectional_edge_index_trafo_load_to_ext = bidirectional_edge_index_trafo[from_bus_load | to_bus_ext]
-    bidirectional_edge_index_trafo_ext_to_load = bidirectional_edge_index_trafo[from_bus_ext | to_bus_load]
-    bidirectional_edge_index_trafo_load_ext_to_ext = pd.concat([bidirectional_edge_index_trafo_load_to_ext, bidirectional_edge_index_trafo_ext_to_load], axis=0)
-    bidirectional_edge_attr_trafo_load_ext = bidirectional_edge_attr_trafo.loc[bidirectional_edge_index_trafo_load_ext_to_ext.index]
-    if len(bidirectional_edge_index_trafo_load_ext_to_ext) > 0:
-        data['load', 'transformer', 'ext'].edge_index = th.tensor(bidirectional_edge_index_trafo_load_ext_to_ext.values, dtype=th.long).t().contiguous()
-        data['load', 'transformer', 'ext'].edge_attr = th.tensor(bidirectional_edge_attr_trafo_load_ext.values, dtype=th.float)
-    else:
-        data['load', 'transformer', 'ext'].edge_index = th.tensor([], dtype=th.long).t().contiguous()
-        data['load', 'transformer', 'ext'].edge_attr = th.tensor([], dtype=th.float)
-
-    from_bus_gen = bidirectional_edge_index_trafo['lv_bus'].isin(node_feat[node_feat['gen'] == 1].index)
-    to_bus_ext = bidirectional_edge_index_trafo['lv_bus'].isin(node_feat[node_feat['ext'] == 1].index)
-    from_bus_ext = bidirectional_edge_index_trafo['hv_bus'].isin(node_feat[node_feat['ext'] == 1].index)
-    to_bus_gen = bidirectional_edge_index_trafo['hv_bus'].isin(node_feat[node_feat['gen'] == 1].index)
-    bidirectional_edge_index_trafo_gen_to_ext = bidirectional_edge_index_trafo[from_bus_gen | to_bus_ext]
-    bidirectional_edge_index_trafo_ext_to_gen = bidirectional_edge_index_trafo[from_bus_ext | to_bus_gen]
-    bidirectional_edge_index_trafo_gen_ext_to_ext = pd.concat([bidirectional_edge_index_trafo_gen_to_ext, bidirectional_edge_index_trafo_ext_to_gen], axis=0)
-    bidirectional_edge_attr_trafo_gen_ext = bidirectional_edge_attr_trafo.loc[bidirectional_edge_index_trafo_gen_ext_to_ext.index]
-    if len(bidirectional_edge_index_trafo_gen_ext_to_ext) > 0:
-        data['gen', 'transformer', 'ext'].edge_index = th.tensor(bidirectional_edge_index_trafo_gen_ext_to_ext.values, dtype=th.long).t().contiguous()
-        data['gen', 'transformer', 'ext'].edge_attr = th.tensor(bidirectional_edge_attr_trafo_gen_ext.values, dtype=th.float)
-    else:
-        data['gen', 'transformer', 'ext'].edge_index = th.tensor([], dtype=th.long).t().contiguous()
-        data['gen', 'transformer', 'ext'].edge_attr = th.tensor([], dtype=th.float)
-
-    # add among same node type edges
-    from_bus_load = bidirectional_edge_index_trafo['lv_bus'].isin(node_feat[node_feat['load'] == 1].index)
-    to_bus_load = bidirectional_edge_index_trafo['hv_bus'].isin(node_feat[node_feat['load'] == 1].index)
-    bidirectional_edge_index_trafo_load_to_load = bidirectional_edge_index_trafo[from_bus_load & to_bus_load]
-    bidirectional_edge_attr_trafo_load = bidirectional_edge_attr_trafo.loc[bidirectional_edge_index_trafo_load_to_load.index]
-    if len(bidirectional_edge_index_trafo_load_to_load) > 0:
-        data['load', 'transformer', 'load'].edge_index = th.tensor(bidirectional_edge_index_trafo_load_to_load.values, dtype=th.long).t().contiguous()
-        data['load', 'transformer', 'load'].edge_attr = th.tensor(bidirectional_edge_attr_trafo_load.values, dtype=th.float)
-    else:
-        data['load', 'transformer', 'load'].edge_index = th.tensor([], dtype=th.long).t().contiguous()
-        data['load', 'transformer', 'load'].edge_attr = th.tensor([], dtype=th.float)
-
-    from_bus_gen = bidirectional_edge_index_trafo['lv_bus'].isin(node_feat[node_feat['gen'] == 1].index)
-    to_bus_gen = bidirectional_edge_index_trafo['hv_bus'].isin(node_feat[node_feat['gen'] == 1].index)
-    bidirectional_edge_index_trafo_gen_to_gen = bidirectional_edge_index_trafo[from_bus_gen & to_bus_gen]
-    bidirectional_edge_attr_trafo_gen = bidirectional_edge_attr_trafo.loc[bidirectional_edge_index_trafo_gen_to_gen.index]
-    if len(bidirectional_edge_index_trafo_gen_to_gen) > 0:
-        data['gen', 'transformer', 'gen'].edge_index = th.tensor(bidirectional_edge_index_trafo_gen_to_gen.values, dtype=th.long).t().contiguous()
-        data['gen', 'transformer', 'gen'].edge_attr = th.tensor(bidirectional_edge_attr_trafo_gen.values, dtype=th.float)
-    else: 
-        data['gen', 'transformer', 'gen'].edge_index = th.tensor([], dtype=th.long).t().contiguous()
-        data['gen', 'transformer', 'gen'].edge_attr = th.tensor([], dtype=th.float)
-
-    from_bus_load_gen = bidirectional_edge_index_trafo['lv_bus'].isin(node_feat[node_feat['load_gen'] == 1].index)
-    to_bus_load_gen = bidirectional_edge_index_trafo['hv_bus'].isin(node_feat[node_feat['load_gen'] == 1].index)
-    bidirectional_edge_index_trafo_load_gen_to_load_gen = bidirectional_edge_index_trafo[from_bus_load_gen & to_bus_load_gen]
-    bidirectional_edge_attr_trafo_load_gen = bidirectional_edge_attr_trafo.loc[bidirectional_edge_index_trafo_load_gen_to_load_gen.index]
-    if len(bidirectional_edge_index_trafo_load_gen_to_load_gen) > 0:
-        data['load_gen', 'transformer', 'load_gen'].edge_index = th.tensor(bidirectional_edge_index_trafo_load_gen_to_load_gen.values, dtype=th.long).t().contiguous()
-        data['load_gen', 'transformer', 'load_gen'].edge_attr = th.tensor(bidirectional_edge_attr_trafo_load_gen.values, dtype=th.float)
-    else: # create empty edge_index and edge_attr
-        data['load_gen', 'transformer', 'load_gen'].edge_index = th.tensor([], dtype=th.long).t().contiguous()
-        data['load_gen', 'transformer', 'load_gen'].edge_attr = th.tensor([], dtype=th.float)
- 
+    # visualize_hetero(data)
     return data
 
 def visualize_hetero(hetero):
@@ -500,10 +375,9 @@ def visualize_hetero(hetero):
 
     # Adding edges for different edge types
     for edge_type in hetero.edge_types:
-        print(edge_type)
+        # print(edge_type)
         edge_indices = hetero[edge_type].edge_index.t().numpy()
 
-        # You can specify different styles, colors, and labels for each edge type
         if edge_type == ('load', 'connects', 'load'):
             edge_color = 'red'
             edge_label = 'load-load',
@@ -556,6 +430,18 @@ def visualize_hetero(hetero):
             edge_color = 'red'
             edge_label = 'load_gen-transf-load_gen'
             edge_style = 'dotted'
+        elif edge_type == ('load_gen', 'connects', 'ext'):
+            edge_color = 'orange'
+            edge_label = 'ext-load_gen'
+            edge_style = 'solid'
+        elif edge_type == ('load', 'connects', 'load_gen'):
+            edge_color = 'purple'
+            edge_label = 'load-load_gen'
+            edge_style = 'dashed'
+        elif edge_type == ('load', 'transformer', 'load_gen'):
+            edge_color = 'green'
+            edge_label = 'load-transf-load_gen'
+            edge_style = 'dashed'
         else:
             edge_color = 'black'
             edge_label = 'other'
