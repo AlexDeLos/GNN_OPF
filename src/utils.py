@@ -254,7 +254,7 @@ def create_physics_data_instance(graph, y_bus, y_gen, y_line):
     # https://pandapower.readthedocs.io/en/latest/elements/shunt.html
     shunt = graph.shunt[['bus', 'q_mvar', 'step']]
     shunt['b_pu_shunt'] = shunt['q_mvar'] * shunt['step'] / graph.sn_mva
-    del shunt['q_mvar']
+    shunt.rename(columns={'q_mvar': 'q_mvar_shunt'}, inplace=True)
     del shunt['step']
     shunt.set_index('bus', inplace=True)
 
@@ -272,7 +272,7 @@ def create_physics_data_instance(graph, y_bus, y_gen, y_line):
     node_feat.fillna(0.0, inplace=True)
     node_feat['vm_pu'] = node_feat['vm_pu'] + node_feat['vm_pu_ext']
     node_feat['p_mw'] = node_feat['p_mw_load'] - node_feat['p_mw_gen'] - node_feat['p_mw_sgen']
-    node_feat['q_mvar'] = node_feat['q_mvar_load'] - node_feat['q_mvar_sgen']
+    node_feat['q_mvar'] = node_feat['q_mvar_load'] + node_feat['q_mvar_shunt'] - node_feat['q_mvar_sgen']
 
     # static generators are modeled as loads in PandaPower
     node_feat['is_load'] = (node_feat['is_sgen'] != 0) | (node_feat['is_load'] != 0)
@@ -283,6 +283,7 @@ def create_physics_data_instance(graph, y_bus, y_gen, y_line):
     del node_feat['p_mw_load']
     del node_feat['q_mvar_load']
     del node_feat['q_mvar_sgen']
+    del node_feat['q_mvar_shunt']
     del node_feat['is_sgen']
 
     # remove duplicate columns/indices
