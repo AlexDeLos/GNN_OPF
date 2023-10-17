@@ -2,7 +2,6 @@ from torch_geometric.loader import DataLoader as pyg_DataLoader
 import tqdm
 import	torch as th
 from utils import get_gnn, get_optim, get_criterion
-from models.pl import ACLoss    
 import optuna
 
 def train_model(arguments, train, val):
@@ -150,12 +149,13 @@ def train_batch_hetero(data, model, optimizer, criterion, device='cpu'):
     out_dict = model(data.x_dict, data.edge_index_dict)
     loss = 0
     # print shape [0] of out_dict
-    print("out_dict")
-    for key, item in out_dict.items():
-        print(f"item {key}: {item.shape}")
-    print("data.y_dict")
-    for item in data.y_dict.values():
-        print(item.shape)
+    # print("out_dict")
+    # for key, item in out_dict.items():
+    #     print(f"item {key}: {item.shape}")
+    # print("data.y_dict")
+    # for key, item in data.y_dict.items():
+    #     print(f"item {key}: {item.shape}")
+
     for node_type, y in data.y_dict.items():
         loss += criterion(out_dict[node_type], y)
     loss.backward()

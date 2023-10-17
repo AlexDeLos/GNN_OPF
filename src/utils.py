@@ -699,6 +699,18 @@ def load_model(gnn_type, path, data, arguments):
     model.load_state_dict(th.load(path))
     return model
 
+def load_model_hetero(gnn_type, path, data, arguments):
+    output_dims = {node_type: data[0].y_dict[node_type].shape[1] for node_type in data[0].y_dict.keys()}
+    gnn_class = get_gnn(gnn_type)
+    gnn = gnn_class(output_dim_dict=output_dims, 
+                    edge_types=data[0].edge_index_dict.keys(),
+                    n_hidden_conv=arguments.n_hidden_gnn,
+                    hidden_conv_dim = arguments.gnn_hidden_dim,
+                    n_hidden_lin=arguments.n_hidden_lin,
+                    hidden_lin_dim = arguments.lin_hidden_dim
+                    )
+    gnn.load_state_dict(th.load(path))
+    return gnn
 
 def write_to_pkl(data, path):
     with open(path, 'wb') as f:

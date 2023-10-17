@@ -5,14 +5,22 @@ import matplotlib.pyplot as plt
 from torch_geometric.loader import DataLoader
 
 
-from utils import load_data_helper, load_model, read_from_pkl, write_to_pkl
+from utils import load_data_helper, load_model, read_from_pkl, write_to_pkl, load_model_hetero  
 
 def main():
     args = parse_args()
     data = read_from_pkl(f"{args.data_path}/pickled.pkl")
-    model = load_model(args.gnn_type, args.model_path, data, args)
+    if "HeteroGAT" in args.model_path:
+        model = load_model_hetero(args.gnn_type, args.model_path, data, args)
+        print(model)
+    else:
+        model = load_model(args.gnn_type, args.model_path, data, args)
     model.eval()
-    test(model, data)
+    if "HeteroGAT" in args.model_path:
+        test_hetero(model, data)
+    else:
+        test(model, data)
+    
 
 def parse_args():
     parser = argparse.ArgumentParser("Testing powerfloww GNN models")
@@ -22,7 +30,7 @@ def parse_args():
     parser.add_argument("--n_hidden_gnn", default=2, type=int)
     parser.add_argument("--gnn_hidden_dim", default=32, type=int)
     parser.add_argument("--n_hidden_lin", default=2, type=int)
-    parser.add_argument("--lin_hidden_dim", default=32, type=int)
+    parser.add_argument("--lin_hidden_dim", default=8, type=int)
     args = parser.parse_args()
     return args
 
@@ -33,11 +41,12 @@ def test(model, data):
     first = True
     for g in loader:
         out = model(g)
-        # if first:
-            # print("Y")
-            # print(g.y)
-            # print("Pred")
-            # print(out)
+        if first:
+            print("Y")
+            print(g.y)
+            print("Pred")
+            print(out)
+            quit()
             # print(th.cat([g.y, out], dim=1))
         error = th.abs(th.sub(g.y, out))
         p_error = th.div(error, g.y) * 100
@@ -68,6 +77,46 @@ def test(model, data):
 
     return errors, p_errors
 
+def test_hetero(model, data):
+    loader = DataLoader(data)
+    errors = []
+    p_errors = []
+    first = True
+    for g in loader:
+        out = model(g.x_dict, g.edge_index_dict)
+        if first:
+            for node_type, y in g.y_dict.items():
+                print('in test', node_type)
+                print(th.cat((out[node_type], y), axis=1))
+            quit()
+        error = th.abs(th.sub(g.y, out))
+        p_error = th.div(error, g.y) * 100
+        errors.append(error.detach().numpy())
+        p_errors.append(p_error.detach().numpy())
+
+    errors = np.concatenate(errors)
+    errors = errors.reshape((-1, 2))
+
+    p_errors = np.concatenate(p_errors)
+    p_errors = p_errors.reshape((-1, 2))
+    print(np.shape(p_errors))
+
+    mask = np.isinf(p_errors)
+    p_errors[mask] = 0
+
+    # plt.hist(errors)
+    # plt.show()
+    # plt.hist(p_errors)
+    # plt.show()
+
+    
+    print("within 5%", np.sum(abs(p_errors) < 5, axis=0) / len(p_errors))
+    print("within 10%", np.sum(abs(p_errors) < 10, axis=0) / len(p_errors))
+    print("within 15%", np.sum(abs(p_errors) < 15, axis=0) / len(p_errors))
+    print("within 25%", np.sum(abs(p_errors) < 25, axis=0) / len(p_errors))
+    print("within 50%", np.sum(abs(p_errors) < 50, axis=0) / len(p_errors))
+
+    return errors, p_errors
 def new_test(model, data):
     loader = DataLoader(data)
     load_errors = []
