@@ -1,5 +1,7 @@
 from torch_geometric.nn import HeteroConv, GATConv, Linear
 import torch
+import torch.nn.functional as F
+
 
 class HeteroGAT(torch.nn.Module):
 
@@ -55,11 +57,13 @@ class HeteroGAT(torch.nn.Module):
     def forward(self, x_dict, edge_index_dict):
         for conv in self.convs:
             x_dict = conv(x_dict, edge_index_dict)
+            print(x_dict)
             x_dict = {k: x.relu() for k, x in x_dict.items()}
-            x_dict = {k: x.dropout(p=self.dropout_rate, training=self.training) for k, x in x_dict.items()}
+            x_dict = {k: F.dropout(x, p=self.dropout_rate, training=self.training) for k, x in x_dict.items()}
         
         for i in range(len(self.lins)-1):
             for node_type in x_dict.keys():
+                print(x_dict)
                 x_dict[node_type] = self.lins[str(i)][node_type](x_dict[node_type].relu())
 
         out_dict = {}

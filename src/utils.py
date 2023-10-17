@@ -69,6 +69,7 @@ def load_data(train_dir, val_dir, test_dir):
         print("Testing Data...")
         test = load_data_helper(test_dir)
         print("hetero data can be loaded whooho")
+        # quit()
 
         # save data to pkl
         write_to_pkl(train, f"{train_dir}/pickled.pkl")
@@ -82,8 +83,8 @@ def load_data(train_dir, val_dir, test_dir):
 def load_data_helper(dir):
     graph_path = f"{dir}/x"
     sol_path = f"{dir}/y"
-    graph_paths = sorted(os.listdir(graph_path))
-    sol_paths = sorted(os.listdir(sol_path))
+    graph_paths = sorted(os.listdir(graph_path))[:20]
+    sol_paths = sorted(os.listdir(sol_path))[:60]
     data = []
 
     for i, g in tqdm.tqdm(enumerate(graph_paths)):
@@ -309,21 +310,22 @@ def create_hetero_data_instance(graph, y_bus, xxx, y_line):
     ext_dict = {old_idx: new_idx for new_idx, old_idx in enumerate(node_feat[node_feat['ext'] == 1].index)}
     
     # print total entries in each dictionary
-    print("---")
-    print("total entries in each dictionary: ", len(gen_dict) + len(load_dict)+ len(load_gen_dict)+ len(ext_dict))
-    print("gen_dict ", gen_dict)
-    print("load_dict ", load_dict)
-    print("load_gen_dict ", load_gen_dict)
-    print("ext_dict ", ext_dict)
+    # print("---")
+    # print("total entries in each dictionary: ", len(gen_dict) + len(load_dict)+ len(load_gen_dict)+ len(ext_dict))
+    # print("gen_dict ", gen_dict)
+    # print("load_dict ", load_dict)
+    # print("load_gen_dict ", load_gen_dict)
+    # print("ext_dict ", ext_dict)
     # make a union of all the dictionaries
     new_dict = {}
-    new_dict.update(gen_dict)
     new_dict.update(load_dict)
+    new_dict.update(gen_dict)
     new_dict.update(load_gen_dict)
     new_dict.update(ext_dict)
-    print("total entries in union dictionary:", len(new_dict))
-    print("new_dict", new_dict)
-    print("---")
+    # print("total entries in union dictionary:", len(new_dict))
+    # print("new_dict", new_dict)
+    # print(f"total number of nodes: {len(node_feat)}")
+    # print("---")
 
     def map_indices(dataframe, index_mapping):
         # return a new dataframe where each column is mapped to the new indices
@@ -365,6 +367,8 @@ def create_hetero_data_instance(graph, y_bus, xxx, y_line):
                 bidirectional_edge_index_a_to_b = bei[from_bus_a & to_bus_b]
                 bidirectional_edge_index_b_to_a = bei[from_bus_b & to_bus_a]
                 bidirectional_edge_index_a_b_to_b = pd.concat([bidirectional_edge_index_a_to_b, bidirectional_edge_index_b_to_a], axis=0)
+                mask = bidirectional_edge_index_a_b_to_b[l] > bidirectional_edge_index_a_b_to_b[h]
+                bidirectional_edge_index_a_b_to_b.loc[mask, [l, h]] = bidirectional_edge_index_a_b_to_b.loc[mask, [h, l]].values
                 bidirectional_edge_attr_a_b = bei_attr.loc[bidirectional_edge_index_a_b_to_b.index]
                 if bidirectional_edge_index_a_b_to_b.shape[0] > 0:
                     data[node_type_a, con_type, node_type_b].edge_index = th.tensor(map_indices(bidirectional_edge_index_a_b_to_b, new_dict).values, dtype=th.long).t().contiguous()
@@ -372,8 +376,24 @@ def create_hetero_data_instance(graph, y_bus, xxx, y_line):
                 else:
                     data[node_type_a, con_type, node_type_b].edge_index = th.tensor([], dtype=th.long).t().contiguous()
                     data[node_type_a, con_type, node_type_b].edge_attr = th.tensor([], dtype=th.float)
-
+    # print(data)
+    # ppl.simple_plot(graph)
     # visualize_hetero(data)
+    # print("EDGES")
+    # print(edge_index)
+    # print(edge_index_trafo)
+    # print("gen_dict ", gen_dict)
+    # print("load_dict ", load_dict)
+    # print("load_gen_dict ", load_gen_dict)
+    # print("ext_dict ", ext_dict)
+    # print("new_dict", new_dict)
+
+    # for x in data.edge_types:
+    #     l = len(data[x].edge_index)
+    #     if l > 0:
+    #         print(x)
+    #         print(data[x].edge_index)
+    # quit()
     return data
 
 def visualize_hetero(hetero):
