@@ -68,6 +68,9 @@ def train_batch_hetero(data, model, optimizer, criterion, device='cpu'):
     out_dict = model(data.x_dict, data.edge_index_dict, data.edge_attr_dict)
     loss = 0
     for node_type, y in data.y_dict.items():
+        # prevent nan loss
+        if y.shape[0] == 0:
+            continue
         loss += criterion(out_dict[node_type], y)
     loss.backward()
     optimizer.step()
@@ -79,5 +82,8 @@ def evaluate_batch_hetero(data, model, criterion, device='cpu'):
     out_dict = model(data.x_dict, data.edge_index_dict, data.edge_attr_dict)
     loss = 0
     for node_type, y in data.y_dict.items():
+        # prevent nan loss
+        if y.shape[0] == 0:
+            continue
         loss += criterion(out_dict[node_type], y)
     return loss

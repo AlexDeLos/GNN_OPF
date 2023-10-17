@@ -15,7 +15,7 @@ class HeteroGNN(torch.nn.Module):
             n_hidden_lin=1, 
             hidden_lin_dim=32, 
             dropout_rate=0.1,
-            conv_type='GAT', # GAT or SAGE 
+            conv_type='SAGE', # GAT or SAGE 
             *args, 
             **kwargs
         ):
@@ -27,6 +27,7 @@ class HeteroGNN(torch.nn.Module):
         self.out_channels_dict = output_dim_dict
 
         conv_class = None
+        self.conv_type = conv_type
         if conv_type == 'GAT':
             conv_class = GATConv
         elif conv_type == 'SAGE':
@@ -64,10 +65,9 @@ class HeteroGNN(torch.nn.Module):
         self.dropout_rate = dropout_rate
        
 
-    def forward(self, x_dict, edge_index_dict, edge_attr_dict=None):
+    def forward(self, x_dict, edge_index_dict, edge_attr_dict):
         for conv in self.convs:
-            
-            if edge_attr_dict is None:
+            if self.conv_type == 'SAGE':
                 x_dict = conv(x_dict, edge_index_dict)
             else:
                 x_dict = conv(x_dict, edge_index_dict, edge_attr_dict)
