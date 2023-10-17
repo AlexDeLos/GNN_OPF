@@ -2,8 +2,6 @@ from torch_geometric.loader import DataLoader as pyg_DataLoader
 import tqdm
 import	torch as th
 from utils import get_gnn, get_optim, get_criterion
-from models.pl import ACLoss    
-import optuna
 
 def train_model(arguments, train, val):
     input_dim = train[0].x.shape[1]
