@@ -23,6 +23,7 @@ def get_arguments():
     parser = argparse.ArgumentParser(prog="GNN script",
                                      description="Run a GNN to solve an inductive power system problem (power flow only for now)")
     
+    # Important: prefix all heterogeneous GNNs names with "Hetero"
     parser.add_argument("gnn", choices=["GAT", "MessagePassing", "GraphSAGE", "GINE", "HeteroGAT"], default="GAT")
     # if file is moved in another directory level relative to the root (currently in root/src), this needs to be changed
     root_directory = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -63,8 +64,6 @@ def load_data(train_dir, val_dir, test_dir, gnn_type):
         val = load_data_helper(val_dir, gnn_type)
         print("Testing Data...")
         test = load_data_helper(test_dir, gnn_type)
-        print("hetero data can be loaded whooho")
-        # quit()
 
         # save data to pkl
         write_to_pkl(train, f"{train_dir}/pickled.pkl")
