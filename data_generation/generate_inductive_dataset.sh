@@ -42,7 +42,7 @@ echo "Generating from case2869pegase"
 python $SCRIPT_DIR/generate.py case2869pegase -n 15 -s$1/train  >/dev/null
 
 echo "Generating Validation Set"
-python $SCRIPT_DIR/generate.py GBnetwork -n 100 -max_size 200 -s $1/val  >/dev/null
+python $SCRIPT_DIR/generate.py GBnetwork -n 100 -s $1/val  >/dev/null
 
 echo "Generating Testing Set"
 python $SCRIPT_DIR/generate.py GBnetwork -n 100 -s $1/test  >/dev/null

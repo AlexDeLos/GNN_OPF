@@ -1,28 +1,30 @@
 import argparse
-import matplotlib.pyplot as plt
+import math
 from models.GAT import GAT
 from models.MessagePassing import MessagePassingGNN
 from models.GraphSAGE import GraphSAGE
 from models.GINE import GINE
+from models.GAT_hetero import HeteroGAT
 import os
 import pandapower.plotting as ppl
 import pandas as pd
 import pandapower as pp
 import pickle
-import numpy as np
 import random
 import string
 import torch as th
 import torch.nn as nn
+from torch_geometric.data import HeteroData
 from torch_geometric.utils.convert import from_networkx
 import tqdm
-
+from utils_hetero import create_hetero_data_instance
 
 def get_arguments():
     parser = argparse.ArgumentParser(prog="GNN script",
                                      description="Run a GNN to solve an inductive power system problem (power flow only for now)")
     
-    parser.add_argument("gnn", choices=["GAT", "MessagePassing", "GraphSAGE", "GINE"], default="GAT")
+    # Important: prefix all heterogeneous GNNs names with "Hetero"
+    parser.add_argument("gnn", choices=["GAT", "MessagePassing", "GraphSAGE", "GINE", "HeteroGAT"], default="GAT")
     # if file is moved in another directory level relative to the root (currently in root/src), this needs to be changed
     root_directory = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     parser.add_argument("--train", default=root_directory + "/Data/train")
@@ -30,13 +32,17 @@ def get_arguments():
     parser.add_argument("--test", default=root_directory + "/Data/test")
     parser.add_argument("-s", "--save_model", action="store_true", default=True)
     parser.add_argument("-m", "--model_name", default=''.join([random.choice(string.ascii_letters + string.digits) for _ in range(8)]))
-    parser.add_argument("-p", "--plot", action="store_true", default=True)
+    parser.add_argument("-p", "--plot", action="store_true", default=False)
     parser.add_argument("-o", "--optimizer", default="Adam")
     parser.add_argument("-c", "--criterion", default="MSELoss")
     parser.add_argument("-b", "--batch_size", default=16)
-    parser.add_argument("-n", "--n_epochs", default=200)
+    parser.add_argument("-n", "--n_epochs", default=100)
     parser.add_argument("-l", "--learning_rate", default=1e-4)
     parser.add_argument("-w", "--weight_decay", default=0.05)
+    parser.add_argument("--n_hidden_gnn", default=2, type=int)
+    parser.add_argument("--gnn_hidden_dim", default=32, type=int)
+    parser.add_argument("--n_hidden_lin", default=2, type=int)
+    parser.add_argument("--lin_hidden_dim", default=8, type=int)
     parser.add_argument("--patience", default=40)
     parser.add_argument("--plot_node_error", action="store_true", default=False)
     parser.add_argument("--normalize", action="store_true", default=False)
@@ -44,7 +50,7 @@ def get_arguments():
     args = parser.parse_args()
     return args
 
-def load_data(train_dir, val_dir, test_dir):
+def load_data(train_dir, val_dir, test_dir, gnn_type):
     try:
         train = read_from_pkl(f"{train_dir}/pickled.pkl")
         val = read_from_pkl(f"{val_dir}/pickled.pkl")
@@ -53,11 +59,11 @@ def load_data(train_dir, val_dir, test_dir):
     except:
         print("Data not found, loading from json files...")
         print("Training Data...")
-        train = load_data_helper(train_dir)
+        train = load_data_helper(train_dir, gnn_type)
         print("Validation Data...")
-        val = load_data_helper(val_dir)
+        val = load_data_helper(val_dir, gnn_type)
         print("Testing Data...")
-        test = load_data_helper(test_dir)
+        test = load_data_helper(test_dir, gnn_type)
 
         # save data to pkl
         write_to_pkl(train, f"{train_dir}/pickled.pkl")
@@ -68,7 +74,7 @@ def load_data(train_dir, val_dir, test_dir):
 
     return train, val, test
 
-def load_data_helper(dir):
+def load_data_helper(dir, gnn_type):
     graph_path = f"{dir}/x"
     sol_path = f"{dir}/y"
     graph_paths = sorted(os.listdir(graph_path))
@@ -78,10 +84,13 @@ def load_data_helper(dir):
     for i, g in tqdm.tqdm(enumerate(graph_paths)):
         graph = pp.from_json(f"{graph_path}/{g}")
         y_bus = pd.read_csv(f"{sol_path}/{sol_paths[i * 3]}", index_col=0)
-        y_gen = pd.read_csv(f"{sol_path}/{sol_paths[i * 3 + 1]}", index_col=0)
-        y_line = pd.read_csv(f"{sol_path}/{sol_paths[i * 3 + 2]}", index_col=0)
+        # y_gen = pd.read_csv(f"{sol_path}/{sol_paths[i * 3 + 1]}", index_col=0)
+        # y_line = pd.read_csv(f"{sol_path}/{sol_paths[i * 3 + 2]}", index_col=0)
 
-        instance = create_data_instance(graph, y_bus, y_gen, y_line)
+        if gnn_type[:6] != "Hetero":
+            instance = create_data_instance(graph, y_bus)
+        else:
+            instance = create_hetero_data_instance(graph, y_bus)
         data.append(instance)
 
     return data
@@ -140,12 +149,12 @@ def normalize_data(train, val, test, standard_normalizaton=True):
 
 
 # return a torch_geometric.data.Data object for each instance
-def create_data_instance(graph, y_bus, y_gen, y_line):
+def create_data_instance(graph, y_bus):
     g = ppl.create_nxgraph(graph, include_trafos=True)
-
     # https://pandapower.readthedocs.io/en/latest/elements/gen.html
     gen = graph.gen[['bus', 'p_mw', 'vm_pu']]
     gen.rename(columns={'p_mw': 'p_mw_gen'}, inplace=True)
+    gen['gen'] = 1
     gen.set_index('bus', inplace=True)
 
     # https://pandapower.readthedocs.io/en/latest/elements/load.html
@@ -153,33 +162,76 @@ def create_data_instance(graph, y_bus, y_gen, y_line):
     load.rename(columns={'p_mw': 'p_mw_load'}, inplace=True)
     load.set_index('bus', inplace=True)
 
+    ext = graph.ext_grid[['bus', 'vm_pu', 'va_degree']]
+    ext.rename(columns={'vm_pu': 'vm_pu_ext'}, inplace=True)
+    ext['ext'] = 1
+    ext.set_index('bus', inplace=True)
+
     # https://pandapower.readthedocs.io/en/latest/elements/bus.html
-    node_feat = graph.bus[['vn_kv', 'max_vm_pu', 'min_vm_pu']]
+    node_feat = graph.bus[['vn_kv']]
 
     # make sure all nodes (bus, gen, load) have the same number of features (namely the union of all features)
     node_feat = node_feat.merge(gen, left_index=True, right_index=True, how='outer')
     node_feat = node_feat.merge(load, left_index=True, right_index=True, how='outer')
+    node_feat = node_feat.merge(ext, left_index=True, right_index=True, how='outer')
+
     # fill missing feature values with 0
     node_feat.fillna(0.0, inplace=True)
+    node_feat['vm_pu'] = node_feat['vm_pu'] + node_feat['vm_pu_ext']
+    node_feat['p_mw'] = node_feat['p_mw_load'] - node_feat['p_mw_gen']
+
+    del node_feat['vm_pu_ext']
+    del node_feat['p_mw_gen']
+    del node_feat['p_mw_load']
+    del node_feat['vn_kv']
+
     # remove duplicate columns/indices
     node_feat = node_feat[~node_feat.index.duplicated(keep='first')]
-    # print("here")
-    # print(gen)
-    # print(load)
-    # print(node_feat)
+    node_feat['load'] = (node_feat['gen'] == 0) & (node_feat['ext'] == 0)
+    node_feat['load'] = node_feat['load'].astype(float)
+    node_feat = node_feat[['load', 'gen', 'ext', 'p_mw', 'q_mvar', 'vm_pu', 'va_degree']]
+    
+
     for node in node_feat.itertuples():
         # set each node features
-        g.nodes[node.Index]['x'] = [float(node.vn_kv), #bus, the grid voltage level.
-                                    float(node.p_mw_gen), #gen, the active power of the generator
-                                    float(node.vm_pu), #gen, the voltage magnitude of the generator.
-                                    float(node.p_mw_load), #load, the active power of the load
-                                    float(node.q_mvar)] #load, the reactive power of the load
+        g.nodes[node.Index]['x'] = [float(node.load), 
+                                    float(node.gen), 
+                                    float(node.ext), 
+                                    float(node.p_mw), 
+                                    float(node.q_mvar), 
+                                    float(node.vm_pu),
+                                    float(node.va_degree)]
         
-        # set each node label
-        g.nodes[node.Index]['y'] = [float(y_bus['p_mw'][node.Index]),
-                                    float(y_bus['q_mvar'][node.Index]),
-                                    float(y_bus['va_degree'][node.Index]),
+        g.nodes[node.Index]['y'] = [float(y_bus['va_degree'][node.Index]),
                                     float(y_bus['vm_pu'][node.Index])]
+        
+        # g.nodes[node.Index]['y'] = [float(y_bus['p_mw'][node.Index]),
+        #                             float(y_bus['q_mvar'][node.Index]),
+        #                             float(y_bus['vm_pu'][node.Index]),
+        #                             float(y_bus['va_degree'][node.Index])]
+        # set each node label by type
+        # if node.load:
+        #     g.nodes[node.Index]['y'] = [float(y_bus['va_degree'][node.Index]),
+        #                                 float(y_bus['vm_pu'][node.Index])]
+        #     # g.nodes[node.Index]['reals'] = [float(y_bus['p_mw'][node.Index]),
+        #     #                                 float(y_bus['q_mvar'][node.Index])]
+        # elif node.gen:
+        #     g.nodes[node.Index]['y'] = [float(y_bus['q_mvar'][node.Index]),
+        #                                 float(y_bus['va_degree'][node.Index])]
+        #     # g.nodes[node.Index]['reals'] = [float(y_bus['p_mw'][node.Index]),
+        #     #                                 float(y_bus['vm_pu'][node.Index])]
+        # elif node.ext:
+        #     g.nodes[node.Index]['y'] = [float(y_bus['p_mw'][node.Index]),
+        #                                 float(y_bus['q_mvar'][node.Index])]
+        #     # g.nodes[node.Index]['reals'] = [float(y_bus['vm_pu'][node.Index]),
+        #     #                                 float(y_bus['va_degree'][node.Index])]
+        # else:
+        #     g.nodes[node.Index]['y'] = [float(y_bus['va_degree'][node.Index]),
+        #                                 float(y_bus['vm_pu'][node.Index])]
+        #     # g.nodes[node.Index]['reals'] = [float(y_bus['p_mw'][node.Index]),
+        #     #                                 float(y_bus['q_mvar'][node.Index])]
+        
+
     first = True
     for edges in graph.line.itertuples():
         if first:
@@ -187,25 +239,18 @@ def create_data_instance(graph, y_bus, y_gen, y_line):
             first = False
         g.edges[edges.from_bus, edges.to_bus, ('line', edges.Index)]['edge_attr'] = [float(edges.r_ohm_per_km),
                                                                                      float(edges.x_ohm_per_km),
-                                                                                     float(edges.c_nf_per_km),
-                                                                                     float(edges.g_us_per_km),
-                                                                                     float(edges.max_i_ka),
-                                                                                     float(edges.parallel),
-                                                                                     float(edges.df),
                                                                                      float(edges.length_km)]
+                                                                                    #  float(edges.c_nf_per_km),
+                                                                                    #  float(edges.g_us_per_km),
+                                                                                    #  float(edges.max_i_ka),
+                                                                                    #  float(edges.parallel),
+                                                                                    #  float(edges.df),
+
     # print(common_edge)
     for trafos in graph.trafo.itertuples():
-        g.edges[trafos.lv_bus, trafos.hv_bus, ('trafo', trafos.Index)]['edge_attr'] = [float(common_edge.r_ohm_per_km),
-                                                                                     float(common_edge.x_ohm_per_km),
-                                                                                     float(common_edge.c_nf_per_km),
-                                                                                     float(common_edge.g_us_per_km),
-                                                                                     float(common_edge.max_i_ka),
-                                                                                     float(common_edge.parallel),
-                                                                                     float(common_edge.df),
-                                                                                     1]
-
-
-
+        g.edges[trafos.lv_bus, trafos.hv_bus, ('trafo', trafos.Index)]['edge_attr'] = [float(trafos.vkr_percent / (trafos.sn_mva / (trafos.vn_lv_kv * math.sqrt(3)))),
+                                                                                       float(math.sqrt((trafos.vk_percent ** 2) - (trafos.vkr_percent) ** 2)) / (trafos.sn_mva / (trafos.vn_lv_kv * math.sqrt(3))),
+                                                                                       1.0]
     return from_networkx(g)
 
 
@@ -221,6 +266,9 @@ def get_gnn(gnn_name):
     
     if gnn_name == "GINE":
         return GINE
+    
+    if gnn_name == "HeteroGAT":
+        return HeteroGAT
 
 def get_optim(optim_name):
     if optim_name == "Adam":
@@ -239,7 +287,7 @@ def save_model(model, model_name):
         'state_dict': model.state_dict(),
     }
     # timestamp = pd.Timestamp.now().strftime("%Y-%m-%d")
-    model_name = model_name + "_" + model.class_name # + "_" + str(timestamp)
+    model_name = model_name + "-" + model.class_name # + "_" + str(timestamp)
     # if file is moved in another directory level relative to the root (currently in root/src), this needs to be changed
     root_directory = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     save_directory = root_directory + "/trained_models"
@@ -248,16 +296,33 @@ def save_model(model, model_name):
     th.save(model.state_dict(), f"{save_directory}/{model_name}.pt")
     
 
-def load_model(gnn_type, path, data):
+def load_model(gnn_type, path, data, arguments):
     input_dim = data[0].x.shape[1]
     edge_attr_dim = data[0].edge_attr.shape[1] 
     output_dim = data[0].y.shape[1]
-    print(input_dim, edge_attr_dim, output_dim)
     gnn_class = get_gnn(gnn_type)
-    model = gnn_class(input_dim, output_dim, edge_attr_dim)
+    model = gnn_class(input_dim, 
+                      output_dim, 
+                      edge_attr_dim,
+                      arguments.n_hidden_gnn, 
+                      arguments.gnn_hidden_dim, 
+                      arguments.n_hidden_lin, 
+                      arguments.lin_hidden_dim)
     model.load_state_dict(th.load(path))
     return model
 
+def load_model_hetero(gnn_type, path, data, arguments):
+    output_dims = {node_type: data[0].y_dict[node_type].shape[1] for node_type in data[0].y_dict.keys()}
+    gnn_class = get_gnn(gnn_type)
+    gnn = gnn_class(output_dim_dict=output_dims, 
+                    edge_types=data[0].edge_index_dict.keys(),
+                    n_hidden_conv=arguments.n_hidden_gnn,
+                    hidden_conv_dim = arguments.gnn_hidden_dim,
+                    n_hidden_lin=arguments.n_hidden_lin,
+                    hidden_lin_dim = arguments.lin_hidden_dim
+                    )
+    gnn.load_state_dict(th.load(path))
+    return gnn
 
 def write_to_pkl(data, path):
     with open(path, 'wb') as f:
