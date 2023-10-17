@@ -1,6 +1,4 @@
-import torch as th
 import torch.nn as nn
-
 import torch.nn.functional as F
 from torch_geometric.nn import GATConv
 from torch_geometric.nn.models import JumpingKnowledge
@@ -14,9 +12,9 @@ class GAT(nn.Module):
             input_dim, 
             output_dim, 
             edge_attr_dim,
-            n_hidden_conv=8, 
-            hidden_conv_dim=64, 
-            n_hidden_lin=4, 
+            n_hidden_conv=2, 
+            hidden_conv_dim=16, 
+            n_hidden_lin=2, 
             hidden_lin_dim=64, 
             dropout_rate=0.1, 
             heads=1,
