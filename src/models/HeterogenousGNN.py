@@ -1,10 +1,10 @@
-from torch_geometric.nn import HeteroConv, GATConv, Linear
+from torch_geometric.nn import HeteroConv, GATConv, SAGEConv, Linear
 import torch
 import torch.nn.functional as F
 
 
-class HeteroGAT(torch.nn.Module):
-    class_name = "HeteroGAT"
+class HeteroGNN(torch.nn.Module):
+    class_name = "HeteroGNN"
     
     def __init__(
             self, 
@@ -14,7 +14,8 @@ class HeteroGAT(torch.nn.Module):
             hidden_conv_dim=32, 
             n_hidden_lin=1, 
             hidden_lin_dim=32, 
-            dropout_rate=0.1, 
+            dropout_rate=0.1,
+            conv_type='GAT', # GAT or SAGE 
             *args, 
             **kwargs
         ):
@@ -25,10 +26,18 @@ class HeteroGAT(torch.nn.Module):
         self.convs = torch.nn.ModuleList()
         self.out_channels_dict = output_dim_dict
 
+        conv_class = None
+        if conv_type == 'GAT':
+            conv_class = GATConv
+        elif conv_type == 'SAGE':
+            conv_class = SAGEConv
+        else:
+            raise ValueError(f"conv_type must be 'GAT' or 'SAGE', not {conv_type}")
+        
         for _ in range(n_hidden_conv):
             conv_dict = {}
             for edge_type in edge_types:
-                conv_dict[edge_type] = GATConv((-1, -1), hidden_conv_dim, add_self_loops=False)
+                conv_dict[edge_type] = conv_class((-1, -1), hidden_conv_dim, add_self_loops=False)
             conv = HeteroConv(conv_dict, aggr='sum')
             self.convs.append(conv)
 
@@ -55,9 +64,14 @@ class HeteroGAT(torch.nn.Module):
         self.dropout_rate = dropout_rate
        
 
-    def forward(self, x_dict, edge_index_dict):
+    def forward(self, x_dict, edge_index_dict, edge_attr_dict=None):
         for conv in self.convs:
-            x_dict = conv(x_dict, edge_index_dict)
+            
+            if edge_attr_dict is None:
+                x_dict = conv(x_dict, edge_index_dict)
+            else:
+                x_dict = conv(x_dict, edge_index_dict, edge_attr_dict)
+
             x_dict = {k: x.relu() for k, x in x_dict.items()}
             x_dict = {k: F.dropout(x, p=self.dropout_rate, training=self.training) for k, x in x_dict.items()}
         

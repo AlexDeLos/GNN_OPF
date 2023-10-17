@@ -12,13 +12,13 @@ from utils import load_data_helper, load_model, read_from_pkl, write_to_pkl, loa
 def main():
     args = parse_args()
     data = read_from_pkl(f"{args.data_path}/pickled.pkl")
-    if "HeteroGAT" in args.model_path:
+    if "HeteroGNN" in args.model_path:
         model = load_model_hetero(args.gnn_type, args.model_path, data, args)
         print(model)
     else:
         model = load_model(args.gnn_type, args.model_path, data, args)
     model.eval()
-    if "HeteroGAT" in args.model_path:
+    if "HeteroGNN" in args.model_path:
         test_hetero(model, data)
     else:
         test(model, data)
