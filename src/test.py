@@ -3,15 +3,16 @@ import numpy as np
 import argparse
 import matplotlib.pyplot as plt
 from torch_geometric.loader import DataLoader
+from utils import load_data
 
 
 from utils import load_data_helper, load_model
 
 def main():
     args = parse_args()
-    data = load_data_helper(args.data_path)
-    model = load_model(args.gnn_type, args.model_path, data)
-    errors, p_errors = test(model, data)
+    test_data = load_data_helper(args.data_path)
+    model = load_model(args.gnn_type, args.model_path, test_data)
+    errors, p_errors = test(model, test_data)
 
 def parse_args():
     parser = argparse.ArgumentParser("Testing powerfloww GNN models")
@@ -41,10 +42,10 @@ def test(model, data):
     mask = np.isinf(p_errors)
     p_errors[mask] = 0
 
-    # plt.hist(errors)
-    # plt.show()
-    # plt.hist(p_errors)
-    # plt.show()
+    plt.hist(errors)
+    plt.show()
+    plt.hist(p_errors)
+    plt.show()
 
     num_correct = np.sum(abs(p_errors) < 5, axis=0)
     

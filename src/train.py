@@ -11,7 +11,7 @@ def train_model(arguments, train, val):
 
     print(f"Input shape: {input_dim}\nOutput shape: {output_dim}")
 
-    batch_size = arguments.batch_size
+    batch_size = int(arguments.batch_size)
     train_dataloader = pyg_DataLoader(train, batch_size=batch_size, shuffle=True)
     val_dataloader = pyg_DataLoader(val, batch_size=batch_size, shuffle=False)
     gnn_class = get_gnn(arguments.gnn)
@@ -19,13 +19,13 @@ def train_model(arguments, train, val):
     print(f"GNN: \n{gnn}")
 
     optimizer_class = get_optim(arguments.optimizer)
-    optimizer = optimizer_class(gnn.parameters(), lr=arguments.learning_rate)
+    optimizer = optimizer_class(gnn.parameters(), lr=float(arguments.learning_rate))
     criterion = get_criterion(arguments.criterion)
 
     losses = []
     val_losses = []
     last_batch = None
-    for epoch in tqdm.tqdm(range(arguments.n_epochs)): #args epochs
+    for epoch in tqdm.tqdm(range(int(arguments.n_epochs))): #args epochs
         epoch_loss = 0.0
         epoch_val_loss = 0.0
         gnn.train()
