@@ -79,8 +79,9 @@ def test(model, data):
 
 def test_hetero(model, data):
     loader = DataLoader(data)
-    errors = []
-    p_errors = []
+    load_errors = []
+    gen_errors = []
+    load_gen_errors = []
     first = True
     for g in loader:
         out = model(g.x_dict, g.edge_index_dict)
