@@ -52,9 +52,9 @@ def get_arguments():
 
 def load_data(train_dir, val_dir, test_dir):
     try:
-        train = read_from_pkl(f"{train_dir}/picfkled.pkl")
-        val = read_from_pkl(f"{val_dir}/pickfled.pkl")
-        test = read_from_pkl(f"{test_dir}/pifckled.pkl")
+        train = read_from_pkl(f"{train_dir}/pickled.pkl")
+        val = read_from_pkl(f"{val_dir}/pickled.pkl")
+        test = read_from_pkl(f"{test_dir}/pickled.pkl")
         print("Data Loaded from pkl files")
     except:
         print("Data not found, loading from json files...")
@@ -78,8 +78,8 @@ def load_data(train_dir, val_dir, test_dir):
 def load_data_helper(dir):
     graph_path = f"{dir}/x"
     sol_path = f"{dir}/y"
-    graph_paths = sorted(os.listdir(graph_path))[:20]
-    sol_paths = sorted(os.listdir(sol_path))[:70]
+    graph_paths = sorted(os.listdir(graph_path))
+    sol_paths = sorted(os.listdir(sol_path))
     data = []
 
     for i, g in tqdm.tqdm(enumerate(graph_paths)):
