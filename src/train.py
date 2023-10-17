@@ -110,7 +110,7 @@ def train_model_hetero(arguments, train, val):
     losses = []
     val_losses = []
     last_batch = None
-    for epoch in range(arguments.n_epochs):
+    for epoch in tqdm.tqdm(range(arguments.n_epochs)): #args epochs range(arguments.n_epochs)
         epoch_loss = 0.0
         epoch_val_loss = 0.0
         gnn.train()
@@ -125,6 +125,9 @@ def train_model_hetero(arguments, train, val):
 
         losses.append(avg_epoch_loss)
         val_losses.append(avg_epoch_val_loss)
+
+        if epoch % 10 == 0:
+            print(f'Epoch: {epoch:03d}, trn_Loss: {avg_epoch_loss:.6f}, val_loss: {avg_epoch_val_loss:.6f}')
 
         # Early stopping
         try:  

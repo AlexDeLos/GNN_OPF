@@ -4,7 +4,8 @@ import torch.nn.functional as F
 
 
 class HeteroGAT(torch.nn.Module):
-
+    class_name = "HeteroGAT"
+    
     def __init__(
             self, 
             output_dim_dict, 
@@ -57,17 +58,15 @@ class HeteroGAT(torch.nn.Module):
     def forward(self, x_dict, edge_index_dict):
         for conv in self.convs:
             x_dict = conv(x_dict, edge_index_dict)
-            print(x_dict)
             x_dict = {k: x.relu() for k, x in x_dict.items()}
             x_dict = {k: F.dropout(x, p=self.dropout_rate, training=self.training) for k, x in x_dict.items()}
         
         for i in range(len(self.lins)-1):
-            for node_type in x_dict.keys():
-                print(x_dict)
+            for node_type in self.out_channels_dict.keys():
                 x_dict[node_type] = self.lins[str(i)][node_type](x_dict[node_type].relu())
 
         out_dict = {}
-        for node_type, x in x_dict.items():
-            out_dict[node_type] = self.lins[str(len(self.lins)-1)][node_type](x)
+        for node_type in self.out_channels_dict.keys():
+            out_dict[node_type] = self.lins[str(len(self.lins)-1)][node_type](x_dict[node_type])
 
         return out_dict

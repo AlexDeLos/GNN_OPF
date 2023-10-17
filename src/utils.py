@@ -83,8 +83,8 @@ def load_data(train_dir, val_dir, test_dir):
 def load_data_helper(dir):
     graph_path = f"{dir}/x"
     sol_path = f"{dir}/y"
-    graph_paths = sorted(os.listdir(graph_path))[:20]
-    sol_paths = sorted(os.listdir(sol_path))[:60]
+    graph_paths = sorted(os.listdir(graph_path))
+    sol_paths = sorted(os.listdir(sol_path))
     data = []
 
     for i, g in tqdm.tqdm(enumerate(graph_paths)):
@@ -272,7 +272,7 @@ def create_hetero_data_instance(graph, y_bus, xxx, y_line):
         # Calculate transformer attributes
         vkr_pu = float(trafo.vkr_percent / (trafo.sn_mva / (trafo.vn_lv_kv * math.sqrt(3))))
         p_pu = float(math.sqrt((trafo.vk_percent ** 2) - (trafo.vkr_percent) ** 2) / (trafo.sn_mva / (trafo.vn_lv_kv * math.sqrt(3))))
-        q_pu = 1.0
+        q_pu = float(1.0)
         edge_attr_list.append([vkr_pu, p_pu, q_pu])
     
     edge_attr_trafo = pd.DataFrame(edge_attr_list, columns=['one', 'two', 'three'])
@@ -294,7 +294,7 @@ def create_hetero_data_instance(graph, y_bus, xxx, y_line):
         y_features = y_map[node_type]
         if y_features is not None:
             sub_df_y = target[mask]
-            y = th.tensor(sub_df_y[y_features].values, dtype=float)
+            y = th.tensor(sub_df_y[y_features].values, dtype=th.float)
             data[node_type].y = y 
 
 
