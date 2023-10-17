@@ -6,30 +6,35 @@ import numpy as np
 from utils import get_gnn, get_optim, get_criterion
 import math
 
-
 def train_model(arguments, train, val):
     input_dim = train[0].x.shape[1]
-    edge_attr_dim = train[0].edge_attr.shape[1] # why not [1]
+    edge_attr_dim = train[0].edge_attr.shape[1]
     output_dim = train[0].y.shape[1]
 
     print(f"Input shape: {input_dim}\nOutput shape: {output_dim}")
 
-    batch_size = arguments.batch_size
+    batch_size = int(arguments.batch_size)
     train_dataloader = pyg_DataLoader(train, batch_size=batch_size, shuffle=True)
     val_dataloader = pyg_DataLoader(val, batch_size=batch_size, shuffle=False)
     gnn_class = get_gnn(arguments.gnn)
-    gnn = gnn_class(input_dim, output_dim, edge_attr_dim)
+    gnn = gnn_class(input_dim,
+                    output_dim, 
+                    edge_attr_dim, 
+                    arguments.n_hidden_gnn, 
+                    arguments.gnn_hidden_dim, 
+                    arguments.n_hidden_lin, 
+                    arguments.lin_hidden_dim)
     print(f"GNN: \n{gnn}")
     ac = None
 
     optimizer_class = get_optim(arguments.optimizer)
-    optimizer = optimizer_class(gnn.parameters(), lr=arguments.learning_rate)
+    optimizer = optimizer_class(gnn.parameters(), lr=float(arguments.learning_rate))
     criterion = get_criterion(arguments.criterion)
 
     losses = []
     val_losses = []
     last_batch = None
-    for epoch in tqdm.tqdm(range(arguments.n_epochs)): #args epochs
+    for epoch in tqdm.tqdm(range(arguments.n_epochs)):
         epoch_loss = 0.0
         epoch_val_loss = 0.0
         gnn.train()
@@ -59,7 +64,7 @@ def train_model(arguments, train, val):
                 early_stop = 0
         except:
             early_stop = 0
-    
+    print(f"Min loss: {min(val_losses)} last loss: {val_losses[-1]}")
     return gnn, losses, val_losses, last_batch
 
 

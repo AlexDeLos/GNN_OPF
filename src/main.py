@@ -1,5 +1,7 @@
 from train import train_model
+from train_hetero import train_model_hetero
 from utils import get_arguments, load_data, normalize_data, save_model
+from utils_hetero import normalize_data_hetero
 from plot_utils import distance_plot, plot_losses
 import warnings
 
@@ -12,12 +14,14 @@ def main():
     arguments = get_arguments()
     print(f"Parsed arguments: {arguments}")
 
-    
-    train, val, test = load_data(arguments.train, arguments.val, arguments.test, load_physics=arguments.physics)
+    train, val, test = load_data(arguments.train, arguments.val, arguments.test, arguments.gnn, load_physics=arguments.physics)  
 
     if arguments.normalize:
         print("Normalizing Data")
-        train, val, test = normalize_data(train, val, test)
+        if arguments.gnn[:6] != "Hetero":
+            train, val, test = normalize_data(train, val, test)
+        else: 
+            train, val, test = normalize_data_hetero(train, val, test)
 
     print(f"Data Loaded \n",
           f"Number of training samples = {len(train)}\n",
@@ -25,8 +29,11 @@ def main():
         #   f"Number of testing samples = {len(test)}\n",)
 
     print("Training Model")
-    
-    model, losses, val_losses, last_batch = train_model(arguments, train, val)
+
+    if arguments.gnn[:6] != "Hetero":
+        model, losses, val_losses, last_batch = train_model(arguments, train, val)
+    else:
+        model, losses, val_losses, last_batch = train_model_hetero(arguments, train, val)
 
     if arguments.save_model:
         print("Saving Model")
