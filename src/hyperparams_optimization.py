@@ -83,6 +83,7 @@ def hyperparams_optimization(
             hidden_conv_dim = trial.suggest_int('hidden_conv_dim', 4, 32)
             n_hidden_lin = trial.suggest_int('n_hidden_lin', 1, 3)
             hidden_lin_dim = trial.suggest_int('hidden_lin_dim', 4, 32)
+            jumping_knowledge = trial.suggest_categorical('jumping_knowledge', [True, False])
 
             gnn = gnn_class(input_dim=input_dim,
                             output_dim=output_dim,
@@ -92,20 +93,24 @@ def hyperparams_optimization(
                             n_hidden_lin=n_hidden_lin,
                             hidden_lin_dim=hidden_lin_dim,
                             dropout=dropout_rate,
+                            jumping_knowledge=jumping_knowledge,
                             )
-        elif model_class_name == "GINE":       
-            hidden_gine_dim = trial.suggest_int('hidden_gine_dim', 15, 40)
+        elif model_class_name == "GINE":    
+            n_hidden_conv = trial.suggest_int('n_hidden_conv', 1, 10)   
+            hidden_conv_dim = trial.suggest_int('hidden_conv_dim', 15, 40)
+            n_hidden_lin = trial.suggest_int('n_hidden_lin', 1, 10)
             hidden_lin_dim = trial.suggest_int('hidden_lin_dim', 32, 50)
-            jumping_knowledge = trial.suggest_categorical('jumping_knowledge', [True, False])
-            n_of_convs_in = trial.suggest_int('n_of_convs_in', 1, 10)
+            jumping_knowledge = trial.suggest_categorical('jumping_knowledge', [True, False])            
 
             gnn = gnn_class(input_dim=input_dim,
                             output_dim=output_dim,
-                            edge_dim=edge_attr_dim,
-                            hidden_gine_dim=hidden_gine_dim,
+                            edge_attr_dim=edge_attr_dim,
+                            n_hidden_conv=n_hidden_conv,
+                            hidden_conv_dim=hidden_conv_dim,
+                            n_hidden_lin=n_hidden_lin,
                             hidden_lin_dim=hidden_lin_dim,
+                            dropout=dropout_rate,
                             jumping_knowledge=jumping_knowledge,
-                            n_of_convs_in=n_of_convs_in,
                             )
 
         print(f"GNN: \n{gnn}")
