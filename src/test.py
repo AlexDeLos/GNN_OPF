@@ -10,10 +10,9 @@ from utils import load_data_helper, load_model
 
 def main():
     args = parse_args()
-    #Call it with the same path for all three arguments in order to use only the train data
-    train, val, data = load_data(args.data_path,args.data_path,args.data_path)
-    model = load_model(args.gnn_type, args.model_path, data)
-    errors, p_errors = test(model, data)
+    test_data = load_data_helper(args.data_path)
+    model = load_model(args.gnn_type, args.model_path, test_data)
+    errors, p_errors = test(model, test_data)
 
 def parse_args():
     parser = argparse.ArgumentParser("Testing powerfloww GNN models")
