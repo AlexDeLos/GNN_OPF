@@ -30,7 +30,7 @@ def train_model(arguments, train, val):
     losses = []
     val_losses = []
     last_batch = None
-    for epoch in range(arguments.n_epochs): #tqdm.tqdm(range(arguments.n_epochs)): #args epochs
+    for epoch in tqdm.tqdm(range(arguments.n_epochs)):
         epoch_loss = 0.0
         epoch_val_loss = 0.0
         gnn.train()
@@ -38,6 +38,7 @@ def train_model(arguments, train, val):
             epoch_loss += train_batch(data=batch, model=gnn, optimizer=optimizer, criterion=criterion)
         gnn.eval()
         for batch in val_dataloader:
+            last_batch = batch
             epoch_val_loss += evaluate_batch(data=batch, model=gnn, criterion=criterion)
 
         avg_epoch_loss = epoch_loss.item() / len(train_dataloader)
@@ -46,8 +47,8 @@ def train_model(arguments, train, val):
         losses.append(avg_epoch_loss)
         val_losses.append(avg_epoch_val_loss)
 
-        # if epoch % 10 == 0:
-        #     print(f'Epoch: {epoch:03d}, trn_Loss: {avg_epoch_loss:.6f}, val_loss: {avg_epoch_val_loss:.6f}')
+        if epoch % 10 == 0:
+            print(f'Epoch: {epoch:03d}, trn_Loss: {avg_epoch_loss:.6f}, val_loss: {avg_epoch_val_loss:.6f}')
         
         #Early stopping
         try:  
@@ -68,7 +69,7 @@ def train_batch(data, model, optimizer, criterion, device='cpu'):
     model.to(device)
     optimizer.zero_grad()
     out = model(data)
-    loss = criterion(out, data.y) # ac(out, data.x, data.edge_index, data.edge_attr)
+    loss = criterion(out, data.y)
     loss.backward()
     optimizer.step()
     return loss
@@ -77,5 +78,5 @@ def train_batch(data, model, optimizer, criterion, device='cpu'):
 def evaluate_batch(data, model, criterion, device='cpu'):
     model.to(device)
     out = model(data)
-    loss = criterion(out, data.y) # ac(out, data.x, data.edge_index, data.edge_attr)
+    loss = criterion(out, data.y)
     return loss

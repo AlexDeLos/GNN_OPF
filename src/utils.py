@@ -151,7 +151,6 @@ def normalize_data(train, val, test, standard_normalizaton=True):
 # return a torch_geometric.data.Data object for each instance
 def create_data_instance(graph, y_bus):
     g = ppl.create_nxgraph(graph, include_trafos=True)
-    # []
     # https://pandapower.readthedocs.io/en/latest/elements/gen.html
     gen = graph.gen[['bus', 'p_mw', 'vm_pu']]
     gen.rename(columns={'p_mw': 'p_mw_gen'}, inplace=True)
@@ -191,22 +190,6 @@ def create_data_instance(graph, y_bus):
     node_feat['load'] = (node_feat['gen'] == 0) & (node_feat['ext'] == 0)
     node_feat['load'] = node_feat['load'].astype(float)
     node_feat = node_feat[['load', 'gen', 'ext', 'p_mw', 'q_mvar', 'vm_pu', 'va_degree']]
-    # zero_check = node_feat[(node_feat['load'] == 0) & (node_feat['gen'] == 0) & (node_feat['ext'] == 0) & (node_feat['is_none'] == 0)]
-    # load_ext_check = node_feat[(node_feat['load'] == 1) & (node_feat['ext'] == 1)]
-
-    # if not zero_check.empty:
-    #     print("zero check failed")
-    #     print(node_feat)
-    #     print("zero check results")
-    #     print(zero_check)
-    #     quit()
-    
-    # if not load_ext_check.empty:
-    #     print("load ext check failed")
-    #     print(node_feat)
-    #     print("load ext check results")
-    #     print(zero_check)
-    #     quit()
     
 
     for node in node_feat.itertuples():
@@ -268,11 +251,6 @@ def create_data_instance(graph, y_bus):
         g.edges[trafos.lv_bus, trafos.hv_bus, ('trafo', trafos.Index)]['edge_attr'] = [float(trafos.vkr_percent / (trafos.sn_mva / (trafos.vn_lv_kv * math.sqrt(3)))),
                                                                                        float(math.sqrt((trafos.vk_percent ** 2) - (trafos.vkr_percent) ** 2)) / (trafos.sn_mva / (trafos.vn_lv_kv * math.sqrt(3))),
                                                                                        1.0]
-                                                                                    #  float(common_edge.c_nf_per_km),
-                                                                                    #  float(common_edge.g_us_per_km),
-                                                                                    #  float(common_edge.max_i_ka),
-                                                                                    #  float(common_edge.parallel),
-                                                                                    #  float(common_edge.df),
     return from_networkx(g)
 
 
