@@ -1,7 +1,8 @@
 import numba
 import numpy as np
+import networkx as nx
 import pandapower as pp
-
+import community
 
 
 def random_neighbor_selection(full_net, initial_bus, subgraph_length):
@@ -104,6 +105,7 @@ def random_walk_neighbor_selection(full_net, starting_bus, subgraph_length):
 
     return subgraph_busses
 
+# Creates a network with the same topology as the full network, but with random variations for the loads and generators values
 def number_changes(full_net):
     test_net = pp.pandapowerNet(full_net.copy())
     # We vary every value based on how big they are around their point
@@ -116,4 +118,32 @@ def number_changes(full_net):
 
     return test_net
 
-# other methods to try: k-hop neighborhood, Community Detection, random walk laplacian,graphSAINT partitioning, ...
+
+def partition_graph(full_net, min_partition_size=5):
+        
+    # Create a graph from the network data
+    G = nx.Graph()
+    G.add_nodes_from(full_net.bus.index)
+
+    for _, line in full_net.line.iterrows():
+        G.add_edge(line.from_bus, line.to_bus)
+
+    # https://python-louvain.readthedocs.io/en/latest/api.html
+    # https://ieeexplore.ieee.org/document/8245596
+    partition = community.best_partition(G)
+
+    # Create a dictionary to map cluster IDs to lists of bus IDs
+    clusters = {}
+    for node, cluster_id in partition.items():
+        if cluster_id in clusters:
+            clusters[cluster_id].append(node)
+        else:
+            clusters[cluster_id] = [node]
+
+    # Convert the dictionary values to a list of lists
+    all_partitions_busses = list(clusters.values())
+
+    # Remove all partitions that are smaller than the min_partition_size
+    all_partitions_busses = [partition_busses for partition_busses in all_partitions_busses if len(partition_busses) >= min_partition_size]
+    
+    return all_partitions_busses

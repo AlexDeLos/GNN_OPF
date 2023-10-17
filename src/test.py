@@ -3,6 +3,7 @@ import numpy as np
 import argparse
 import matplotlib.pyplot as plt
 from torch_geometric.loader import DataLoader
+from utils import load_data
 
 
 from utils import load_data_helper, load_model, read_from_pkl, write_to_pkl, load_model_hetero  
@@ -20,7 +21,6 @@ def main():
         test_hetero(model, data)
     else:
         test(model, data)
-    
 
 def parse_args():
     parser = argparse.ArgumentParser("Testing powerfloww GNN models")
@@ -63,10 +63,10 @@ def test(model, data):
     mask = np.isinf(p_errors)
     p_errors[mask] = 0
 
-    # plt.hist(errors)
-    # plt.show()
-    # plt.hist(p_errors)
-    # plt.show()
+    plt.hist(errors)
+    plt.show()
+    plt.hist(p_errors)
+    plt.show()
 
     
     print("within 5%", np.sum(abs(p_errors) < 5, axis=0) / len(p_errors))
