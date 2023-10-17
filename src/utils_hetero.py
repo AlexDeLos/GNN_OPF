@@ -201,6 +201,105 @@ def create_hetero_data_instance(graph, y_bus):
     return data
 
 
+def normalize_data_hetero(train, val, test, standard_normalization=True):
+    combined_x_dict = {}
+    combined_y_dict = {}
+    combined_edge_attr_dict = {}
+
+    for data in train + val + test:
+        for key, value in data.x_dict.items():
+            if key not in combined_x_dict:
+                combined_x_dict[key] = value.clone()
+            else:
+                combined_x_dict[key] = th.cat([combined_x_dict[key], value], dim=0)
+
+        for key, value in data.y_dict.items():
+            if key not in combined_y_dict:
+                combined_y_dict[key] = value.clone()
+            else:
+                combined_y_dict[key] = th.cat([combined_y_dict[key], value], dim=0)
+
+        for key, value in data.edge_attr_dict.items():
+            if key not in combined_edge_attr_dict:
+                combined_edge_attr_dict[key] = value.clone()
+            else:
+                combined_edge_attr_dict[key] = th.cat([combined_edge_attr_dict[key], value], dim=0)
+
+    epsilon = 1e-7  # to avoid division by zero
+
+    # Standard normalization between -1 and 1
+    if standard_normalization:
+
+        # compute mean and std for all columns
+        mean_x_dict = {}
+        std_x_dict = {}
+        mean_y_dict = {}
+        std_y_dict = {}
+        mean_edge_attr_dict = {}
+        std_edge_attr_dict = {}
+
+        for key, value in combined_x_dict.items():
+            mean_x_dict[key] = th.mean(value, dim=0)
+            std_x_dict[key] = th.std(value, dim=0)
+
+        for key, value in combined_y_dict.items():
+            mean_y_dict[key] = th.mean(value, dim=0)
+            std_y_dict[key] = th.std(value, dim=0)
+
+        for key, value in combined_edge_attr_dict.items():
+            mean_edge_attr_dict[key] = th.mean(value, dim=0)
+            std_edge_attr_dict[key] = th.std(value, dim=0)
+
+        # normalize data
+        for data in train + val + test:
+            for key, value in data.x_dict.items():
+                data.x_dict[key] = (value - mean_x_dict[key]) / (std_x_dict[key] + epsilon)
+
+            for key, value in data.y_dict.items():
+                data.y_dict[key] = (value - mean_y_dict[key]) / (std_y_dict[key] + epsilon)
+
+            for key, value in data.edge_attr_dict.items():
+                data.edge_attr_dict[key] = (value - mean_edge_attr_dict[key]) / (std_edge_attr_dict[key] + epsilon)
+
+    else: # Use min max normalization to normalize data between 0 and 1 
+        # https://en.wikipedia.org/wiki/Feature_scaling#Rescaling_(min-max_normalization)
+        
+        # find min value and max for all columns
+        # x: vn_kv, p_mw_gen, vm_pu, p_mw_load, q_mvar
+        min_x_dict = {}
+        max_x_dict = {}
+        min_y_dict = {}
+        max_y_dict = {}
+        min_edge_attr_dict = {}
+        max_edge_attr_dict = {}
+
+        for key, value in combined_x_dict.items():
+            min_x_dict[key] = th.min(value, dim=0).values
+            max_x_dict[key] = th.max(value, dim=0).values
+
+        for key, value in combined_y_dict.items():
+            min_y_dict[key] = th.min(value, dim=0).values
+            max_y_dict[key] = th.max(value, dim=0).values
+
+        for key, value in combined_edge_attr_dict.items():
+            min_edge_attr_dict[key] = th.min(value, dim=0).values
+            max_edge_attr_dict[key] = th.max(value, dim=0).values
+
+        # normalize data
+        for data in train + val + test:
+            for key, value in data.x_dict.items():
+                data.x_dict[key] = (value - min_x_dict[key]) / (max_x_dict[key] - min_x_dict[key] + epsilon)
+
+            for key, value in data.y_dict.items():
+                data.y_dict[key] = (value - min_y_dict[key]) / (max_y_dict[key] - min_y_dict[key] + epsilon)
+
+            for key, value in data.edge_attr_dict.items():
+                data.edge_attr_dict[key] = (value - min_edge_attr_dict[key]) / (max_edge_attr_dict[key] - min_edge_attr_dict[key] + epsilon)
+
+    return train, val, test
+
+
+
 def visualize_hetero(hetero):
     G = nx.Graph()
     color_map = []

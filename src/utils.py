@@ -17,7 +17,7 @@ import torch.nn as nn
 from torch_geometric.data import HeteroData
 from torch_geometric.utils.convert import from_networkx
 import tqdm
-from utils_hetero import create_hetero_data_instance, visualize_hetero
+from utils_hetero import create_hetero_data_instance
 
 def get_arguments():
     parser = argparse.ArgumentParser(prog="GNN script",
@@ -49,7 +49,7 @@ def get_arguments():
     args = parser.parse_args()
     return args
 
-def load_data(train_dir, val_dir, test_dir):
+def load_data(train_dir, val_dir, test_dir, gnn_type):
     try:
         train = read_from_pkl(f"{train_dir}/pickled.pkl")
         val = read_from_pkl(f"{val_dir}/pickled.pkl")
@@ -58,11 +58,11 @@ def load_data(train_dir, val_dir, test_dir):
     except:
         print("Data not found, loading from json files...")
         print("Training Data...")
-        train = load_data_helper(train_dir)
+        train = load_data_helper(train_dir, gnn_type)
         print("Validation Data...")
-        val = load_data_helper(val_dir)
+        val = load_data_helper(val_dir, gnn_type)
         print("Testing Data...")
-        test = load_data_helper(test_dir)
+        test = load_data_helper(test_dir, gnn_type)
         print("hetero data can be loaded whooho")
         # quit()
 
@@ -75,20 +75,23 @@ def load_data(train_dir, val_dir, test_dir):
 
     return train, val, test
 
-def load_data_helper(dir):
+def load_data_helper(dir, gnn_type):
     graph_path = f"{dir}/x"
     sol_path = f"{dir}/y"
-    graph_paths = sorted(os.listdir(graph_path))
-    sol_paths = sorted(os.listdir(sol_path))
+    graph_paths = sorted(os.listdir(graph_path))[:20]
+    sol_paths = sorted(os.listdir(sol_path))[:60]
     data = []
 
     for i, g in tqdm.tqdm(enumerate(graph_paths)):
         graph = pp.from_json(f"{graph_path}/{g}")
         y_bus = pd.read_csv(f"{sol_path}/{sol_paths[i * 3]}", index_col=0)
-        y_gen = pd.read_csv(f"{sol_path}/{sol_paths[i * 3 + 1]}", index_col=0)
-        y_line = pd.read_csv(f"{sol_path}/{sol_paths[i * 3 + 2]}", index_col=0)
+        # y_gen = pd.read_csv(f"{sol_path}/{sol_paths[i * 3 + 1]}", index_col=0)
+        # y_line = pd.read_csv(f"{sol_path}/{sol_paths[i * 3 + 2]}", index_col=0)
 
-        instance = create_hetero_data_instance(graph, y_bus)
+        if gnn_type[:6] != "Hetero":
+            instance = create_data_instance(graph, y_bus)
+        else:
+            instance = create_hetero_data_instance(graph, y_bus)
         data.append(instance)
 
     return data
@@ -147,7 +150,7 @@ def normalize_data(train, val, test, standard_normalizaton=True):
 
 
 # return a torch_geometric.data.Data object for each instance
-def create_data_instance(graph, y_bus, y_gen, y_line):
+def create_data_instance(graph, y_bus):
     g = ppl.create_nxgraph(graph, include_trafos=True)
     # []
     # https://pandapower.readthedocs.io/en/latest/elements/gen.html
