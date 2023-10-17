@@ -8,6 +8,7 @@ from utils import load_data
 
 from utils import load_data_helper, load_model, read_from_pkl, write_to_pkl, load_model_hetero  
 
+
 def main():
     args = parse_args()
     data = read_from_pkl(f"{args.data_path}/pickled.pkl")
@@ -33,6 +34,7 @@ def parse_args():
     parser.add_argument("--lin_hidden_dim", default=8, type=int)
     args = parser.parse_args()
     return args
+
 
 def test(model, data):
     loader = DataLoader(data)
@@ -105,12 +107,11 @@ def test_hetero(model, data):
     mask = np.isinf(p_errors)
     p_errors[mask] = 0
 
-    # plt.hist(errors)
-    # plt.show()
-    # plt.hist(p_errors)
-    # plt.show()
+    plt.hist(errors)
+    plt.show()
+    plt.hist(p_errors)
+    plt.show()
 
-    
     print("within 5%", np.sum(abs(p_errors) < 5, axis=0) / len(p_errors))
     print("within 10%", np.sum(abs(p_errors) < 10, axis=0) / len(p_errors))
     print("within 15%", np.sum(abs(p_errors) < 15, axis=0) / len(p_errors))
@@ -118,6 +119,7 @@ def test_hetero(model, data):
     print("within 50%", np.sum(abs(p_errors) < 50, axis=0) / len(p_errors))
 
     return errors, p_errors
+  
 def new_test(model, data):
     loader = DataLoader(data)
     load_errors = []
@@ -182,6 +184,7 @@ def process_errors(errors):
         print("within", num_correct_15 / len(errors))
         print("within", num_correct_25 / len(errors))
         print("within", num_correct_50 / len(errors))
+
 
 if __name__ == '__main__':
     main()

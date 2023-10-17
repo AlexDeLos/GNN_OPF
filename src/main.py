@@ -14,8 +14,7 @@ def main():
     arguments = get_arguments()
     print(f"Parsed arguments: {arguments}")
 
-    
-    train, val, test = load_data(arguments.train, arguments.val, arguments.test, arguments.gnn)  
+    train, val, test = load_data(arguments.train, arguments.val, arguments.test, arguments.gnn, load_physics=arguments.physics)  
 
     if arguments.normalize:
         print("Normalizing Data")
@@ -50,3 +49,6 @@ def main():
     
 if __name__ == "__main__":
     main()
+
+
+
