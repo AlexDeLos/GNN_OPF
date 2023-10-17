@@ -149,6 +149,13 @@ def train_batch_hetero(data, model, optimizer, criterion, device='cpu'):
     optimizer.zero_grad()
     out_dict = model(data.x_dict, data.edge_index_dict)
     loss = 0
+    # print shape [0] of out_dict
+    print("out_dict")
+    for key, item in out_dict.items():
+        print(f"item {key}: {item.shape}")
+    print("data.y_dict")
+    for item in data.y_dict.values():
+        print(item.shape)
     for node_type, y in data.y_dict.items():
         loss += criterion(out_dict[node_type], y)
     loss.backward()
