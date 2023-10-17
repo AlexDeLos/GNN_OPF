@@ -1,6 +1,4 @@
-import torch as th
 import torch.nn as nn
-
 import torch.nn.functional as F
 from torch_geometric.nn import GATConv
 from torch_geometric.nn.models import JumpingKnowledge
