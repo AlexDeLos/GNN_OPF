@@ -29,7 +29,6 @@ class GraphSAGE(torch.nn.Module):
         for _ in range(n_hidden_conv):
             self.convs.append(SAGEConv(in_channels=hidden_conv_dim, out_channels=hidden_conv_dim))
         
-        
         self.lins.append(nn.Linear(hidden_conv_dim, hidden_lin_dim))
         for _ in range(n_hidden_lin):
             self.lins.append(nn.Linear(hidden_lin_dim, hidden_lin_dim))
