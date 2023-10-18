@@ -34,7 +34,7 @@ def train_model(arguments, train, val):
     losses = []
     val_losses = []
     last_batch = None
-    for epoch in tqdm.tqdm(range(arguments.n_epochs)):
+    for epoch in tqdm.tqdm(range(int(arguments.n_epochs))):
         epoch_loss = 0.0
         epoch_val_loss = 0.0
         gnn.train()
