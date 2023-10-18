@@ -166,10 +166,10 @@ def create_networks(arguments):
 def solve_and_save(full_net, subgraph_net, subgraph_busses, subgraph_length, arguments):
     try:
         # check if the subgraph contains a slack bus, if not add one by setting the slack bus to a random bus
-        if full_net.ext_grid.bus.item() not in subgraph_busses:
-            slack_bus = subgraph_busses[np.random.randint(0, len(subgraph_busses))]
-            # https://pandapower.readthedocs.io/en/v2.1.0/elements/ext_grid.html#pandapower.create_ext_grid
-            pp.create_ext_grid(subgraph_net, slack_bus)
+        # if full_net.ext_grid.bus.item() not in subgraph_busses:
+        #     slack_bus = subgraph_busses[np.random.randint(0, len(subgraph_busses))]
+        #     # https://pandapower.readthedocs.io/en/v2.1.0/elements/ext_grid.html#pandapower.create_ext_grid
+        #     pp.create_ext_grid(subgraph_net, slack_bus)
         pp.runpp(subgraph_net, numba = False)
         # ppl.simple_plot(subgraph_net, plot_loads=True, plot_gens=True, trafo_color="r", switch_color="g") 
 
