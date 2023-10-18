@@ -108,13 +108,36 @@ def random_walk_neighbor_selection(full_net, starting_bus, subgraph_length):
 # Creates a network with the same topology as the full network, but with random variations for the loads and generators values
 def number_changes(full_net):
     test_net = pp.pandapowerNet(full_net.copy())
-    # We vary every value based on how big they are around their point
-    for i in range(len(test_net.gen)):
-        test_net.gen.at[i,'p_mw'] = np.abs(np.random.normal(test_net.gen.at[i,'p_mw'], np.sqrt(abs(test_net.gen.at[i,'p_mw'])/100))) #goes from 0 - 1000
-        test_net.gen.at[i,'vm_pu'] = np.abs(np.random.normal(1, 1/100)) #goes from 0 - 1.1
+    #TODO
+    # We vary every value based on how big they are around their point.
+    # values should vary so that they are not too far from their original value.
+    # assume 80% correlation between every node.
+    # Power should increase as much as the load increases.
+    old = []
+    new = []
+    #basis from all the variation in the network
+    #decided for a uniform distribution
+    ratio_increase = np.random.uniform(0.9,1.1)
     for i in range(len(test_net.load)):
-        test_net.load.at[i,'p_mw'] = np.abs(np.random.normal(test_net.load.at[i,'p_mw'], np.sqrt(abs(test_net.load.at[i,'p_mw']))))# goes from 0 - 500 (most under 100)
+        individual_variation = np.random.normal(0,0.05)
+        if test_net.load.at[i,'p_mw']==0:
+            test_net.load.at[i,'p_mw'] = test_net.load.at[i,'p_mw'] + 0.00000000001
+        old.append(test_net.load.at[i,'p_mw'])
+        test_net.load.at[i,'p_mw'] = test_net.load.at[i,'p_mw'] * (ratio_increase + individual_variation)
+        new.append(test_net.load.at[i,'p_mw'])
+        #same correlation of the P_mw
         test_net.load.at[i,'q_mvar'] =np.abs(np.random.normal(test_net.load.at[i,'q_mvar'], np.sqrt(abs(test_net.load.at[i,'q_mvar'])))) # goes from -50 to about 300
+    # Average value by which the load changes
+    div = np.divide(np.array(new),np.array(old))
+    # np.nan_to_num(div)
+    change = np.average(div)
+
+    for i in range(len(test_net.gen)):
+        individual_variation = np.random.normal(0,0.05)
+        test_net.gen.at[i,'p_mw'] = test_net.gen.at[i,'p_mw'] * change #(ratio_increase + individual_variation) #np.abs(np.random.normal(test_net.gen.at[i,'p_mw'], np.sqrt(abs(test_net.gen.at[i,'p_mw'])/100))) #goes from 0 - 1000
+
+        # test_net.gen.at[i,'vm_pu'] = np.abs(np.random.normal(test_net.gen.at[i,'vm_pu'], 1/100)) #goes from 0 - 1.1
+    
 
     return test_net
 
