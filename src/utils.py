@@ -14,6 +14,7 @@ import random
 import string
 import torch as th
 import torch.nn as nn
+import numpy as np
 from torch_geometric.data import HeteroData
 from torch_geometric.utils.convert import from_networkx
 import tqdm
@@ -298,7 +299,6 @@ def create_physics_data_instance(graph, y_bus):
     # https://pandapower.readthedocs.io/en/latest/elements/ext_grid.html
     ext = graph.ext_grid[['bus', 'vm_pu', 'va_degree']]
     ext.rename(columns={'vm_pu': 'vm_pu_ext'}, inplace=True)
-    ext['va_degree'] = 1
     ext['is_ext'] = 1
     ext.set_index('bus', inplace=True)
 
@@ -341,7 +341,7 @@ def create_physics_data_instance(graph, y_bus):
     node_feat = node_feat[~node_feat.index.duplicated(keep='first')]
     node_feat['is_none'] = (node_feat['is_gen'] == 0) & (node_feat['is_load'] == 0) & (node_feat['is_ext'] == 0)
     node_feat['is_none'] = node_feat['is_none'].astype(float)
-    node_feat = node_feat[['is_load', 'is_gen', 'is_ext', 'is_none', 'p_mw', 'q_mvar', 'vm_pu', 'b_pu_shunt']]
+    node_feat = node_feat[['is_load', 'is_gen', 'is_ext', 'is_none', 'p_mw', 'q_mvar', 'vm_pu', 'va_degree', 'b_pu_shunt']]
     zero_check = node_feat[(node_feat['is_load'] == 0) & (node_feat['is_gen'] == 0) & (node_feat['is_ext'] == 0) & (
                 node_feat['is_none'] == 0)]
 
@@ -361,6 +361,7 @@ def create_physics_data_instance(graph, y_bus):
                                     float(node.p_mw / graph.sn_mva),
                                     float(node.q_mvar / graph.sn_mva),
                                     float(node.vm_pu),
+                                    float(node.va_degree),
                                     float(node.b_pu_shunt)]
 
         g.nodes[node.Index]['y'] = [float(y_bus['p_mw'][node.Index] / graph.sn_mva),

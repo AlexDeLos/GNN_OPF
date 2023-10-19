@@ -111,7 +111,8 @@ def physics_loss(network, output, log_loss=True):
 
     # slack bus:
     idx_list = (network.x[:, 2] > 0.5)  # get slack node id's
-    combined_output[idx_list, 2] += network.x[idx_list, 6]  # Add fixed vm_pu from input; va_degree is 0 for slacks
+    combined_output[idx_list, 2] += network.x[idx_list, 6]  # Add fixed vm_pu from input
+    combined_output[idx_list, 3] += network.x[idx_list, 7]  # Add fixed va_degree from input
     combined_output[idx_list, 0] += output[idx_list, 0]  # Add predicted p_mw
     combined_output[idx_list, 1] += output[idx_list, 1]  # Add predicted q_mvar
 
@@ -152,7 +153,7 @@ def physics_loss(network, output, log_loss=True):
     # add diagonal (self-admittance) elements of each node as well (angle diff is 0; only cos sections have an effect)
     aggr_act_imb += combined_output[:, 2] * combined_output[:, 2] * pyg_util.scatter(network.edge_attr[:, 0], network.edge_index[0])
     # for reactive self-admittance we also take into account the shunt reactances and not only line reactances
-    aggr_rea_imb += combined_output[:, 2] * combined_output[:, 2] * (-1.0 * (pyg_util.scatter(network.edge_attr[:, 1], network.edge_index[0]) + network.x[:, 7]))
+    aggr_rea_imb += combined_output[:, 2] * combined_output[:, 2] * (-1.0 * (pyg_util.scatter(network.edge_attr[:, 1], network.edge_index[0]) + network.x[:, 8]))
 
     # subtract from power at each node to find imbalance. negate power output values due to pos/neg conventions for loads/gens
     active_imbalance = -1.0 * combined_output[:, 0] - aggr_act_imb
