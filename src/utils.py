@@ -377,10 +377,10 @@ def create_physics_data_instance(graph, y_bus):
         g.edges[edges.to_bus, edges.from_bus, ('line', edges.Index)]['edge_attr'] = [float(conductance_line), float(susceptance_line)]
 
     for trafos in graph.trafo.itertuples():
+        # Calculate trafo impedance using low voltage side as base voltage
+        # Assumes simplified trafo model (no vkr, iron loss, tap)
         r_tot = 0.0
-        x_tot = (trafos.vk_percent / 100.0) * (graph.sn_mva / trafos.sn_mva)
-        Zref = (math.pow(trafos.vn_lv_kv, 2)) * graph.sn_mva / trafos.sn_mva
-        x_tot = x_tot * Zref
+        x_tot = (trafos.vk_percent / 100.0) * (trafos.vn_lv_kv ** 2) / trafos.sn_mva
         conductance, susceptance = impedance_to_admittance(r_tot, x_tot, trafos.vn_lv_kv, graph.sn_mva)
         g.edges[trafos.hv_bus, trafos.lv_bus, ('trafo', trafos.Index)]['edge_attr'] = [float(conductance), float(susceptance)]
         g.edges[trafos.lv_bus, trafos.hv_bus, ('trafo', trafos.Index)]['edge_attr'] = [float(conductance), float(susceptance)]

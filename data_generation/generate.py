@@ -204,6 +204,8 @@ def modify_network_values(netw):
     # Set transformer leakage values to 0
     netw.trafo['vkr_percent'] = 0.0
     netw.trafo['pfe_kw'] = 0.0
+    netw.trafo['i0_percent'] = 0.0
+    netw.trafo['tap_step_percent'] = 0.0
     return netw
 
 
