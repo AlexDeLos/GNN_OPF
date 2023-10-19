@@ -14,7 +14,13 @@ def main():
     arguments = get_arguments()
     print(f"Parsed arguments: {arguments}")
 
-    train, val, test = load_data(arguments.train, arguments.val, arguments.test, arguments.gnn, load_physics=arguments.physics)  
+    train, val, test = load_data(arguments.train, 
+                                 arguments.val, 
+                                 arguments.test, 
+                                 arguments.gnn, 
+                                 load_physics=arguments.physics,
+                                 missing=arguments.value_mode == 'missing',
+                                 volt=arguments.value_mode == 'voltage')  
 
     if arguments.normalize:
         print("Normalizing Data")

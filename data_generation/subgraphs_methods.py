@@ -110,7 +110,7 @@ def number_changes(full_net):
     test_net = pp.pandapowerNet(full_net.copy())
     # We vary every value based on how big they are around their point
     for i in range(len(test_net.gen)):
-        test_net.gen.at[i,'p_mw'] = np.abs(np.random.normal(test_net.gen.at[i,'p_mw'], np.sqrt(abs(test_net.gen.at[i,'p_mw'])/100))) #goes from 0 - 1000
+        test_net.gen.at[i,'p_mw'] = np.abs(np.random.normal(test_net.gen.at[i,'p_mw'], np.sqrt(abs(test_net.gen.at[i,'p_mw'])/10))) #goes from 0 - 1000
         test_net.gen.at[i,'vm_pu'] = np.abs(np.random.normal(1, 1/100)) #goes from 0 - 1.1
     for i in range(len(test_net.load)):
         test_net.load.at[i,'p_mw'] = np.abs(np.random.normal(test_net.load.at[i,'p_mw'], np.sqrt(abs(test_net.load.at[i,'p_mw']))))# goes from 0 - 500 (most under 100)
