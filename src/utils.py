@@ -377,30 +377,26 @@ def create_physics_data_instance(graph, y_bus):
         g.edges[edges.to_bus, edges.from_bus, ('line', edges.Index)]['edge_attr'] = [float(conductance_line), float(susceptance_line)]
 
     for trafos in graph.trafo.itertuples():
-        # First calculate values from low to high voltage bus
         r_tot = 0.0
-        x_tot = trafos.vk_percent * (trafos.vn_lv_kv ** 2) / trafos.sn_mva
+        x_tot = (trafos.vk_percent / 100.0) * (graph.sn_mva / trafos.sn_mva)
+        Zref = (math.pow(trafos.vn_lv_kv, 2)) * graph.sn_mva / trafos.sn_mva
+        x_tot = x_tot * Zref
         conductance, susceptance = impedance_to_admittance(r_tot, x_tot, trafos.vn_lv_kv, graph.sn_mva)
-        g.edges[trafos.lv_bus, trafos.hv_bus, ('trafo', trafos.Index)]['edge_attr'] = [float(conductance), float(susceptance)]
-
-        # Now high to low voltage bus values
-        r_tot = 0.0
-        x_tot = trafos.vk_percent * (trafos.vn_hv_kv ** 2) / trafos.sn_mva
-        conductance, susceptance = impedance_to_admittance(r_tot, x_tot, trafos.vn_hv_kv, graph.sn_mva)
         g.edges[trafos.hv_bus, trafos.lv_bus, ('trafo', trafos.Index)]['edge_attr'] = [float(conductance), float(susceptance)]
+        g.edges[trafos.lv_bus, trafos.hv_bus, ('trafo', trafos.Index)]['edge_attr'] = [float(conductance), float(susceptance)]
 
     return from_networkx(g)
 
 
 def impedance_to_admittance(r_ohm, x_ohm, base_volt, rated_power, per_unit_conversion=True):
     if per_unit_conversion:
-        z_base = base_volt ** 2 / rated_power  # Z_base used to convert impedance to per-unit
+        z_base = math.pow(base_volt, 2) / rated_power  # Z_base used to convert impedance to per-unit
         r_tot = r_ohm / z_base  # Convert to per unit metrics before converting to admittance
         x_tot = x_ohm / z_base
     else:
         r_tot = r_ohm
         x_tot = x_ohm
-    denom = r_tot ** 2 + x_tot ** 2
+    denom = math.pow(r_tot, 2) + math.pow(x_tot, 2)
     conductance = r_tot / denom
     susceptance = -x_tot / denom
     return conductance, susceptance
