@@ -197,6 +197,14 @@ def create_hetero_data_instance(graph, y_bus):
                     data[node_type_a, con_type, node_type_b].edge_index = th.tensor([], dtype=th.long).t().contiguous()
                     data[node_type_a, con_type, node_type_b].edge_attr = th.tensor([], dtype=th.float)
 
+        # add reverse edges (T.ToUndirected() didn't work so we do it manually)
+        for i in range(key_len):
+            node_type_a = node_types[i]
+            for j in range(i + 1, key_len):
+                node_type_b = node_types[j]
+                data[node_type_b, con_type, node_type_a].edge_index = data[node_type_a, con_type, node_type_b].edge_index.flip(0)
+                data[node_type_b, con_type, node_type_a].edge_attr = data[node_type_a, con_type, node_type_b].edge_attr
+
     # visualize_hetero(data)
     return data
 
