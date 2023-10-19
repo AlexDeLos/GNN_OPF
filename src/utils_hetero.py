@@ -252,14 +252,11 @@ def normalize_data_hetero(train, val, test, standard_normalization=True):
 
         # normalize data
         for data in train + val + test:
-            for key, value in data.x_dict.items():
-                data.x_dict[key] = (value - mean_x_dict[key]) / (std_x_dict[key] + epsilon)
-
-            for key, value in data.y_dict.items():
-                data.y_dict[key] = (value - mean_y_dict[key]) / (std_y_dict[key] + epsilon)
-
-            for key, value in data.edge_attr_dict.items():
-                data.edge_attr_dict[key] = (value - mean_edge_attr_dict[key]) / (std_edge_attr_dict[key] + epsilon)
+            # one line for loop to replace full dictionary at once, replacing one key at a time doesnt work
+            data.x_dict = {k: (v - mean_x_dict[k]) / (std_x_dict[k] + epsilon) for k, v in data.x_dict.items()}
+            data.y_dict = {k: (v - mean_y_dict[k]) / (std_y_dict[k] + epsilon) for k, v in data.y_dict.items()}
+            # v.numel() > 0 checks for empty tensors (e.g. zero entries for a specific edge type)
+            data.edge_attr_dict = {k: ((v - mean_edge_attr_dict[k]) / (std_edge_attr_dict[k] + epsilon) if v.numel() > 0 else v) for k, v in data.edge_attr_dict.items()}
 
     else: # Use min max normalization to normalize data between 0 and 1 
         # https://en.wikipedia.org/wiki/Feature_scaling#Rescaling_(min-max_normalization)
@@ -282,20 +279,18 @@ def normalize_data_hetero(train, val, test, standard_normalization=True):
             max_y_dict[key] = th.max(value, dim=0).values
 
         for key, value in combined_edge_attr_dict.items():
-            min_edge_attr_dict[key] = th.min(value, dim=0).values
-            max_edge_attr_dict[key] = th.max(value, dim=0).values
+            if value.numel() > 0:
+                min_edge_attr_dict[key] = th.min(value, dim=0).values
+                max_edge_attr_dict[key] = th.max(value, dim=0).values
+            else:
+                min_edge_attr_dict[key] = th.tensor([])
+                max_edge_attr_dict[key] = th.tensor([])
 
         # normalize data
         for data in train + val + test:
-            for key, value in data.x_dict.items():
-                data.x_dict[key] = (value - min_x_dict[key]) / (max_x_dict[key] - min_x_dict[key] + epsilon)
-
-            for key, value in data.y_dict.items():
-                data.y_dict[key] = (value - min_y_dict[key]) / (max_y_dict[key] - min_y_dict[key] + epsilon)
-
-            for key, value in data.edge_attr_dict.items():
-                data.edge_attr_dict[key] = (value - min_edge_attr_dict[key]) / (max_edge_attr_dict[key] - min_edge_attr_dict[key] + epsilon)
-
+            data.x_dict = {k: (v - min_x_dict[k]) / (max_x_dict[k] - min_x_dict[k] + epsilon) for k, v in data.x_dict.items()}
+            data.y_dict = {k: (v - min_y_dict[k]) / (max_y_dict[k] - min_y_dict[k] + epsilon) for k, v in data.y_dict.items()}
+            data.edge_attr_dict = {k: ((v - min_edge_attr_dict[k]) / (max_edge_attr_dict[k] - min_edge_attr_dict[k] + epsilon) if v.numel() > 0 else v) for k, v in data.edge_attr_dict.items()}
     return train, val, test
 
 
