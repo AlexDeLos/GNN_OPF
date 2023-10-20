@@ -1,8 +1,11 @@
-import torch as th
-import numpy as np
 import argparse
 import matplotlib.pyplot as plt
+import numpy as np
+import os
+import pandapower as pp
+import torch as th
 from torch_geometric.loader import DataLoader
+import tqdm
 from utils import load_model, load_model_hetero, read_from_pkl
 from utils_homo import normalize_data
 from utils_hetero import normalize_data_hetero
@@ -190,6 +193,16 @@ def process_errors(errors):
         print("within", num_correct_15 / len(errors))
         print("within", num_correct_25 / len(errors))
         print("within", num_correct_50 / len(errors))
+
+
+def normalize_test():
+    graph_path = f"Data/bfs_gen/large/x"
+    graph_paths = sorted(os.listdir(graph_path))
+
+    for g in tqdm.tqdm(graph_paths):
+        graph = pp.from_json(f"{graph_path}/{g}")
+        print(graph.line['r_ohm_per_km'].min())
+        print(graph.line['r_ohm_per_km'].max())
 
 
 if __name__ == '__main__':

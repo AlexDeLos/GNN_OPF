@@ -1,9 +1,28 @@
+import argparse
 import matplotlib.pyplot as plt 
 import numpy as np
 import os
 import pandas as pd
+import pandapower as pp 
+import pandapower.networks as pn
 import torch as th
+import tqdm
 
+
+def vis_graphs():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("dir")
+    args = parser.parse_args()
+    dir = args.dir
+    graph_path = f"{dir}/x"
+    graph_paths = sorted(os.listdir(graph_path))
+    data = []
+
+    for g in tqdm.tqdm(enumerate(graph_paths)):
+        graph = pp.from_json(f"{graph_path}/{g}")
+        pn.simple_plot(graph)
+
+    return data
 
 def plot_losses(losses, val_losses, model_name):
     """
