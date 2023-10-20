@@ -6,6 +6,7 @@ import numpy as np
 from utils import get_gnn, get_optim, get_criterion
 import math
 
+
 def train_model(arguments, train, val):
     input_dim = train[0].x.shape[1]
     edge_attr_dim = train[0].edge_attr.shape[1]
@@ -23,12 +24,15 @@ def train_model(arguments, train, val):
                     arguments.n_hidden_gnn, 
                     arguments.gnn_hidden_dim, 
                     arguments.n_hidden_lin, 
-                    arguments.lin_hidden_dim)
+                    arguments.lin_hidden_dim,
+                    no_lin=arguments.no_linear)
     print(f"GNN: \n{gnn}")
     ac = None
 
     optimizer_class = get_optim(arguments.optimizer)
-    optimizer = optimizer_class(gnn.parameters(), lr=float(arguments.learning_rate))
+    optimizer = optimizer_class(gnn.parameters(), lr=float(arguments.learning_rate), weight_decay=arguments.weight_decay)
+    scheduler = th.optim.lr_scheduler.ReduceLROnPlateau(optimizer, verbose=True)
+
     criterion = get_criterion(arguments.criterion)
 
     losses = []
@@ -52,7 +56,7 @@ def train_model(arguments, train, val):
 
         if epoch % 10 == 0:
             print(f'Epoch: {epoch:03d}, trn_Loss: {avg_epoch_loss:.6f}, val_loss: {avg_epoch_val_loss:.6f}')
-        
+        scheduler.step(avg_epoch_val_loss)
         #Early stopping
         try:  
             if val_losses[-1]>=val_losses[-2]:

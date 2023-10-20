@@ -33,7 +33,7 @@ def get_arguments():
     parser.add_argument("--test", default=root_directory + "/Data/test")
     parser.add_argument("-s", "--save_model", action="store_true", default=True)
     parser.add_argument("-m", "--model_name", default=''.join([random.choice(string.ascii_letters + string.digits) for _ in range(8)]))
-    parser.add_argument("-p", "--plot", action="store_true", default=False)
+    parser.add_argument("-p", "--plot", action="store_true", default=True)
     parser.add_argument("-o", "--optimizer", default="Adam")
     parser.add_argument("-c", "--criterion", default="MSELoss")
     parser.add_argument("-b", "--batch_size", default=16, type=int)
@@ -48,12 +48,14 @@ def get_arguments():
     parser.add_argument("--plot_node_error", action="store_true", default=False)
     parser.add_argument("--normalize", action="store_true", default=False)
     parser.add_argument("--physics", action="store_true", default=False)
+    parser.add_argument("--no_linear", action="store_true", default=False)
+    parser.add_argument("--value_mode", choices=['all', 'missing', 'voltage'], default='all')
 
     args = parser.parse_args()
     return args
 
 
-def load_data(train_dir, val_dir, test_dir, gnn_type, load_physics=False):
+def load_data(train_dir, val_dir, test_dir, gnn_type, load_physics=False, missing=False, volt=False):
     try:
         train = read_from_pkl(f"{train_dir}/pickled.pkl")
         val = read_from_pkl(f"{val_dir}/pickled.pkl")
@@ -63,11 +65,11 @@ def load_data(train_dir, val_dir, test_dir, gnn_type, load_physics=False):
         print("Data not found, loading from json files...")
         print("Training Data...")
 
-        train = load_data_helper(train_dir, gnn_type, physics_data=load_physics)
+        train = load_data_helper(train_dir, gnn_type, physics_data=load_physics, missing=missing, volt=volt)
         print("Validation Data...")
-        val = load_data_helper(val_dir, gnn_type, physics_data=load_physics)
+        val = load_data_helper(val_dir, gnn_type, physics_data=load_physics, missing=missing, volt=volt)
         print("Testing Data...")
-        test = load_data_helper(test_dir, gnn_type, physics_data=load_physics)
+        test = load_data_helper(test_dir, gnn_type, physics_data=load_physics, missing=missing, volt=volt)
 
         # save data to pkl
         write_to_pkl(train, f"{train_dir}/pickled.pkl")
@@ -79,7 +81,7 @@ def load_data(train_dir, val_dir, test_dir, gnn_type, load_physics=False):
     return train, val, test
 
   
-def load_data_helper(dir, gnn_type, physics_data=False):
+def load_data_helper(dir, gnn_type, physics_data=False, missing=False, volt=False):
     graph_path = f"{dir}/x"
     sol_path = f"{dir}/y"
     graph_paths = sorted(os.listdir(graph_path))
@@ -93,10 +95,7 @@ def load_data_helper(dir, gnn_type, physics_data=False):
         # y_line = pd.read_csv(f"{sol_path}/{sol_paths[i * 3 + 2]}", index_col=0)
 
         if gnn_type[:6] != "Hetero":
-            if physics_data:
-                instance = create_physics_data_instance(graph, y_bus)
-            else:
-                instance = create_data_instance(graph, y_bus)
+            instance = create_physics_data_instance(graph, y_bus, missing, volt)
         else:
             instance = create_hetero_data_instance(graph, y_bus)
         data.append(instance)
@@ -161,7 +160,7 @@ def normalize_data(train, val, test, standard_normalizaton=True):
 
 
 # return a torch_geometric.data.Data object for each instance
-def create_data_instance(graph, y_bus):
+def create_data_instance(graph, y_bus, missing, volt):
     g = ppl.create_nxgraph(graph, include_trafos=True)
     # https://pandapower.readthedocs.io/en/latest/elements/gen.html
     gen = graph.gen[['bus', 'p_mw', 'vm_pu']]
@@ -187,7 +186,6 @@ def create_data_instance(graph, y_bus):
     # https://pandapower.readthedocs.io/en/latest/elements/ext_grid.html
     ext = graph.ext_grid[['bus', 'vm_pu', 'va_degree']]
     ext.rename(columns={'vm_pu': 'vm_pu_ext'}, inplace=True)
-    ext['va_degree'] = 1
     ext['is_ext'] = 1
     ext.set_index('bus', inplace=True)
 
@@ -228,7 +226,7 @@ def create_data_instance(graph, y_bus):
     node_feat = node_feat[~node_feat.index.duplicated(keep='first')]
     node_feat['is_none'] = (node_feat['is_gen'] == 0) & (node_feat['is_load'] == 0) & (node_feat['is_ext'] == 0)
     node_feat['is_none'] = node_feat['is_none'].astype(float)
-    node_feat = node_feat[['is_load', 'is_gen', 'is_ext', 'is_none', 'p_mw', 'q_mvar', 'vm_pu']]
+    node_feat = node_feat[['is_load', 'is_gen', 'is_ext', 'is_none', 'p_mw', 'q_mvar', 'va_degree', 'vm_pu']]
     zero_check = node_feat[(node_feat['is_load'] == 0) & (node_feat['is_gen'] == 0) & (node_feat['is_ext'] == 0) & (
             node_feat['is_none'] == 0)]
 
@@ -247,12 +245,28 @@ def create_data_instance(graph, y_bus):
                                     float(node.is_none),
                                     float(node.p_mw),
                                     float(node.q_mvar),
+                                    float(node.va_degree),
                                     float(node.vm_pu)]
 
-        g.nodes[node.Index]['y'] = [float(y_bus['p_mw'][node.Index]),
-                                    float(y_bus['q_mvar'][node.Index]),
-                                    float(y_bus['vm_pu'][node.Index]),
-                                    float(y_bus['va_degree'][node.Index])]
+        if missing:
+            if node.is_load or node.is_none:
+                g.nodes[node.Index]['y'] = [float(y_bus['vm_pu'][node.Index]),
+                            float(y_bus['va_degree'][node.Index])]
+            if node.is_gen and not node.is_load:
+                g.nodes[node.Index]['y'] = [float(y_bus['q_mvar'][node.Index]),
+                            float(y_bus['va_degree'][node.Index])]
+            if node.is_ext:
+                g.nodes[node.Index]['y'] = [float(y_bus['vm_pu'][node.Index]),
+                            float(y_bus['va_degree'][node.Index])]
+        elif volt:
+            g.nodes[node.Index]['y'] = [float(y_bus['vm_pu'][node.Index]),
+                            float(y_bus['va_degree'][node.Index])]
+             
+        else:
+            g.nodes[node.Index]['y'] = [float(y_bus['p_mw'][node.Index]),
+                                        float(y_bus['q_mvar'][node.Index]),
+                                        float(y_bus['vm_pu'][node.Index]),
+                                        float(y_bus['va_degree'][node.Index])]
 
     for edges in graph.line.itertuples():
         g.edges[edges.from_bus, edges.to_bus, ('line', edges.Index)]['edge_attr'] = [float(edges.r_ohm_per_km),
@@ -269,7 +283,19 @@ def create_data_instance(graph, y_bus):
 
 # Create the data needed for the physics loss
 # return a torch_geometric.data.Data object for each instance
-def create_physics_data_instance(graph, y_bus):
+def create_physics_data_instance(graph, y_bus, missing, volt):
+    """
+    Converts a PandaPower graph to a NetworkX graph and creates a node feature matrix for the graph.
+
+    Args:
+        graph (pandapowerNet): The PandaPower graph to convert.
+        y_bus (pandas.DataFrame): The Y-bus matrix for the graph.
+        missing (bool): Whether to include missing data in the node feature matrix.
+        volt (bool): Whether to include voltage data in the node feature matrix.
+
+    Returns:
+        networkx.Graph: The converted NetworkX graph.
+    """
     # Convert PandaPower graph to NetworkX graph and set it to be directed (for directed transformer edges further down)
     g = ppl.create_nxgraph(graph, include_trafos=True)
     g = g.to_directed()
@@ -298,7 +324,9 @@ def create_physics_data_instance(graph, y_bus):
     # https://pandapower.readthedocs.io/en/latest/elements/ext_grid.html
     ext = graph.ext_grid[['bus', 'vm_pu', 'va_degree']]
     ext.rename(columns={'vm_pu': 'vm_pu_ext'}, inplace=True)
-    ext['va_degree'] = 1
+    ext_degree = ext.loc[0, 'va_degree']
+    if ext_degree != 30.0:
+        print(ext_degree)
     ext['is_ext'] = 1
     ext.set_index('bus', inplace=True)
 
@@ -341,7 +369,7 @@ def create_physics_data_instance(graph, y_bus):
     node_feat = node_feat[~node_feat.index.duplicated(keep='first')]
     node_feat['is_none'] = (node_feat['is_gen'] == 0) & (node_feat['is_load'] == 0) & (node_feat['is_ext'] == 0)
     node_feat['is_none'] = node_feat['is_none'].astype(float)
-    node_feat = node_feat[['is_load', 'is_gen', 'is_ext', 'is_none', 'p_mw', 'q_mvar', 'vm_pu', 'b_pu_shunt']]
+    node_feat = node_feat[['is_load', 'is_gen', 'is_ext', 'is_none', 'p_mw', 'q_mvar', 'va_degree', 'vm_pu', 'b_pu_shunt']]
     zero_check = node_feat[(node_feat['is_load'] == 0) & (node_feat['is_gen'] == 0) & (node_feat['is_ext'] == 0) & (
                 node_feat['is_none'] == 0)]
 
@@ -361,9 +389,25 @@ def create_physics_data_instance(graph, y_bus):
                                     float(node.p_mw / graph.sn_mva),
                                     float(node.q_mvar / graph.sn_mva),
                                     float(node.vm_pu),
+                                    float(node.va_degree),
                                     float(node.b_pu_shunt)]
 
-        g.nodes[node.Index]['y'] = [float(y_bus['p_mw'][node.Index] / graph.sn_mva),
+        if missing:
+            if node.is_load or node.is_none:
+                g.nodes[node.Index]['y'] = [float(y_bus['vm_pu'][node.Index]),
+                            float(y_bus['va_degree'][node.Index])]
+            if node.is_gen and not node.is_load:
+                g.nodes[node.Index]['y'] = [float(y_bus['q_mvar'][node.Index] / graph.sn_mva),
+                            float(y_bus['va_degree'][node.Index])]
+            if node.is_ext:
+                g.nodes[node.Index]['y'] = [float(y_bus['p_mw'][node.Index] / graph.sn_mva),
+                            float(y_bus['q_mvar'][node.Index]) / graph.sn_mva]
+        elif volt:
+            g.nodes[node.Index]['y'] = [float(y_bus['vm_pu'][node.Index]),
+                            float(y_bus['va_degree'][node.Index])]
+             
+        else:
+            g.nodes[node.Index]['y'] = [float(y_bus['p_mw'][node.Index] / graph.sn_mva),
                                     float(y_bus['q_mvar'][node.Index] / graph.sn_mva),
                                     float(y_bus['vm_pu'][node.Index]),
                                     float(y_bus['va_degree'][node.Index])]
@@ -426,6 +470,30 @@ def get_gnn(gnn_name):
 def get_optim(optim_name):
     if optim_name == "Adam":
         return th.optim.Adam
+    if optim_name == "Adadelta":
+        return th.optim.Adadelta
+    if optim_name == "Adagrad":
+        return th.optim.Adagrad
+    if optim_name == "AdamW":
+        return th.optim.AdamW
+    if optim_name == "SparseAdam":
+        return th.optim.SparseAdam
+    if optim_name == "Adamax":
+        return th.optim.Adamax
+    if optim_name == "ASGD":
+        return th.optim.ASGD
+    if optim_name == "LBFGS":
+        return th.optim.LBFGS
+    if optim_name == "NAdam":
+        return th.optim.NAdam
+    if optim_name == "RAdam":
+        return th.optim.RAdam
+    if optim_name == "RMSProp":
+        return th.optim.RMSProp
+    if optim_name == "Rprop":
+        return th.optim.Rprop
+    if optim_name == "SGD":
+        return th.optim.SGD
 
 
 def get_criterion(criterion_name):
@@ -433,6 +501,8 @@ def get_criterion(criterion_name):
         return nn.MSELoss()
     if criterion_name == "L1Loss":
         return nn.L1Loss()
+    if criterion_name == "Huber":
+        return nn.HuberLoss()
 
 
 def save_model(model, model_name):
@@ -461,7 +531,9 @@ def load_model(gnn_type, path, data, arguments):
                       arguments.n_hidden_gnn, 
                       arguments.gnn_hidden_dim, 
                       arguments.n_hidden_lin, 
-                      arguments.lin_hidden_dim)
+                      arguments.lin_hidden_dim,
+                      no_lin=arguments.no_linear)
+    print(model)
     model.load_state_dict(th.load(path))
     return model
 

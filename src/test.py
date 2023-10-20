@@ -3,7 +3,8 @@ import numpy as np
 import argparse
 import matplotlib.pyplot as plt
 from torch_geometric.loader import DataLoader
-from utils import load_data
+from utils import load_data, normalize_data
+from utils_hetero import normalize_data_hetero
 
 
 from utils import load_data_helper, load_model, read_from_pkl, write_to_pkl, load_model_hetero  
@@ -12,9 +13,14 @@ from utils import load_data_helper, load_model, read_from_pkl, write_to_pkl, loa
 def main():
     args = parse_args()
     data = read_from_pkl(f"{args.data_path}/pickled.pkl")
+    if args.normalize:
+        print("Normalizing Data")
+        if args.gnn_type[:6] != "Hetero":
+            data, _, _ = normalize_data(data, data, data)
+        else: 
+            data, _, _ = normalize_data_hetero(data, data, data)
     if "HeteroGNN" in args.model_path:
         model = load_model_hetero(args.gnn_type, args.model_path, data, args)
-        print(model)
     else:
         model = load_model(args.gnn_type, args.model_path, data, args)
     model.eval()
@@ -28,49 +34,51 @@ def parse_args():
     parser.add_argument("-g", "--gnn_type", required=True)
     parser.add_argument("-m", "--model_path", required=True)
     parser.add_argument("-d", "--data_path", required=True)
-    parser.add_argument("--n_hidden_gnn", default=2, type=int)
-    parser.add_argument("--gnn_hidden_dim", default=32, type=int)
-    parser.add_argument("--n_hidden_lin", default=2, type=int)
-    parser.add_argument("--lin_hidden_dim", default=8, type=int)
+    parser.add_argument("--n_hidden_gnn", default=1, type=int)
+    parser.add_argument("--gnn_hidden_dim", default=16, type=int)
+    parser.add_argument("--n_hidden_lin", default=0, type=int)
+    parser.add_argument("--lin_hidden_dim", default=32, type=int)
+    parser.add_argument("--normalize", action='store_true', default=False)
+    parser.add_argument("--no_linear", action="store_true", default=False)
     args = parser.parse_args()
     return args
 
 
 def test(model, data):
+    print("testing")
     loader = DataLoader(data)
     errors = []
     p_errors = []
     first = True
     for g in loader:
         out = model(g)
-        if first:
-            print("Y")
-            print(g.y)
-            print("Pred")
-            print(out)
-            quit()
+        # if first:
+        #     print("Y")
+        #     print(g.y)
+        #     print("Pred")
+        #     print(out)
+            # quit()
+            # first = False
             # print(th.cat([g.y, out], dim=1))
         error = th.abs(th.sub(g.y, out))
         p_error = th.div(error, g.y) * 100
         errors.append(error.detach().numpy())
         p_errors.append(p_error.detach().numpy())
-
     errors = np.concatenate(errors)
     errors = errors.reshape((-1, 2))
+    print(errors.shape, np.shape(errors), "shape of errors")
 
     p_errors = np.concatenate(p_errors)
-    p_errors = p_errors.reshape((-1, 2))
-    print(np.shape(p_errors))
+    errors = errors.reshape((-1, 2))
+    print(errors.shape, np.shape(errors), "shape of errors")
 
     mask = np.isinf(p_errors)
     p_errors[mask] = 0
 
-    plt.hist(errors)
-    plt.show()
-    plt.hist(p_errors)
-    plt.show()
-
-    
+    # plt.hist(errors)
+    # plt.show()
+    # plt.hist(p_errors)
+    # plt.show()
     print("within 5%", np.sum(abs(p_errors) < 5, axis=0) / len(p_errors))
     print("within 10%", np.sum(abs(p_errors) < 10, axis=0) / len(p_errors))
     print("within 15%", np.sum(abs(p_errors) < 15, axis=0) / len(p_errors))
