@@ -11,13 +11,7 @@ def train_model_hetero(arguments, train, val):
     
     gnn_class = get_gnn(arguments.gnn)
 
-    gnn = gnn_class(output_dim_dict=output_dims, 
-                    edge_types=train[0].edge_index_dict.keys(),
-                    n_hidden_conv=arguments.n_hidden_gnn,
-                    hidden_conv_dim = arguments.gnn_hidden_dim,
-                    n_hidden_lin=arguments.n_hidden_lin,
-                    hidden_lin_dim = arguments.lin_hidden_dim
-                    )
+    gnn = gnn_class(output_dim_dict=output_dims, edge_types=train[0].edge_index_dict.keys())
     
     print(f"GNN: \n{gnn}")
 

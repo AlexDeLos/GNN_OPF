@@ -16,9 +16,9 @@ import torch as th
 import torch.nn as nn
 from torch_geometric.data import HeteroData
 from torch_geometric.utils.convert import from_networkx
+from torch_geometric.nn import DeepGraphInfomax
 import tqdm
 from utils_hetero import create_hetero_data_instance
-
 
 def get_arguments():
     parser = argparse.ArgumentParser(prog="GNN script",
@@ -37,7 +37,7 @@ def get_arguments():
     parser.add_argument("-o", "--optimizer", default="Adam")
     parser.add_argument("-c", "--criterion", default="MSELoss")
     parser.add_argument("-b", "--batch_size", default=16, type=int)
-    parser.add_argument("-n", "--n_epochs", default=100, type=int)
+    parser.add_argument("-n", "--n_epochs", default=200, type=int)
     parser.add_argument("-l", "--learning_rate", default=1e-4, type=float)
     parser.add_argument("-w", "--weight_decay", default=0.05, type=float)
     parser.add_argument("--n_hidden_gnn", default=2, type=int)
@@ -50,6 +50,7 @@ def get_arguments():
     parser.add_argument("--physics", action="store_true", default=False)
     parser.add_argument("--no_linear", action="store_true", default=False)
     parser.add_argument("--value_mode", choices=['all', 'missing', 'voltage'], default='all')
+    parser.add_argument("--pretrain", action="store_true", default=False)
 
     args = parser.parse_args()
     return args
@@ -559,3 +560,52 @@ def read_from_pkl(path):
     with open(path, 'rb') as f:
         data = pickle.load(f)
     return data
+
+
+# https://pytorch-geometric.readthedocs.io/en/latest/generated/torch_geometric.nn.models.DeepGraphInfomax.html
+# examples: 
+# https://github.com/pyg-team/pytorch_geometric/blob/master/examples/infomax_transductive.py
+# https://github.com/pyg-team/pytorch_geometric/blob/master/examples/infomax_inductive.py
+# paper: https://arxiv.org/pdf/1809.10341.pdf
+def pretrain(encoder_class, input_dim, output_dim, edge_attr_dim, train_dataloader):
+    device = th.device('cpu')
+
+    def corruption(data):
+        data.x = data.x[th.randperm(data.x.size(0))]
+        return data
+
+    def train():
+        model.train()
+        total_loss = 0 
+        total_examples = 0
+        for batch in train_dataloader:
+            optimizer.zero_grad()
+            pos_z, neg_z, summary = model(batch)
+            loss = model.loss(pos_z, neg_z, summary)
+            loss.backward()
+            optimizer.step()
+            total_loss += float(loss) * pos_z.size(0)
+            total_examples += pos_z.size(0)
+            
+        return total_loss / total_examples
+    
+    model = DeepGraphInfomax(
+        hidden_channels=output_dim, 
+        encoder=encoder_class(
+            input_dim, 
+            output_dim, 
+            edge_attr_dim,
+        ),
+        summary=lambda z, *args, **kwargs: th.sigmoid(z.mean(dim=0)),
+        corruption=corruption
+        ).to(device)
+
+    model = model.to(device)
+    optimizer = th.optim.Adam(model.parameters(), lr=0.0001)
+
+    for epoch in tqdm.tqdm(range(150)):
+        loss = train()
+        # if epoch % 10 == 0:
+        #     print(f"Epoch {epoch} loss: {train():.3f}")
+
+    return model.encoder

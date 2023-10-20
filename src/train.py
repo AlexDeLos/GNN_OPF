@@ -1,10 +1,9 @@
+import math
+import torch as th
 from torch_geometric.loader import DataLoader as pyg_DataLoader
 import torch_geometric.utils as pyg_util
 import tqdm
-import torch as th
-import numpy as np
-from utils import get_gnn, get_optim, get_criterion
-import math
+from utils import get_gnn, get_optim, get_criterion, pretrain
 
 
 def train_model(arguments, train, val):
@@ -18,14 +17,18 @@ def train_model(arguments, train, val):
     train_dataloader = pyg_DataLoader(train, batch_size=batch_size, shuffle=True)
     val_dataloader = pyg_DataLoader(val, batch_size=batch_size, shuffle=False)
     gnn_class = get_gnn(arguments.gnn)
-    gnn = gnn_class(input_dim,
-                    output_dim, 
-                    edge_attr_dim, 
-                    arguments.n_hidden_gnn, 
-                    arguments.gnn_hidden_dim, 
-                    arguments.n_hidden_lin, 
-                    arguments.lin_hidden_dim,
-                    no_lin=arguments.no_linear)
+
+    if arguments.pretrain:
+        print("Pretraining with Deep Graph Infomax...")
+        gnn = pretrain(gnn_class, input_dim, output_dim, edge_attr_dim, train_dataloader)
+        print("Pretraining done")
+    else:
+        gnn = gnn_class(
+            input_dim,
+            output_dim, 
+            edge_attr_dim
+        )
+        
     print(f"GNN: \n{gnn}")
     ac = None
 
