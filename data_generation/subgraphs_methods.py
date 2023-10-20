@@ -121,7 +121,7 @@ def number_changes(full_net):
     for i in range(len(test_net.load)):
         individual_variation = np.random.normal(0,0.05)
         if test_net.load.at[i,'p_mw']==0:
-            test_net.load.at[i,'p_mw'] = test_net.load.at[i,'p_mw'] + 0.00000000001
+            test_net.load.at[i,'p_mw'] =  0.00000000001
         old.append(test_net.load.at[i,'p_mw'])
         test_net.load.at[i,'p_mw'] = test_net.load.at[i,'p_mw'] * (ratio_increase + individual_variation)
         new.append(test_net.load.at[i,'p_mw'])
