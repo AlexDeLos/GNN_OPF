@@ -1,4 +1,3 @@
-import numba
 import numpy as np
 import networkx as nx
 import pandapower as pp
@@ -104,6 +103,7 @@ def random_walk_neighbor_selection(full_net, starting_bus, subgraph_length):
         stuck_iteration = 0
 
     return subgraph_busses
+
 
 # Creates a network with the same topology as the full network, but with random variations for the loads and generators values
 def number_changes(full_net):
