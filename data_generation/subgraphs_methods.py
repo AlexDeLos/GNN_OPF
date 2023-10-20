@@ -113,8 +113,8 @@ def number_changes(full_net):
     # values should vary so that they are not too far from their original value.
     # assume 80% correlation between every node.
     # Power should increase as much as the load increases.
-    old = []
-    new = []
+    old_p_mws= []
+    new_p_mws = []
     #basis from all the variation in the network
     #decided for a uniform distribution
     ratio_increase = np.random.uniform(0.9,1.1)
