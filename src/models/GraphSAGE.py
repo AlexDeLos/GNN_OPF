@@ -18,18 +18,23 @@ class GraphSAGE(torch.nn.Module):
             n_hidden_lin=1,
             hidden_lin_dim=64,  
             dropout=0.1,
-            jumping_knowledge=False
+            jumping_knowledge=False,
+            no_lin=False
         ):
         
         super().__init__()
         self.convs = nn.ModuleList()
         self.lins = nn.ModuleList()
-
+        self.no_lin = no_lin
         self.convs.append(SAGEConv(in_channels=input_dim, out_channels=hidden_conv_dim))
         for _ in range(n_hidden_conv):
             self.convs.append(SAGEConv(in_channels=hidden_conv_dim, out_channels=hidden_conv_dim))
         
+        if self.no_lin:
+            self.convs.append(SAGEConv(hidden_conv_dim, output_dim))
+
         self.lins.append(nn.Linear(hidden_conv_dim, hidden_lin_dim))
+
         for _ in range(n_hidden_lin):
             self.lins.append(nn.Linear(hidden_lin_dim, hidden_lin_dim))
 
@@ -45,11 +50,19 @@ class GraphSAGE(torch.nn.Module):
         x, edge_index = data.x, data.edge_index
         xs = []
 
-        for c in self.convs:
+        for c in self.convs[:-1]:
             x = c(x=x, edge_index=edge_index)
             x = F.dropout(x, p=self.dropout_rate, training=self.training)
             x = F.elu(x)
             xs.append(x)
+
+        if self.no_lin:
+            return self.convs[-1](x, edge_index=edge_index)
+    
+        x = self.convs[-1](x, edge_index=edge_index)
+        x = F.dropout(x, p=self.dropout_rate, training=self.training)
+        x = F.elu(x)
+        xs.append(x)
 
         if hasattr(self, 'jumping_knowledge'):
             x = self.jumping_knowledge(xs)
