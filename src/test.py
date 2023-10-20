@@ -19,12 +19,12 @@ def main():
             data, _, _ = normalize_data(data, data, data)
         else: 
             data, _, _ = normalize_data_hetero(data, data, data)
-    if "HeteroGAT" in args.model_path:
+    if "HeteroGNN" in args.model_path:
         model = load_model_hetero(args.gnn_type, args.model_path, data, args)
     else:
         model = load_model(args.gnn_type, args.model_path, data, args)
     model.eval()
-    if "HeteroGAT" in args.model_path:
+    if "HeteroGNN" in args.model_path:
         test_hetero(model, data)
     else:
         test(model, data)
