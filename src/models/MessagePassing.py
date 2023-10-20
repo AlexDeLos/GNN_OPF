@@ -1,4 +1,3 @@
-import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch_geometric.nn import MessagePassing
@@ -20,7 +19,7 @@ class MessagePassingGNN(MessagePassing):
             aggr='mean', 
         ):
         
-        super(MessagePassingGNN, self).__init__(aggr=aggr)
+        super().__init__()
 
         self.num_layers = num_layers
         self.input_dim = input_dim
@@ -62,10 +61,9 @@ class MessagePassingGNN(MessagePassing):
         # edge_index has shape [2, E]
         # edge_attr has shape [E, edge_attr_dim]
         x, edge_index, edge_attr = data.x, data.edge_index, data.edge_attr
-        # Step 1: Add self-loops to the adjacency matrix.
-        edge_index, edge_attr = add_self_loops(edge_index, edge_attr=edge_attr, num_nodes=x.size(0))
+
+        # edge_index, edge_attr = add_self_loops(edge_index, edge_attr=edge_attr, num_nodes=x.size(0))
         
-        # Step 2: Linearly transform node feature matrix.
         for node_layer in self.node_layers[:-1]:
             x = F.relu(node_layer(x))
             x = F.dropout(x, p=self.dropout_rate, training=self.training)
@@ -100,10 +98,3 @@ class MessagePassingGNN(MessagePassing):
         #output = self.mlp_update(aggr_out)
         # Apply the final layer
         return aggr_out
-    
-
-    # experiments/ablations:
-    # add n of layers in the mlps for message function
-    # add biases
-    # add skip/residual connections in update function
-    # use only edge features and not node features

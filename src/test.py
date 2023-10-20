@@ -3,11 +3,9 @@ import numpy as np
 import argparse
 import matplotlib.pyplot as plt
 from torch_geometric.loader import DataLoader
-from utils import load_data, normalize_data
+from utils import load_model, load_model_hetero, read_from_pkl
+from utils_homo import normalize_data
 from utils_hetero import normalize_data_hetero
-
-
-from utils import load_data_helper, load_model, read_from_pkl, write_to_pkl, load_model_hetero  
 
 
 def main():
@@ -20,9 +18,9 @@ def main():
         else: 
             data, _, _ = normalize_data_hetero(data, data, data)
     if "HeteroGNN" in args.model_path:
-        model = load_model_hetero(args.gnn_type, args.model_path, data, args)
+        model = load_model_hetero(args.gnn_type, args.model_path, data)
     else:
-        model = load_model(args.gnn_type, args.model_path, data, args)
+        model = load_model(args.gnn_type, args.model_path, data)
     model.eval()
     if "HeteroGNN" in args.model_path:
         test_hetero(model, data)

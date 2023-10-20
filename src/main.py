@@ -1,8 +1,9 @@
-from train import train_model
+from train_homo import train_model
 from train_hetero import train_model_hetero
-from utils import get_arguments, load_data, normalize_data, save_model
+from utils import get_arguments, load_data, save_model
 from utils_hetero import normalize_data_hetero
-from plot_utils import distance_plot, plot_losses
+from utils_homo import normalize_data
+from utils_plot import distance_plot, plot_losses
 import warnings
 
 # Suppress FutureWarning

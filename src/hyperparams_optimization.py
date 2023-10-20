@@ -1,10 +1,10 @@
 import optuna
 import torch
-import numpy as np
 from torch_geometric.loader import DataLoader as pyg_DataLoader
 import tqdm
-from train import train_batch, evaluate_batch
-from utils import get_gnn, load_data, get_criterion, normalize_data
+from train_homo import train_batch, evaluate_batch
+from utils import get_gnn, load_data, get_criterion
+from utils_homo import normalize_data
 
 import warnings
 # Suppress FutureWarning

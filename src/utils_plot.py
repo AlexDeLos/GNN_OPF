@@ -3,10 +3,7 @@ import numpy as np
 import os
 import pandas as pd
 import torch as th
-import matplotlib.pyplot as plt
 
-import numpy as np
-import matplotlib.pyplot as plt
 
 def plot_losses(losses, val_losses, model_name):
     """
@@ -72,7 +69,6 @@ def distance_plot(model, batch):
     plt.show()
 
 
-
 def get_distance_loss(out, labels, data):
     """
     Calculates the distance loss between the predicted output and the ground truth labels.
@@ -108,7 +104,6 @@ def get_distance_loss(out, labels, data):
         if normalization_vector[i] != 0:
             res[i] = res[i]/normalization_vector[i]
     return res, len(res)
-
 
 
 def get_distance_from_generator(data):
