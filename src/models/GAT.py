@@ -17,7 +17,7 @@ class GAT(nn.Module):
             n_hidden_lin=2, 
             hidden_lin_dim=16, 
             dropout_rate=0.1, 
-            heads=8,
+            heads=16,
             jumping_knowledge=False,
             no_lin=False,
             *args, 

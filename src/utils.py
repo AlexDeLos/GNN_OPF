@@ -284,6 +284,18 @@ def create_data_instance(graph, y_bus, missing, volt):
 # Create the data needed for the physics loss
 # return a torch_geometric.data.Data object for each instance
 def create_physics_data_instance(graph, y_bus, missing, volt):
+    """
+    Converts a PandaPower graph to a NetworkX graph and creates a node feature matrix for the graph.
+
+    Args:
+        graph (pandapowerNet): The PandaPower graph to convert.
+        y_bus (pandas.DataFrame): The Y-bus matrix for the graph.
+        missing (bool): Whether to include missing data in the node feature matrix.
+        volt (bool): Whether to include voltage data in the node feature matrix.
+
+    Returns:
+        networkx.Graph: The converted NetworkX graph.
+    """
     # Convert PandaPower graph to NetworkX graph and set it to be directed (for directed transformer edges further down)
     g = ppl.create_nxgraph(graph, include_trafos=True)
     g = g.to_directed()
