@@ -4,7 +4,7 @@ from models.GAT import GAT
 from models.MessagePassing import MessagePassingGNN
 from models.GraphSAGE import GraphSAGE
 from models.GINE import GINE
-from models.GAT_hetero import HeteroGAT
+from models.HeterogenousGNN import HeteroGNN
 import os
 import pandapower.plotting as ppl
 import pandas as pd
@@ -25,7 +25,7 @@ def get_arguments():
                                      description="Run a GNN to solve an inductive power system problem (power flow only for now)")
     
     # Important: prefix all heterogeneous GNNs names with "Hetero"
-    parser.add_argument("gnn", choices=["GAT", "MessagePassing", "GraphSAGE", "GINE", "HeteroGAT"], default="GAT")
+    parser.add_argument("gnn", choices=["GAT", "MessagePassing", "GraphSAGE", "GINE", "HeteroGNN"], default="GAT")
     # if file is moved in another directory level relative to the root (currently in root/src), this needs to be changed
     root_directory = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     parser.add_argument("--train", default=root_directory + "/Data/train")
@@ -463,8 +463,8 @@ def get_gnn(gnn_name):
     if gnn_name == "GINE":
         return GINE
     
-    if gnn_name == "HeteroGAT":
-        return HeteroGAT
+    if gnn_name == "HeteroGNN":
+        return HeteroGNN
 
 
 def get_optim(optim_name):
