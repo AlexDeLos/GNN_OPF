@@ -105,42 +105,6 @@ def random_walk_neighbor_selection(full_net, starting_bus, subgraph_length):
     return subgraph_busses
 
 
-# Creates a network with the same topology as the full network, but with random variations for the loads and generators values
-def number_changes(full_net):
-    test_net = pp.pandapowerNet(full_net.copy())
-    # We vary every value based on how big they are around their point.
-    # values should vary so that they are not too far from their original value.
-    # assume 80% correlation between every node.
-    # Power should increase as much as the load increases.
-    old_p_mws= []
-    new_p_mws = []
-    #basis from all the variation in the network
-    #decided for a uniform distribution
-    ratio_increase = np.random.uniform(0.8,1.2)
-    for i in range(len(test_net.load)):
-        individual_variation = np.random.normal(0,0.05)
-        if test_net.load.at[i,'p_mw']==0:
-            # safety to aviod dividing by 0
-            test_net.load.at[i,'p_mw'] =  0.00000000001
-        old_p_mws.append(test_net.load.at[i,'p_mw'])
-        test_net.load.at[i,'p_mw'] = test_net.load.at[i,'p_mw'] * (ratio_increase + individual_variation)
-        new_p_mws.append(test_net.load.at[i,'p_mw'])
-        #same correlation of the P_mw
-        test_net.load.at[i,'q_mvar'] =np.abs(np.random.normal(test_net.load.at[i,'q_mvar'], np.sqrt(abs(test_net.load.at[i,'q_mvar'])))) # goes from -50 to about 300
-    # Average value by which the load changes
-    div = np.divide(np.array(new_p_mws),np.array(old_p_mws))
-    # making sure that the average change is the same for the generators
-    # this should be around one, but can vary.
-    # The reason why this is needed is because we want the generators to be able to compensate for the load change.
-    change = np.average(div)
-
-    for i in range(len(test_net.gen)):
-        test_net.gen.at[i,'p_mw'] = test_net.gen.at[i,'p_mw'] * change
-        # test_net.gen.at[i,'vm_pu'] = np.abs(np.random.normal(test_net.gen.at[i,'vm_pu'], 1/100)) #goes from 0 - 1.1
-
-    return test_net
-
-
 def partition_graph(full_net, min_partition_size=5):
         
     # Create a graph from the network data
