@@ -10,8 +10,8 @@ import string
 import tqdm
 import time
 import warnings
-# Suppress FutureWarning
-warnings.filterwarnings("ignore", category=FutureWarning)
+# Suppress all warnings
+warnings.filterwarnings("ignore")
 
 
 def main():
@@ -59,7 +59,12 @@ def expand(args):
     n = 0
     for g in tqdm.tqdm(graph_paths):
         graph = pp.from_json(f"{p}/x/{g}")
-        for _ in range(args.num_networks):
+        num_generated_graphs = 0
+        trials = 0
+        while num_generated_graphs < args.num_networks:
+            if trials == 30: # avoid infinite loop, stop after 30 trials
+                print(f"Could not generate a new network for {g} in 30 trials, skipping...")
+                break
             new_graph = pp.pandapowerNet(graph.copy())
             old_p_mws= []
             new_p_mws = []
@@ -90,8 +95,11 @@ def expand(args):
 
             try:
                 pp.runpp(new_graph, numba=False)
+                num_generated_graphs += 1
+                trials = 0
             except:
-                print(f"Network not solvable trying a new one")
+                # print(f"Network not solvable trying a new one")
+                trials += 1
                 continue
             g_split = g.split("_")
             network = g_split[0]
