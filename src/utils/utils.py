@@ -13,9 +13,14 @@ import string
 import torch as th
 import torch.nn as nn
 import tqdm
-from utils_hetero import create_hetero_data_instance
-from utils_homo import create_data_instance
-from utils_physics import create_physics_data_instance
+import os
+import sys
+# local imports
+# add parent directory to sys.path
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from utils.utils_hetero import create_hetero_data_instance
+from utils.utils_homo import create_data_instance
+from utils.utils_physics import create_physics_data_instance
 
 def get_arguments():
     parser = argparse.ArgumentParser(prog="GNN script",
@@ -23,8 +28,8 @@ def get_arguments():
     
     # Important: prefix all heterogeneous GNNs names with "Hetero"
     parser.add_argument("gnn", choices=["GAT", "MessagePassing", "GraphSAGE", "GINE", "HeteroGNN"], default="GAT")
-    # if file is moved in another directory level relative to the root (currently in root/src), this needs to be changed
-    root_directory = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    # if file is moved in another directory level relative to the root (currently in root/utils/src), this needs to be changed
+    root_directory = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     parser.add_argument("--train", default=root_directory + "/Data/train")
     parser.add_argument("--val", default=root_directory + "/Data/val")
     parser.add_argument("--test", default=root_directory + "/Data/test")
@@ -154,8 +159,8 @@ def get_criterion(criterion_name):
 
 def save_model(model, model_name):
     model_name = model_name + "-" + model.class_name
-    # if file is moved in another directory level relative to the root (currently in root/src), this needs to be changed
-    root_directory = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    # if file is moved in another directory level relative to the root (currently in root/utils/src), this needs to be changed
+    root_directory = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     save_directory = root_directory + "/trained_models"
     if not os.path.exists(save_directory):
         os.mkdir(save_directory)

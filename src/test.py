@@ -1,14 +1,18 @@
 import argparse
 import matplotlib.pyplot as plt
 import numpy as np
-import os
 import pandapower as pp
 import torch as th
 from torch_geometric.loader import DataLoader
 import tqdm
-from utils import load_model, load_model_hetero, read_from_pkl
-from utils_homo import normalize_data
-from utils_hetero import normalize_data_hetero
+import os
+import sys
+# local imports
+# add parent directory to sys.path
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from utils.utils import load_model, load_model_hetero, read_from_pkl
+from utils.utils_homo import normalize_data
+from utils.utils_hetero import normalize_data_hetero
 
 
 def main():

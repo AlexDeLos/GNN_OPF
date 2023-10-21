@@ -1,9 +1,14 @@
 import torch as th
 from torch_geometric.loader import DataLoader as pyg_DataLoader
 import tqdm
-from utils import get_gnn, get_optim, get_criterion
-from utils_homo import pretrain
-from utils_physics import physics_loss
+import os
+import sys
+# local imports
+# add parent directory to sys.path
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from utils.utils import get_gnn, get_optim, get_criterion
+from utils.utils_homo import pretrain
+from utils.utils_physics import physics_loss
 
 
 def train_model(arguments, train, val):

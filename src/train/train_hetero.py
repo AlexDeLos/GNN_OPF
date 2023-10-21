@@ -1,6 +1,11 @@
 from torch_geometric.loader import DataLoader as pyg_DataLoader
 import tqdm
-from utils import get_gnn, get_optim, get_criterion
+import os
+import sys
+# local imports
+# add parent directory to sys.path
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from utils.utils import get_gnn, get_optim, get_criterion
 
 def train_model_hetero(arguments, train, val):
     output_dims = {node_type: train[0].y_dict[node_type].shape[1] for node_type in train[0].y_dict.keys()}
