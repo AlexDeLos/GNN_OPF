@@ -5,11 +5,10 @@ import pandas as pd
 import networkx as nx
 import torch as th
 from torch_geometric.data import HeteroData
-import tqdm
 import warnings
-
 # suppress the UserWarning
 warnings.filterwarnings('ignore', '.*Boolean Series key will be reindexed.*')
+
 
 def create_hetero_data_instance(graph, y_bus):
     # Get relevant values from gens, loads, and external grids TODO static generators
@@ -300,7 +299,6 @@ def normalize_data_hetero(train, val, test, standard_normalization=True):
             data.y_dict = {k: (v - min_y_dict[k]) / (max_y_dict[k] - min_y_dict[k] + epsilon) for k, v in data.y_dict.items()}
             data.edge_attr_dict = {k: ((v - min_edge_attr_dict[k]) / (max_edge_attr_dict[k] - min_edge_attr_dict[k] + epsilon) if v.numel() > 0 else v) for k, v in data.edge_attr_dict.items()}
     return train, val, test
-
 
 
 def visualize_hetero(hetero):

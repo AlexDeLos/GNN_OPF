@@ -1,24 +1,24 @@
-import pandapower as pp
-from copy import deepcopy
-import numpy as np
-import math
-import tqdm
-import os
 import argparse
-import time
+from copy import deepcopy
+import math
+import numpy as np
+import os
+from pathlib import Path
+import pandapower as pp
 import random
 import string
-from pathlib import Path
-
+import tqdm
+import time
 import warnings
-
 # Suppress FutureWarning
 warnings.filterwarnings("ignore", category=FutureWarning)
+
 
 def main():
     args = get_args()
     n, t = expand(args)
     print(f"{n} new networks expanded in {t:0.2f} seconds")
+
 
 def get_args():
     parser = argparse.ArgumentParser(
@@ -32,6 +32,7 @@ def get_args():
     args = parser.parse_args()
     print(args)
     return args
+
 
 def expand(args):
     start = time.perf_counter()

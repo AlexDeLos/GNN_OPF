@@ -1,9 +1,8 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.nn import Linear, Sequential, BatchNorm1d, ReLU, Dropout
+from torch.nn import Linear, Sequential, BatchNorm1d, ReLU
 from torch_geometric.nn import GINEConv
-from torch_geometric.nn import global_mean_pool, global_add_pool
 from torch_geometric.nn.models import JumpingKnowledge
 
 class GINE(torch.nn.Module):

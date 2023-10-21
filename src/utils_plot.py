@@ -1,12 +1,28 @@
+import argparse
 import matplotlib.pyplot as plt 
 import numpy as np
 import os
 import pandas as pd
+import pandapower as pp 
+import pandapower.networks as pn
 import torch as th
-import matplotlib.pyplot as plt
+import tqdm
 
-import numpy as np
-import matplotlib.pyplot as plt
+
+def vis_graphs():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("dir")
+    args = parser.parse_args()
+    dir = args.dir
+    graph_path = f"{dir}/x"
+    graph_paths = sorted(os.listdir(graph_path))
+    data = []
+
+    for g in tqdm.tqdm(enumerate(graph_paths)):
+        graph = pp.from_json(f"{graph_path}/{g}")
+        pn.simple_plot(graph)
+
+    return data
 
 def plot_losses(losses, val_losses, model_name):
     """
@@ -72,7 +88,6 @@ def distance_plot(model, batch):
     plt.show()
 
 
-
 def get_distance_loss(out, labels, data):
     """
     Calculates the distance loss between the predicted output and the ground truth labels.
@@ -108,7 +123,6 @@ def get_distance_loss(out, labels, data):
         if normalization_vector[i] != 0:
             res[i] = res[i]/normalization_vector[i]
     return res, len(res)
-
 
 
 def get_distance_from_generator(data):

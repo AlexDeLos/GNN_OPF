@@ -1,13 +1,14 @@
-import torch as th
-import numpy as np
 import argparse
 import matplotlib.pyplot as plt
+import numpy as np
+import os
+import pandapower as pp
+import torch as th
 from torch_geometric.loader import DataLoader
-from utils import load_data, normalize_data
+import tqdm
+from utils import load_model, load_model_hetero, read_from_pkl
+from utils_homo import normalize_data
 from utils_hetero import normalize_data_hetero
-
-
-from utils import load_data_helper, load_model, read_from_pkl, write_to_pkl, load_model_hetero  
 
 
 def main():
@@ -20,9 +21,9 @@ def main():
         else: 
             data, _, _ = normalize_data_hetero(data, data, data)
     if "HeteroGNN" in args.model_path:
-        model = load_model_hetero(args.gnn_type, args.model_path, data, args)
+        model = load_model_hetero(args.gnn_type, args.model_path, data)
     else:
-        model = load_model(args.gnn_type, args.model_path, data, args)
+        model = load_model(args.gnn_type, args.model_path, data)
     model.eval()
     if "HeteroGNN" in args.model_path:
         test_hetero(model, data)
@@ -192,6 +193,16 @@ def process_errors(errors):
         print("within", num_correct_15 / len(errors))
         print("within", num_correct_25 / len(errors))
         print("within", num_correct_50 / len(errors))
+
+
+def normalize_test():
+    graph_path = f"Data/bfs_gen/large/x"
+    graph_paths = sorted(os.listdir(graph_path))
+
+    for g in tqdm.tqdm(graph_paths):
+        graph = pp.from_json(f"{graph_path}/{g}")
+        print(graph.line['r_ohm_per_km'].min())
+        print(graph.line['r_ohm_per_km'].max())
 
 
 if __name__ == '__main__':

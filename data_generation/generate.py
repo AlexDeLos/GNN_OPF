@@ -1,27 +1,26 @@
-import pandapower as pp
-import pandapower.plotting as ppl
-import pandapower.networks as pn
-import pandapower.toolbox as tb
+import argparse
+import copy
 import numpy as np
 import os
-import string
-import random
-import argparse
-from collections import Counter
-import time
-import copy
 from pathlib import Path
+import pandapower.plotting as ppl
+import pandapower as pp
+import pandapower.networks as pn
+import pandapower.toolbox as tb
+import random
+import string
 import subgraphs_methods
-
+import time
 import warnings
-
 # Suppress FutureWarning
 warnings.filterwarnings("ignore", category=FutureWarning)
+
 
 def generate():
     arguments = get_arguments()
     x, t = create_networks(arguments)
     print(f"{x} networks created in {t:0.2f} seconds")
+
 
 def get_arguments():
     parser = argparse.ArgumentParser(
