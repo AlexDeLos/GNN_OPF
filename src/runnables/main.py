@@ -1,9 +1,14 @@
-from train_homo import train_model
-from train_hetero import train_model_hetero
-from utils import get_arguments, load_data, save_model
-from utils_hetero import normalize_data_hetero
-from utils_homo import normalize_data
-from utils_plot import distance_plot, plot_losses
+import os
+import sys
+# local imports
+# add parent directory to sys.path
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from train.train_homo import train_model
+from train.train_hetero import train_model_hetero
+from utils.utils import get_arguments, load_data, save_model
+from utils.utils_hetero import normalize_data_hetero
+from utils.utils_homo import normalize_data
+from utils.utils_plot import distance_plot, plot_losses
 import warnings
 
 # Suppress FutureWarning

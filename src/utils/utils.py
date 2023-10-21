@@ -13,9 +13,14 @@ import string
 import torch as th
 import torch.nn as nn
 import tqdm
-from utils_hetero import create_hetero_data_instance
-from utils_homo import create_data_instance
-from utils_physics import create_physics_data_instance
+import os
+import sys
+# local imports
+# add parent directory to sys.path
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from utils.utils_hetero import create_hetero_data_instance
+from utils.utils_homo import create_data_instance
+from utils.utils_physics import create_physics_data_instance
 
 def get_arguments():
     parser = argparse.ArgumentParser(prog="GNN script",
