@@ -1,27 +1,26 @@
-import pandapower as pp
-import pandapower.plotting as ppl
-import pandapower.networks as pn
-import pandapower.toolbox as tb
+import argparse
+import copy
 import numpy as np
 import os
-import string
-import random
-import argparse
-from collections import Counter
-import time
-import copy
 from pathlib import Path
+import pandapower.plotting as ppl
+import pandapower as pp
+import pandapower.networks as pn
+import pandapower.toolbox as tb
+import random
+import string
 import subgraphs_methods
-
+import time
 import warnings
-
 # Suppress FutureWarning
 warnings.filterwarnings("ignore", category=FutureWarning)
+
 
 def generate():
     arguments = get_arguments()
     x, t = create_networks(arguments)
     print(f"{x} networks created in {t:0.2f} seconds")
+
 
 def get_arguments():
     parser = argparse.ArgumentParser(
@@ -38,12 +37,13 @@ def get_arguments():
     parser.add_argument("--min_size", type=int, default=5)
     parser.add_argument("--max_size", type=int, default=30)
     parser.add_argument("--n_1", type=bool, default=False)
-    parser.add_argument("--subgraphing_method", choices=['rnd_neighbor', 'bfs', 'rnd_walk', 'num_change', 'partitioning'], default='rnd_neighbor')
     parser.add_argument("--no_leakage", action="store_true", default=False)
+    parser.add_argument("--subgraphing_method", choices=['rnd_neighbor', 'bfs', 'rnd_walk', 'partitioning'], default='rnd_neighbor')
 
     args = parser.parse_args()
     print(args)
     return args
+
 
 def get_network(network_name):
     if network_name == 'case4gs':
@@ -108,8 +108,6 @@ def get_subgraphing_method(method_name):
         return subgraphs_methods.bfs_neighbor_selection
     elif method_name == 'rnd_walk':
         return subgraphs_methods.random_walk_neighbor_selection
-    elif method_name == 'num_change':
-        return subgraphs_methods.number_changes
     elif method_name == 'partitioning':
         return subgraphs_methods.partition_graph
 
@@ -127,8 +125,7 @@ def create_networks(arguments):
     if arguments.subgraphing_method == 'partitioning':
         all_partitions_busses = subgraphing_method(full_net)
         for partition_busses in all_partitions_busses:
-            subgraph_net = tb.select_subnet(full_net, partition_busses)
-            is_subgraph_solved = solve_and_save(full_net, subgraph_net, partition_busses, len(partition_busses), arguments)
+            is_subgraph_solved = solve_and_save(full_net, partition_busses, arguments)
             if is_subgraph_solved:
                 n_subgraph_generated += 1
     else:
@@ -136,26 +133,17 @@ def create_networks(arguments):
         starting_points = full_net.gen.bus
         while n_subgraph_generated < arguments.num_subgraphs:
             print(f"generating network {n_subgraph_generated + 1}")
-            if(arguments.subgraphing_method == 'num_change'):
-                varied_full_net = subgraphing_method(copy.deepcopy(full_net))
-                # when calling it in this case the sub graph is not actually a sub graph but the full graph
-                # the reason for this is because when running the num_change data generation we don't actually make a sub graph
-                # we just change the values of the full graph
-                # I belive this is the best way to do it in order to avoid code duplication.
-                is_subgraph_solved = solve_and_save(full_net, varied_full_net, list(varied_full_net.bus.index), len(varied_full_net.bus), arguments)
+            if arguments.n_1:
+                subgraph_busses = list(full_net.bus.index)
+                downed_bus = np.random.randint(0, len(subgraph_busses))
+                del subgraph_busses[downed_bus]
+        
             else:
-                if arguments.n_1:
-                    subgraph_busses = list(full_net.bus.index)
-                    downed_bus = np.random.randint(0, len(subgraph_busses))
-                    del subgraph_busses[downed_bus]
-            
-                else:
-                    subgraph_length = np.random.randint(arguments.min_size, min(arguments.max_size, len(full_net.bus)))
-                    initial_bus = starting_points[np.random.randint(0, len(starting_points))]
-                    subgraph_busses = subgraphing_method(full_net, initial_bus, subgraph_length)
-            
-                subgraph_net = tb.select_subnet(full_net, subgraph_busses)
-                is_subgraph_solved = solve_and_save(full_net, subgraph_net, subgraph_busses, subgraph_length, arguments)
+                subgraph_length = np.random.randint(arguments.min_size, min(arguments.max_size, len(full_net.bus)))
+                initial_bus = starting_points[np.random.randint(0, len(starting_points))]
+                subgraph_busses = subgraphing_method(full_net, initial_bus, subgraph_length)
+        
+            is_subgraph_solved = solve_and_save(full_net, subgraph_busses, arguments)
             
             if is_subgraph_solved:
                 n_subgraph_generated += 1
@@ -164,7 +152,10 @@ def create_networks(arguments):
     return n_subgraph_generated, end - start
 
 
-def solve_and_save(full_net, subgraph_net, subgraph_busses, subgraph_length, arguments):
+def solve_and_save(full_net, subgraph_busses, arguments):
+    subgraph_net = tb.select_subnet(full_net, subgraph_busses)
+    subgraph_length = len(subgraph_busses)
+
     try:
         if arguments.no_leakage:
             subgraph_net = modify_network_values(subgraph_net)

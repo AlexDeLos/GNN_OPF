@@ -1,12 +1,28 @@
+import argparse
 import matplotlib.pyplot as plt 
 import numpy as np
 import os
 import pandas as pd
+import pandapower as pp 
+import pandapower.networks as pn
 import torch as th
-import matplotlib.pyplot as plt
+import tqdm
 
-import numpy as np
-import matplotlib.pyplot as plt
+
+def vis_graphs():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("dir")
+    args = parser.parse_args()
+    dir = args.dir
+    graph_path = f"{dir}/x"
+    graph_paths = sorted(os.listdir(graph_path))
+    data = []
+
+    for g in tqdm.tqdm(enumerate(graph_paths)):
+        graph = pp.from_json(f"{graph_path}/{g}")
+        pn.simple_plot(graph)
+
+    return data
 
 def plot_losses(losses, val_losses, model_name):
     """
@@ -59,8 +75,8 @@ def distance_plot(model, batch):
     plt.xticks(range(0,len))
     plt.xlabel("Nodes away from the generator the node was located")
     
-    # if file is moved in another directory level relative to the root (currently in root/src), this needs to be changed
-    root_directory = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    # if file is moved in another directory level relative to the root (currently in root/utils/src), this needs to be changed
+    root_directory = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     plot_directory = root_directory + "/plots"
     if not os.path.exists(plot_directory):
         os.mkdir(plot_directory)
@@ -70,7 +86,6 @@ def distance_plot(model, batch):
     model_name = "distance_plot" + "_" + model.class_name + "_" + str(timestamp)
     plt.savefig(f"{plot_directory}/{model_name}.png", format="png")
     plt.show()
-
 
 
 def get_distance_loss(out, labels, data):
@@ -108,7 +123,6 @@ def get_distance_loss(out, labels, data):
         if normalization_vector[i] != 0:
             res[i] = res[i]/normalization_vector[i]
     return res, len(res)
-
 
 
 def get_distance_from_generator(data):

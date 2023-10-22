@@ -1,10 +1,15 @@
 import optuna
 import torch
-import numpy as np
 from torch_geometric.loader import DataLoader as pyg_DataLoader
 import tqdm
-from train import train_batch, evaluate_batch
-from utils import get_gnn, load_data, get_criterion, normalize_data
+import os
+import sys
+# local imports
+# add parent directory to sys.path
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from train.train_homo import train_batch, evaluate_batch
+from utils.utils import get_gnn, load_data, get_criterion
+from utils.utils_homo import normalize_data
 
 import warnings
 # Suppress FutureWarning
@@ -23,6 +28,24 @@ def hyperparams_optimization(
         optimizer_class=torch.optim.Adam,
         criterion_function="MSELoss",
     ):
+    """
+    Perform hyperparameter optimization for a given GNN model using Optuna library.
+
+    Args:
+        train (torch_geometric.data.Data): The training dataset.
+        model_class_name (str): The name of the GNN model class to use. Default is "GraphSAGE".
+        n_trials (int): The number of trials to run for hyperparameter optimization. Default is 50.
+        learning_rate_range (tuple): The range of learning rates to search over. Default is (0.01, 0.1).
+        batch_size_values (list): The list of batch sizes to search over. Default is [32, 64].
+        dropout_rate_range (tuple): The range of dropout rates to search over. Default is (0.1, 0.3).
+        num_epochs (int): The number of epochs to train for each trial. Default is 200.
+        patience (int): The number of epochs to wait before early stopping if validation loss does not improve. Default is 30.
+        optimizer_class (torch.optim.Optimizer): The optimizer class to use. Default is torch.optim.Adam.
+        criterion_function (str): The name of the loss function to use. Default is "MSELoss".
+
+    Returns:
+        None
+    """
 
     def objective(trial):
 
