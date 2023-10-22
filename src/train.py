@@ -35,6 +35,10 @@ def train_model(arguments, train, val):
 
     criterion = get_criterion(arguments.criterion)
 
+    device = 'cuda' if th.cuda.is_available() else 'cpu'
+    print(f"Current device: {device}")
+    gnn = gnn.to(device)
+
     losses = []
     val_losses = []
     last_batch = None
@@ -43,10 +47,10 @@ def train_model(arguments, train, val):
         epoch_val_loss = 0.0
         gnn.train()
         for batch in train_dataloader:
-            epoch_loss += train_batch(data=batch, model=gnn, optimizer=optimizer, criterion=criterion, physics_crit=arguments.physics)
+            epoch_loss += train_batch(data=batch, model=gnn, optimizer=optimizer, criterion=criterion, physics_crit=arguments.physics, mix_weight=arguments.weights, device=device)
         gnn.eval()
         for batch in val_dataloader:
-            epoch_val_loss += evaluate_batch(data=batch, model=gnn, criterion=criterion, physics_crit=arguments.physics)
+            epoch_val_loss += evaluate_batch(data=batch, model=gnn, criterion=criterion, physics_crit=arguments.physics, device=device)
 
         avg_epoch_loss = epoch_loss.item() / len(train_dataloader)
         avg_epoch_val_loss = epoch_val_loss.item() / len(val_dataloader)
@@ -72,12 +76,18 @@ def train_model(arguments, train, val):
     return gnn, losses, val_losses, last_batch
 
 
-def train_batch(data, model, optimizer, criterion, physics_crit=False, device='cpu'):
-    model.to(device)
+def train_batch(data, model, optimizer, criterion, physics_crit='none', mix_weight=0.1, device='cpu'):
+    data = data.to(device)
     optimizer.zero_grad()
     out = model(data)
-    if physics_crit:
-        loss = physics_loss(data, out)
+    if physics_crit != 'none':
+        loss1 = physics_loss(data, out, log_loss=True, device=device)
+
+        if physics_crit == 'mixed':
+            loss2 = criterion(out, data.y)
+            loss = loss1 + mix_weight * loss2
+        else:
+            loss = loss1
     else:
         loss = criterion(out, data.y)
     loss.backward()
@@ -85,7 +95,7 @@ def train_batch(data, model, optimizer, criterion, physics_crit=False, device='c
     return loss
 
 
-def physics_loss(network, output, log_loss=True):
+def physics_loss(network, output, log_loss=True, device='cpu'):
     """
     Calculates power imbalances at each node in the graph and sums results.
     Based on loss from https://arxiv.org/abs/2204.07000
@@ -111,7 +121,7 @@ def physics_loss(network, output, log_loss=True):
     susceptances = -1.0 * network.edge_attr[:, 1]
 
     # Combine the fixed input values and predicted missing values
-    combined_output = th.zeros(output.shape)
+    combined_output = th.zeros(output.shape).to(device)
 
     # slack bus:
     idx_list = (network.x[:, 2] > 0.5)  # get slack node id's
@@ -157,7 +167,7 @@ def physics_loss(network, output, log_loss=True):
     # add diagonal (self-admittance) elements of each node as well (angle diff is 0; only cos sections have an effect)
     aggr_act_imb += combined_output[:, 2] * combined_output[:, 2] * pyg_util.scatter(network.edge_attr[:, 0], network.edge_index[0])
     # for reactive self-admittance we also take into account the shunt reactances and not only line reactances
-    aggr_rea_imb += combined_output[:, 2] * combined_output[:, 2] * (-1.0 * (pyg_util.scatter(network.edge_attr[:, 1], network.edge_index[0]) + network.x[:, 8]))
+    aggr_rea_imb += combined_output[:, 2] * combined_output[:, 2] * (-1.0 * (pyg_util.scatter(network.edge_attr[:, 1], network.edge_index[0])))
 
     # subtract from power at each node to find imbalance. negate power output values due to pos/neg conventions for loads/gens
     active_imbalance = -1.0 * combined_output[:, 0] - aggr_act_imb
@@ -168,15 +178,16 @@ def physics_loss(network, output, log_loss=True):
         tot_loss = th.log(1.0 + th.sum(active_imbalance * active_imbalance + reactive_imbalance * reactive_imbalance))
     else:
         tot_loss = th.sum(th.abs(active_imbalance) + th.abs(reactive_imbalance))
+        # tot_loss = th.mean(active_imbalance * active_imbalance + reactive_imbalance * reactive_imbalance)
 
     return tot_loss
 
 
-def evaluate_batch(data, model, criterion, device='cpu', physics_crit=False):
-    model.to(device)
+def evaluate_batch(data, model, criterion, device='cpu', physics_crit='none'):
+    data = data.to(device)
     out = model(data)
-    if physics_crit:
-        loss = physics_loss(data, out)
+    if physics_crit != 'none':
+        loss = physics_loss(data, out, log_loss=False, device=device)
     else:
         loss = criterion(out, data.y) # ac(out, data.x, data.edge_index, data.edge_attr)
     return loss
