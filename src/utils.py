@@ -41,6 +41,7 @@ def get_arguments():
     parser.add_argument("-n", "--n_epochs", default=100, type=int)
     parser.add_argument("-l", "--learning_rate", default=1e-4, type=float)
     parser.add_argument("-w", "--weight_decay", default=0.05, type=float)
+    parser.add_argument("--weights", default=0.1, type=float)
     parser.add_argument("--n_hidden_gnn", default=2, type=int)
     parser.add_argument("--gnn_hidden_dim", default=32, type=int)
     parser.add_argument("--n_hidden_lin", default=2, type=int)
@@ -48,7 +49,7 @@ def get_arguments():
     parser.add_argument("--patience", default=40, type=int)
     parser.add_argument("--plot_node_error", action="store_true", default=False)
     parser.add_argument("--normalize", action="store_true", default=False)
-    parser.add_argument("--physics", action="store_true", default=False)
+    parser.add_argument("--physics", choices=['none', 'physics', 'mixed'], default='none')
     parser.add_argument("--no_linear", action="store_true", default=False)
     parser.add_argument("--value_mode", choices=['all', 'missing', 'voltage'], default='all')
 
@@ -352,7 +353,7 @@ def create_physics_data_instance(graph, y_bus, missing, volt):
     node_feat.fillna(0.0, inplace=True)
     node_feat['vm_pu'] = node_feat['vm_pu'] + node_feat['vm_pu_ext']
     node_feat['p_mw'] = node_feat['p_mw_load'] - node_feat['p_mw_gen'] - node_feat['p_mw_sgen']
-    node_feat['q_mvar'] = node_feat['q_mvar_load'] + node_feat['q_mvar_shunt'] - node_feat['q_mvar_sgen']
+    node_feat['q_mvar'] = node_feat['q_mvar_load'] - node_feat['q_mvar_sgen']
 
     # static generators are modeled as loads in PandaPower
     node_feat['is_load'] = (node_feat['is_sgen'] != 0) | (node_feat['is_load'] != 0)
@@ -390,8 +391,7 @@ def create_physics_data_instance(graph, y_bus, missing, volt):
                                     float(node.p_mw / graph.sn_mva),
                                     float(node.q_mvar / graph.sn_mva),
                                     float(node.vm_pu),
-                                    float(node.va_degree),
-                                    float(node.b_pu_shunt)]
+                                    float(node.va_degree)]
 
         if missing:
             if node.is_load or node.is_none:
