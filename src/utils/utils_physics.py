@@ -75,7 +75,7 @@ def create_physics_data_instance(graph, y_bus, missing, volt):
     node_feat.fillna(0.0, inplace=True)
     node_feat['vm_pu'] = node_feat['vm_pu'] + node_feat['vm_pu_ext']
     node_feat['p_mw'] = node_feat['p_mw_load'] - node_feat['p_mw_gen'] - node_feat['p_mw_sgen']
-    node_feat['q_mvar'] = node_feat['q_mvar_load'] - node_feat['q_mvar_sgen']
+    node_feat['q_mvar'] = node_feat['q_mvar_load'] + node_feat['q_mvar_shunt'] - node_feat['q_mvar_sgen']
 
     # static generators are modeled as loads in PandaPower
     node_feat['is_load'] = (node_feat['is_sgen'] != 0) | (node_feat['is_load'] != 0)
