@@ -42,6 +42,7 @@ def get_arguments():
     parser.add_argument("-n", "--n_epochs", default=200, type=int)
     parser.add_argument("-l", "--learning_rate", default=1e-4, type=float)
     parser.add_argument("-w", "--weight_decay", default=0.05, type=float)
+    parser.add_argument("--weights", default=0.1, type=float)
     parser.add_argument("--n_hidden_gnn", default=2, type=int)
     parser.add_argument("--gnn_hidden_dim", default=32, type=int)
     parser.add_argument("--n_hidden_lin", default=2, type=int)
@@ -49,8 +50,8 @@ def get_arguments():
     parser.add_argument("--patience", default=40, type=int)
     parser.add_argument("--plot_node_error", action="store_true", default=False)
     parser.add_argument("--normalize", action="store_true", default=False)
-    parser.add_argument("--physics", action="store_true", default=False)
     parser.add_argument("--no_linear", action="store_true", default=False)
+    parser.add_argument("--physics", choices=['none', 'physics', 'mixed'], default='none')
     parser.add_argument("--value_mode", choices=['all', 'missing', 'voltage'], default='all')
     parser.add_argument("--pretrain", action="store_true", default=False)
 

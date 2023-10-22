@@ -43,6 +43,10 @@ def train_model(arguments, train, val):
 
     criterion = get_criterion(arguments.criterion)
 
+    device = 'cuda' if th.cuda.is_available() else 'cpu'
+    print(f"Current device: {device}")
+    gnn = gnn.to(device)
+
     losses = []
     val_losses = []
     last_batch = None
@@ -51,10 +55,10 @@ def train_model(arguments, train, val):
         epoch_val_loss = 0.0
         gnn.train()
         for batch in train_dataloader:
-            epoch_loss += train_batch(data=batch, model=gnn, optimizer=optimizer, criterion=criterion, physics_crit=arguments.physics)
+            epoch_loss += train_batch(data=batch, model=gnn, optimizer=optimizer, criterion=criterion, physics_crit=arguments.physics, mix_weight=arguments.weights, device=device)
         gnn.eval()
         for batch in val_dataloader:
-            epoch_val_loss += evaluate_batch(data=batch, model=gnn, criterion=criterion, physics_crit=arguments.physics)
+            epoch_val_loss += evaluate_batch(data=batch, model=gnn, criterion=criterion, physics_crit=arguments.physics, device=device)
 
         avg_epoch_loss = epoch_loss.item() / len(train_dataloader)
         avg_epoch_val_loss = epoch_val_loss.item() / len(val_dataloader)
@@ -80,12 +84,18 @@ def train_model(arguments, train, val):
     return gnn, losses, val_losses, last_batch
 
 
-def train_batch(data, model, optimizer, criterion, physics_crit=False, device='cpu'):
-    model.to(device)
+def train_batch(data, model, optimizer, criterion, physics_crit='none', mix_weight=0.1, device='cpu'):
+    data = data.to(device)
     optimizer.zero_grad()
     out = model(data)
-    if physics_crit:
-        loss = physics_loss(data, out)
+    if physics_crit != 'none':
+        loss1 = physics_loss(data, out, log_loss=True, device=device)
+
+        if physics_crit == 'mixed':
+            loss2 = criterion(out, data.y)
+            loss = loss1 + mix_weight * loss2
+        else:
+            loss = loss1
     else:
         loss = criterion(out, data.y)
     loss.backward()
@@ -93,11 +103,11 @@ def train_batch(data, model, optimizer, criterion, physics_crit=False, device='c
     return loss
 
 
-def evaluate_batch(data, model, criterion, device='cpu', physics_crit=False):
-    model.to(device)
+def evaluate_batch(data, model, criterion, device='cpu', physics_crit='none'):
+    data = data.to(device)
     out = model(data)
-    if physics_crit:
-        loss = physics_loss(data, out)
+    if physics_crit != 'none':
+        loss = physics_loss(data, out, log_loss=False, device=device)
     else:
         loss = criterion(out, data.y) # ac(out, data.x, data.edge_index, data.edge_attr)
     return loss
