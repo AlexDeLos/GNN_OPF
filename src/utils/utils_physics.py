@@ -48,9 +48,9 @@ def create_physics_data_instance(graph, y_bus, missing, volt):
     ext = graph.ext_grid[['bus', 'vm_pu', 'va_degree']]
     ext.rename(columns={'vm_pu': 'vm_pu_ext'}, inplace=True)
     ext_degree = ext.loc[0, 'va_degree']
-    if ext_degree != 30.0:
-        print('ext_degree')
-        print(ext_degree)
+    # if ext_degree != 30.0:
+    #     print('ext_degree')
+    #     print(ext_degree)
     ext['is_ext'] = 1
     ext.set_index('bus', inplace=True)
 

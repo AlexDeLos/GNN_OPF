@@ -3,6 +3,7 @@ from torch_geometric.loader import DataLoader as pyg_DataLoader
 import tqdm
 import os
 import sys
+import numpy as np
 # local imports
 # add parent directory to sys.path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -80,18 +81,38 @@ def train_model(arguments, train, val):
     return gnn, losses, val_losses, last_batch
 
 
-def train_batch(data, model, optimizer, criterion, physics_crit=False, device='cpu'):
+def train_batch(data, model, optimizer, criterion, physics_crit=False, vector_loss = True, device='cpu'):
     model.to(device)
     optimizer.zero_grad()
     out = model(data)
     if physics_crit:
         loss = physics_loss(data, out)
+    elif vector_loss:
+        loss = vector_loss(out, data, criterion)
     else:
-        loss = criterion(out, data.y)
+        loss = criterion(out, data)
+        
     loss.backward()
     optimizer.step()
     return loss
 
+def vector_loss(data,out, device='cpu'):
+    vec_mag_and_vec_angle = out.y[:,:2]
+    out_x = th.mul(th.cos(vec_mag_and_vec_angle[:,0]), vec_mag_and_vec_angle[:,1])
+    out_y = th.mul(th.sin(vec_mag_and_vec_angle[:,0]), vec_mag_and_vec_angle[:,1])
+    out_vector = th.stack((out_x, out_y))
+
+    data_mag_and_data_angle = data[:,:2]
+    data_x = th.cos(data_mag_and_data_angle[:,0]) * data_mag_and_data_angle[:,1]
+    data_y = th.sin(data_mag_and_data_angle[:,0]) * data_mag_and_data_angle[:,1]
+    data_vector = th.stack((data_x, data_y))
+
+
+    loss = th.mean(distance(out_vector, data_vector))
+    return loss
+
+def distance(a,b):
+    return th.sum(th.subtract(a,b)**2,dim=1)
 
 def evaluate_batch(data, model, criterion, device='cpu', physics_crit=False):
     model.to(device)

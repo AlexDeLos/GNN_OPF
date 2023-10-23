@@ -57,14 +57,6 @@ def test(model, data):
     first = True
     for g in loader:
         out = model(g)
-        # if first:
-        #     print("Y")
-        #     print(g.y)
-        #     print("Pred")
-        #     print(out)
-            # quit()
-            # first = False
-            # print(th.cat([g.y, out], dim=1))
         error = th.abs(th.sub(g.y, out))
         p_error = th.div(error, g.y) * 100
         errors.append(error.detach().numpy())
@@ -79,11 +71,6 @@ def test(model, data):
 
     mask = np.isinf(p_errors)
     p_errors[mask] = 0
-
-    # plt.hist(errors)
-    # plt.show()
-    # plt.hist(p_errors)
-    # plt.show()
     print("within 5%", np.sum(abs(p_errors) < 5, axis=0) / len(p_errors))
     print("within 10%", np.sum(abs(p_errors) < 10, axis=0) / len(p_errors))
     print("within 15%", np.sum(abs(p_errors) < 15, axis=0) / len(p_errors))
