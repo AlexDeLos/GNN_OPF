@@ -7,6 +7,7 @@ import networkx as nx
 import sys
 import torch as th
 from torch_geometric.data import HeteroData
+import torch_geometric.utils as pyg_util
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from utils.utils_physics import impedance_to_admittance
 import warnings
@@ -145,7 +146,7 @@ def create_hetero_data_instance(graph, y_bus):
         conductance_line, susceptance_line = impedance_to_admittance(r_tot, x_tot, graph.bus['vn_kv'][edges.from_bus], graph.sn_mva)
         edge_attr_lines_list.append([conductance_line, susceptance_line])
     
-    edge_attr = pd.DataFrame(edge_attr_lines_list, columns=['r_tot', 'x_tot'])
+    edge_attr = pd.DataFrame(edge_attr_lines_list, columns=['conductance', 'susceptance'])
     
 
 
@@ -348,6 +349,83 @@ def normalize_data_hetero(train, val, test, standard_normalization=True):
             data.edge_attr_dict = {k: ((v - min_edge_attr_dict[k]) / (max_edge_attr_dict[k] - min_edge_attr_dict[k] + epsilon) if v.numel() > 0 else v) for k, v in data.edge_attr_dict.items()}
     return train, val, test
 
+
+def physics_loss_hetero(data, output, log_loss=True, device='cpu'):
+
+# take all edge type and copmute -1 * feature 1 and -1 * feature 2
+    conductance_dict = {}
+    susceptance_dict = {}
+    for edge_type in data.edge_attr_dict.keys():
+        if data.edge_attr_dict[edge_type].numel() > 0:
+            conductance_dict[edge_type] = -1.0 * data.edge_attr_dict[edge_type][:, 0]
+            susceptance_dict[edge_type] = -1.0 * data.edge_attr_dict[edge_type][:, 1]
+
+    # create a tensor combining the output features of differnet node types, for
+    # have a columns for va_degree
+    # have a column for vm_pu, for load it should be from the output, for gen and load genit should be from the input
+    # exclude ext
+    
+    n_rows = sum(data.y_dict[node_type].shape[0] for node_type in data.y_dict if node_type != 'ext')
+
+    feature_map = {
+        'load': ['p_mw', 'q_mvar'],
+        'gen': ['p_mw', 'vm_pu'],
+        'load_gen': ['p_mw', 'q_mvar', 'vm_pu'],
+        'ext': ['vm_pu', 'va_degree']
+    }
+
+    y_map = {
+        'load': ['va_degree', 'vm_pu'],
+        'gen': ['va_degree'],
+        'load_gen': ['va_degree'],
+        'ext': None
+    }
+
+    combined_output = th.zeros((n_rows, 2), dtype=th.float, device=device)
+    cols = ['va_degree', 'vm_pu']
+    for node_type in data.x_dict.keys():
+        if node_type != 'ext':
+            if node_type == 'load':
+                combined_output[:data.y_dict[node_type].shape[0], cols.index('va_degree')] = output[node_type][:, y_map[node_type].index('va_degree')]
+                combined_output[:data.y_dict[node_type].shape[0], cols.index('vm_pu')] = output[node_type][:, y_map[node_type].index('vm_pu')]
+            else:
+                combined_output[:data.y_dict[node_type].shape[0], cols.index('va_degree')] = output[node_type][:, y_map[node_type].index('va_degree')]
+                combined_output[:data.y_dict[node_type].shape[0], cols.index('vm_pu')] = data.x_dict[node_type][:, feature_map[node_type].index('vm_pu')]
+
+            
+    total_loss = 0.0
+    for edge_type in data.edge_attr_dict.keys():
+        if data.edge_attr_dict[edge_type].numel() > 0:
+            from_nodes = pyg_util.select(combined_output, data.edge_index_dict[edge_type][0], 0)
+            to_nodes = pyg_util.select(combined_output, data.edge_index_dict[edge_type][1], 0)
+            # make list of nodes that are connected by edges of this type
+            combined_output_nodes = th.cat([from_nodes, to_nodes], dim=0)
+            
+            angle_diffs = (from_nodes[:, cols.index('va_degree')] - to_nodes[:, cols.index('va_degree')]) * math.pi / 180.0  # list of angle differences for all edges
+
+            # calculate incoming/outgoing values based on the edges connected to each node and the node's + neighbour's values
+            act_imb = th.abs(from_nodes[:, cols.index('vm_pu')]) * th.abs(to_nodes[:, cols.index('vm_pu')]) * (conductance_dict[edge_type] * th.cos(angle_diffs) + susceptance_dict[edge_type] * th.sin(angle_diffs))  # per edge power flow into/out of from_nodes
+            rea_imb = th.abs(from_nodes[:, cols.index('vm_pu')]) * th.abs(to_nodes[:, cols.index('vm_pu')]) * (conductance_dict[edge_type] * th.sin(angle_diffs) - susceptance_dict[edge_type] * th.cos(angle_diffs))
+
+            aggr_act_imb = pyg_util.scatter(act_imb, data.edge_index_dict[edge_type][0])  # aggregate all active powers for each node
+            aggr_rea_imb = pyg_util.scatter(rea_imb, data.edge_index_dict[edge_type][0])
+
+            # add diagonal (self-admittance) elements of each node as well (angle diff is 0; only cos sections have an effect)
+            aggr_act_imb += combined_output_nodes[:, cols.index('vm_pu')] * combined_output_nodes[:, cols.index('vm_pu')] * pyg_util.scatter(data.edge_attr_dict[edge_type][:, 0], data.edge_index_dict[edge_type][0])
+            # for reactive self-admittance we also take into account the shunt reactances and not only line reactances
+            aggr_rea_imb += combined_output_nodes[:, cols.index('vm_pu')] * combined_output_nodes[:, cols.index('vm_pu')] * (-1.0 * (pyg_util.scatter(data.edge_attr_dict[edge_type][:, 1], data.edge_index_dict[edge_type][0])))
+
+            # subtract from power at each node to find imbalance. negate power output values due to pos/neg conventions for loads/gens
+            # active_imbalance = -1.0 * combined_output[:, out_idx['p_mw']] - aggr_act_imb
+            # reactive_imbalance = -1.0 * combined_output[:, out_idx['q_mvar']] - aggr_rea_imb
+
+            # # Use either sum of absolute imbalances or log of squared imbalances
+            # if log_loss:
+            #     edge_type_loss = th.log(1.0 + th.sum(active_imbalance * active_imbalance + reactive_imbalance * reactive_imbalance))
+            # else:
+            #     edge_type_loss = th.sum(th.abs(active_imbalance) + th.abs(reactive_imbalance))
+
+            return 0.0
 
 def visualize_hetero(hetero):
     G = nx.Graph()

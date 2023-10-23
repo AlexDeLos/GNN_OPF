@@ -6,6 +6,7 @@ import sys
 # add parent directory to sys.path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from utils.utils import get_gnn, get_optim, get_criterion
+from utils.utils_hetero import physics_loss_hetero
 
 def train_model_hetero(arguments, train, val):
     output_dims = {node_type: train[0].y_dict[node_type].shape[1] for node_type in train[0].y_dict.keys()}
@@ -66,11 +67,12 @@ def train_batch_hetero(data, model, optimizer, criterion, device='cpu'):
     optimizer.zero_grad()
     out_dict = model(data.x_dict, data.edge_index_dict, data.edge_attr_dict)
     loss = 0
-    for node_type, y in data.y_dict.items():
-        # prevent nan loss
-        if y.shape[0] == 0:
-            continue
-        loss += criterion(out_dict[node_type], y)
+    # for node_type, y in data.y_dict.items():
+    #     # prevent nan loss
+    #     if y.shape[0] == 0:
+    #         continue
+    #     loss += criterion(out_dict[node_type], y)
+    loss = physics_loss_hetero(data, out_dict)
     loss.backward()
     optimizer.step()
     return loss
