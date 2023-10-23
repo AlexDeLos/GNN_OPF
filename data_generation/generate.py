@@ -37,6 +37,7 @@ def get_arguments():
     parser.add_argument("--min_size", type=int, default=5)
     parser.add_argument("--max_size", type=int, default=30)
     parser.add_argument("--n_1", type=bool, default=False)
+    parser.add_argument("--no_leakage", action="store_true", default=False)
     parser.add_argument("--subgraphing_method", choices=['rnd_neighbor', 'bfs', 'rnd_walk', 'partitioning'], default='rnd_neighbor')
 
     args = parser.parse_args()
@@ -156,6 +157,9 @@ def solve_and_save(full_net, subgraph_busses, arguments):
     subgraph_length = len(subgraph_busses)
 
     try:
+        if arguments.no_leakage:
+            subgraph_net = modify_network_values(subgraph_net)
+
         # check if the subgraph contains a slack bus, if not add one by setting the slack bus to a random bus
         # if full_net.ext_grid.bus.item() not in subgraph_busses:
         #     slack_bus = subgraph_busses[np.random.randint(0, len(subgraph_busses))]
@@ -180,6 +184,21 @@ def solve_and_save(full_net, subgraph_busses, arguments):
     subgraph_net.res_bus.to_csv(f"{arguments.save_dir}/y/{arguments.network}_{subgraph_length}_{arguments.subgraphing_method}_{uid}_bus.csv")
 
     return True
+
+
+def modify_network_values(netw):
+    # Set leakage (shunt) values to 0
+    netw.line['c_nf_per_km'] = 0.0
+    netw.line['g_us_per_km'] = 0.0
+    netw.shunt = netw.shunt[0:0]
+
+    # Set transformer leakage values to 0
+    netw.trafo['vkr_percent'] = 0.0
+    netw.trafo['pfe_kw'] = 0.0
+    netw.trafo['i0_percent'] = 0.0
+    netw.trafo['tap_step_percent'] = 0.0
+    return netw
+
 
 if __name__ == "__main__":
     generate()

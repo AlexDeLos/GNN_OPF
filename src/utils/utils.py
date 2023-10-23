@@ -42,6 +42,7 @@ def get_arguments():
     parser.add_argument("-n", "--n_epochs", default=200, type=int)
     parser.add_argument("-l", "--learning_rate", default=1e-4, type=float)
     parser.add_argument("-w", "--weight_decay", default=0.05, type=float)
+    parser.add_argument("--mixed_loss_weight", default=0.1, type=float)
     parser.add_argument("--n_hidden_gnn", default=2, type=int)
     parser.add_argument("--gnn_hidden_dim", default=32, type=int)
     parser.add_argument("--n_hidden_lin", default=2, type=int)
@@ -49,8 +50,8 @@ def get_arguments():
     parser.add_argument("--patience", default=40, type=int)
     parser.add_argument("--plot_node_error", action="store_true", default=False)
     parser.add_argument("--normalize", action="store_true", default=False)
-    parser.add_argument("--physics", action="store_true", default=False)
     parser.add_argument("--no_linear", action="store_true", default=False)
+    parser.add_argument("--loss_type", choices=['standard', 'physics', 'mixed'], default='standard')
     parser.add_argument("--value_mode", choices=['all', 'missing', 'voltage'], default='all')
     parser.add_argument("--pretrain", action="store_true", default=False)
 
@@ -58,7 +59,7 @@ def get_arguments():
     return args
 
 
-def load_data(train_dir, val_dir, test_dir, gnn_type, load_physics=False, missing=False, volt=False):
+def load_data(train_dir, val_dir, test_dir, gnn_type, missing=False, volt=False):
     try:
         train = read_from_pkl(f"{train_dir}/pickled.pkl")
         val = read_from_pkl(f"{val_dir}/pickled.pkl")
@@ -68,11 +69,11 @@ def load_data(train_dir, val_dir, test_dir, gnn_type, load_physics=False, missin
         print("Data not found, loading from json files...")
         print("Training Data...")
 
-        train = load_data_helper(train_dir, gnn_type, physics_data=load_physics, missing=missing, volt=volt)
+        train = load_data_helper(train_dir, gnn_type, missing=missing, volt=volt)
         print("Validation Data...")
-        val = load_data_helper(val_dir, gnn_type, physics_data=load_physics, missing=missing, volt=volt)
+        val = load_data_helper(val_dir, gnn_type, missing=missing, volt=volt)
         print("Testing Data...")
-        test = load_data_helper(test_dir, gnn_type, physics_data=load_physics, missing=missing, volt=volt)
+        test = load_data_helper(test_dir, gnn_type, missing=missing, volt=volt)
 
         # save data to pkl
         write_to_pkl(train, f"{train_dir}/pickled.pkl")
@@ -84,7 +85,7 @@ def load_data(train_dir, val_dir, test_dir, gnn_type, load_physics=False, missin
     return train, val, test
 
   
-def load_data_helper(dir, gnn_type, physics_data=False, missing=False, volt=False):
+def load_data_helper(dir, gnn_type, missing=False, volt=False):
     graph_path = f"{dir}/x"
     sol_path = f"{dir}/y"
     graph_paths = sorted(os.listdir(graph_path))
@@ -141,7 +142,7 @@ def get_optim(optim_name):
     if optim_name == "RAdam":
         return th.optim.RAdam
     if optim_name == "RMSProp":
-        return th.optim.RMSProp
+        return th.optim.RMSprop
     if optim_name == "Rprop":
         return th.optim.Rprop
     if optim_name == "SGD":

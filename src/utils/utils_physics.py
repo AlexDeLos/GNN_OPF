@@ -113,8 +113,7 @@ def create_physics_data_instance(graph, y_bus, missing, volt):
                                     float(node.p_mw / graph.sn_mva),
                                     float(node.q_mvar / graph.sn_mva),
                                     float(node.vm_pu),
-                                    float(node.va_degree),
-                                    float(node.b_pu_shunt)]
+                                    float(node.va_degree)]
 
         if missing:
             if node.is_load or node.is_none:
@@ -145,36 +144,32 @@ def create_physics_data_instance(graph, y_bus, missing, volt):
         g.edges[edges.to_bus, edges.from_bus, ('line', edges.Index)]['edge_attr'] = [float(conductance_line), float(susceptance_line)]
 
     for trafos in graph.trafo.itertuples():
-        # First calculate values from low to high voltage bus
+        # Calculate trafo impedance using low voltage side as base voltage
+        # Assumes simplified trafo model (no vkr, iron loss, tap)
         r_tot = 0.0
-        x_tot = trafos.vk_percent * (trafos.vn_lv_kv ** 2) / trafos.sn_mva
+        x_tot = (trafos.vk_percent / 100.0) * (trafos.vn_lv_kv ** 2) / trafos.sn_mva
         conductance, susceptance = impedance_to_admittance(r_tot, x_tot, trafos.vn_lv_kv, graph.sn_mva)
-        g.edges[trafos.lv_bus, trafos.hv_bus, ('trafo', trafos.Index)]['edge_attr'] = [float(conductance), float(susceptance)]
-
-        # Now high to low voltage bus values
-        r_tot = 0.0
-        x_tot = trafos.vk_percent * (trafos.vn_hv_kv ** 2) / trafos.sn_mva
-        conductance, susceptance = impedance_to_admittance(r_tot, x_tot, trafos.vn_hv_kv, graph.sn_mva)
         g.edges[trafos.hv_bus, trafos.lv_bus, ('trafo', trafos.Index)]['edge_attr'] = [float(conductance), float(susceptance)]
+        g.edges[trafos.lv_bus, trafos.hv_bus, ('trafo', trafos.Index)]['edge_attr'] = [float(conductance), float(susceptance)]
 
     return from_networkx(g)
 
 
 def impedance_to_admittance(r_ohm, x_ohm, base_volt, rated_power, per_unit_conversion=True):
     if per_unit_conversion:
-        z_base = base_volt ** 2 / rated_power  # Z_base used to convert impedance to per-unit
+        z_base = math.pow(base_volt, 2) / rated_power  # Z_base used to convert impedance to per-unit
         r_tot = r_ohm / z_base  # Convert to per unit metrics before converting to admittance
         x_tot = x_ohm / z_base
     else:
         r_tot = r_ohm
         x_tot = x_ohm
-    denom = r_tot ** 2 + x_tot ** 2
+    denom = math.pow(r_tot, 2) + math.pow(x_tot, 2)
     conductance = r_tot / denom
     susceptance = -x_tot / denom
     return conductance, susceptance
 
 
-def physics_loss(network, output, log_loss=True):
+def physics_loss(network, output, log_loss=True, device='cpu'):
     """
     Calculates power imbalances at each node in the graph and sums results.
     Based on loss from https://arxiv.org/abs/2204.07000
@@ -200,11 +195,12 @@ def physics_loss(network, output, log_loss=True):
     susceptances = -1.0 * network.edge_attr[:, 1]
 
     # Combine the fixed input values and predicted missing values
-    combined_output = th.zeros(output.shape)
+    combined_output = th.zeros(output.shape).to(device)
 
     # slack bus:
     idx_list = (network.x[:, 2] > 0.5)  # get slack node id's
-    combined_output[idx_list, 2] += network.x[idx_list, 6]  # Add fixed vm_pu from input; va_degree is 0 for slacks
+    combined_output[idx_list, 2] += network.x[idx_list, 6]  # Add fixed vm_pu from input
+    combined_output[idx_list, 3] += network.x[idx_list, 7]  # Add fixed va_degree from input
     combined_output[idx_list, 0] += output[idx_list, 0]  # Add predicted p_mw
     combined_output[idx_list, 1] += output[idx_list, 1]  # Add predicted q_mvar
 
@@ -245,7 +241,7 @@ def physics_loss(network, output, log_loss=True):
     # add diagonal (self-admittance) elements of each node as well (angle diff is 0; only cos sections have an effect)
     aggr_act_imb += combined_output[:, 2] * combined_output[:, 2] * pyg_util.scatter(network.edge_attr[:, 0], network.edge_index[0])
     # for reactive self-admittance we also take into account the shunt reactances and not only line reactances
-    aggr_rea_imb += combined_output[:, 2] * combined_output[:, 2] * (-1.0 * (pyg_util.scatter(network.edge_attr[:, 1], network.edge_index[0]) + network.x[:, 7]))
+    aggr_rea_imb += combined_output[:, 2] * combined_output[:, 2] * (-1.0 * (pyg_util.scatter(network.edge_attr[:, 1], network.edge_index[0])))
 
     # subtract from power at each node to find imbalance. negate power output values due to pos/neg conventions for loads/gens
     active_imbalance = -1.0 * combined_output[:, 0] - aggr_act_imb

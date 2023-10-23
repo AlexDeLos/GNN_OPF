@@ -183,7 +183,7 @@ def normalize_data(train, val, test, standard_normalizaton=True):
 # https://github.com/pyg-team/pytorch_geometric/blob/master/examples/infomax_inductive.py
 # paper: https://arxiv.org/pdf/1809.10341.pdf
 def pretrain(encoder_class, input_dim, output_dim, edge_attr_dim, train_dataloader):
-    device = th.device('cpu')
+    device = 'cuda' if th.cuda.is_available() else 'cpu'
 
     def corruption(data):
         data.x = data.x[th.randperm(data.x.size(0))]
@@ -195,6 +195,7 @@ def pretrain(encoder_class, input_dim, output_dim, edge_attr_dim, train_dataload
         total_examples = 0
         for batch in train_dataloader:
             optimizer.zero_grad()
+            batch = batch.to(device)
             pos_z, neg_z, summary = model(batch)
             loss = model.loss(pos_z, neg_z, summary)
             loss.backward()
@@ -215,7 +216,6 @@ def pretrain(encoder_class, input_dim, output_dim, edge_attr_dim, train_dataload
         corruption=corruption
         ).to(device)
 
-    model = model.to(device)
     optimizer = th.optim.Adam(model.parameters(), lr=0.0001)
 
     for epoch in tqdm.tqdm(range(150)):
