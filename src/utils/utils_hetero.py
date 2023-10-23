@@ -38,9 +38,9 @@ def create_hetero_data_instance(graph, y_bus):
     ext = graph.ext_grid[['bus', 'vm_pu', 'va_degree']]
     ext.rename(columns={'vm_pu': 'vm_pu_ext'}, inplace=True)
     ext_degree = ext.loc[0, 'va_degree']
-    if ext_degree != 30.0:
-        print('ext_degree')
-        print(ext_degree)
+    # if ext_degree != 30.0:
+    #     print('ext_degree')
+    #     print(ext_degree)
     ext['ext'] = 1
     ext.set_index('bus', inplace=True)
 
@@ -90,7 +90,7 @@ def create_hetero_data_instance(graph, y_bus):
 
     # remove duplicate columns/indices
     node_feat = node_feat[~node_feat.index.duplicated(keep='first')]
-    node_feat = node_feat[['load', 'gen', 'load_gen', 'ext', 'p_mw', 'q_mvar', 'va_degree', 'vm_pu', 'b_pu_shunt']]
+    node_feat = node_feat[['load', 'gen', 'load_gen', 'ext', 'p_mw', 'q_mvar', 'va_degree', 'vm_pu']]
     zero_check = node_feat[(node_feat['load'] == 0) & (node_feat['gen'] == 0) & (node_feat['ext'] == 0) & (node_feat['load_gen'] == 0)]
 
     if not zero_check.empty:
@@ -136,9 +136,6 @@ def create_hetero_data_instance(graph, y_bus):
     edge_index = graph.line[['from_bus', 'to_bus']].reset_index(drop=True)
     edge_index['from_bus'] = edge_index['from_bus'].map(index_mapping)
     edge_index['to_bus'] = edge_index['to_bus'].map(index_mapping)
-    swapped = deepcopy(edge_index)
-    swapped[['from_bus', 'to_bus']] = edge_index[['to_bus', 'from_bus']]
-    # edge_index = pd.concat([edge_index, swapped], axis=0).reset_index(drop=True) should we include this line???
 
     edge_attr_lines_list = []
     for edges in graph.line.itertuples():
@@ -148,7 +145,6 @@ def create_hetero_data_instance(graph, y_bus):
         conductance_line, susceptance_line = impedance_to_admittance(r_tot, x_tot, graph.bus['vn_kv'][edges.from_bus], graph.sn_mva)
         edge_attr_lines_list.append([conductance_line, susceptance_line])
     
-    # we are missing the swapped edges attributes, to add, create another for loop and uncomment the line above
     edge_attr = pd.DataFrame(edge_attr_lines_list, columns=['r_tot', 'x_tot'])
     
 
@@ -157,9 +153,6 @@ def create_hetero_data_instance(graph, y_bus):
     edge_index_trafo = graph.trafo[['lv_bus', 'hv_bus']].reset_index(drop=True)
     edge_index_trafo['lv_bus'] = edge_index_trafo['lv_bus'].map(index_mapping)
     edge_index_trafo['hv_bus'] = edge_index_trafo['hv_bus'].map(index_mapping)
-    swapped_trafo = deepcopy(edge_index_trafo)
-    swapped_trafo[['lv_bus', 'hv_bus']] = edge_index_trafo[['hv_bus', 'lv_bus']]
-    # edge_index_trafo = pd.concat([edge_index_trafo, swapped_trafo], axis=0).reset_index(drop=True) should we include this line???
     
     
     # create a edge attribute dataframe for the transformers
@@ -170,7 +163,6 @@ def create_hetero_data_instance(graph, y_bus):
         conductance, susceptance = impedance_to_admittance(r_tot, x_tot, trafo.vn_lv_kv, graph.sn_mva)
         edge_attr_trafo_list.append([conductance, susceptance])
     
-    # we are missing the swapped edges attributes, to add, create another for loop and uncomment the line above
     edge_attr_trafo = pd.DataFrame(edge_attr_trafo_list, columns=['conductance', 'susceptance'])
         
     data = HeteroData()
