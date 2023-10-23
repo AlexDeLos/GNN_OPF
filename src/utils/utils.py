@@ -142,7 +142,7 @@ def get_optim(optim_name):
     if optim_name == "RAdam":
         return th.optim.RAdam
     if optim_name == "RMSProp":
-        return th.optim.RMSProp
+        return th.optim.RMSprop
     if optim_name == "Rprop":
         return th.optim.Rprop
     if optim_name == "SGD":
