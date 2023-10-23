@@ -460,12 +460,12 @@ def physics_loss_hetero(data, output, log_loss=True, device='cpu'):
 
     # Use either sum of absolute imbalances or log of squared imbalances
     if log_loss:
-        aggr_imbalances = th.tensor([0.0])
+        aggr_imbalances = th.tensor([0.0], device=device)
         for node_type in data.x_dict.keys():
             aggr_imbalances += th.sum(active_imbalance[node_type] * active_imbalance[node_type] + reactive_imbalance[node_type] * reactive_imbalance[node_type])
         tot_loss = th.log(1.0 + aggr_imbalances)
     else:
-        tot_loss = th.tensor([0.0])
+        tot_loss = th.tensor([0.0], device=device)
         for node_type in data.x_dict.keys():
             tot_loss += th.sum(th.abs(active_imbalance[node_type]) + th.abs(reactive_imbalance[node_type]))
 
