@@ -61,7 +61,7 @@ def expand_helper(args, graph, name):
             new_graph.load.at[i,'p_mw'] = new_graph.load.at[i,'p_mw'] * (ratio_increase + individual_variation)
             new_p_mws.append(new_graph.load.at[i,'p_mw'])
             #same correlation of the P_mw
-            new_graph.load.at[i,'q_mvar'] =np.abs(np.random.normal(new_graph.load.at[i,'q_mvar'], np.sqrt(abs(new_graph.load.at[i,'q_mvar'])))) # goes from -50 to about 300
+            new_graph.load.at[i,'q_mvar'] = new_graph.load.at[i,'q_mvar'] * (ratio_increase + individual_variation)
         # Average value by which the load changes
         div = np.divide(np.array(new_p_mws),np.array(old_p_mws))
         # making sure that the average change is the same for the generators
