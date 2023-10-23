@@ -1,10 +1,14 @@
 from copy import deepcopy
 import math
 import matplotlib.pyplot as plt
+import os
 import pandas as pd
 import networkx as nx
+import sys
 import torch as th
 from torch_geometric.data import HeteroData
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from utils.utils_physics import impedance_to_admittance
 import warnings
 # suppress the UserWarning
 warnings.filterwarnings('ignore', '.*Boolean Series key will be reindexed.*')
@@ -16,38 +20,86 @@ def create_hetero_data_instance(graph, y_bus):
     gen.rename(columns={'p_mw': 'p_mw_gen'}, inplace=True)
     gen['gen'] = 1
     gen.set_index('bus', inplace=True)
+    
+    # https://pandapower.readthedocs.io/en/latest/elements/sgen.html
+    # Note: multiple static generators can be attached to 1 bus!
+    sgen = graph.sgen[['bus', 'p_mw', 'q_mvar']]
+    sgen.rename(columns={'p_mw': 'p_mw_sgen'}, inplace=True)
+    sgen.rename(columns={'q_mvar': 'q_mvar_sgen'}, inplace=True)
+    sgen = sgen.groupby('bus')[['p_mw_sgen', 'q_mvar_sgen']].sum()  # Already resets index
+    sgen['sgen'] = 1
 
     load = graph.load[['bus', 'p_mw', 'q_mvar']]
     load.rename(columns={'p_mw': 'p_mw_load'}, inplace=True)
+    load.rename(columns={'q_mvar': 'q_mvar_load'}, inplace=True)
     load['load'] = 1
     load.set_index('bus', inplace=True)
 
     ext = graph.ext_grid[['bus', 'vm_pu', 'va_degree']]
     ext.rename(columns={'vm_pu': 'vm_pu_ext'}, inplace=True)
+    ext_degree = ext.loc[0, 'va_degree']
+    # if ext_degree != 30.0:
+    #     print('ext_degree')
+    #     print(ext_degree)
     ext['ext'] = 1
     ext.set_index('bus', inplace=True)
+
+    # https://pandapower.readthedocs.io/en/latest/elements/shunt.html
+    shunt = graph.shunt[['bus', 'q_mvar', 'step']]
+    shunt['b_pu_shunt'] = shunt['q_mvar'] * shunt['step'] / graph.sn_mva
+    shunt.rename(columns={'q_mvar': 'q_mvar_shunt'}, inplace=True)
+    del shunt['step']
+    shunt.set_index('bus', inplace=True)
     
     # Merge to one dataframe
     node_feat = graph.bus[['vn_kv']]
+
     node_feat = node_feat.merge(gen, left_index=True, right_index=True, how='outer')
+    node_feat = node_feat.merge(sgen, left_index=True, right_index=True, how='outer')
     node_feat = node_feat.merge(load, left_index=True, right_index=True, how='outer')
     node_feat = node_feat.merge(ext, left_index=True, right_index=True, how='outer')
+    node_feat = node_feat.merge(shunt, left_index=True, right_index=True, how='outer')
+
 
     # fill missing feature values with 0
     node_feat.fillna(0.0, inplace=True)
     node_feat['vm_pu'] = node_feat['vm_pu'] + node_feat['vm_pu_ext']
-    node_feat['p_mw'] = node_feat['p_mw_load'] - node_feat['p_mw_gen']
+    node_feat['p_mw'] = node_feat['p_mw_load'] - node_feat['p_mw_gen'] - node_feat['p_mw_sgen']
+    node_feat['p_mw'] = node_feat['p_mw'] / graph.sn_mva
+    node_feat['q_mvar'] = node_feat['q_mvar_load'] + node_feat['q_mvar_shunt'] - node_feat['q_mvar_sgen']
+    node_feat['q_mvar'] = node_feat['q_mvar'] / graph.sn_mva
 
-    # remove duplicate columns/indices
-    node_feat = node_feat[~node_feat.index.duplicated(keep='first')]
+
+    # static generators are modeled as loads in PandaPower
+    node_feat['load'] = (node_feat['sgen'] != 0) | (node_feat['load'] != 0)
+    
+    del node_feat['vm_pu_ext']
+    del node_feat['p_mw_gen']
+    del node_feat['p_mw_sgen']
+    del node_feat['p_mw_load']
+    del node_feat['q_mvar_load']
+    del node_feat['q_mvar_sgen']
+    del node_feat['q_mvar_shunt']
+    del node_feat['sgen']
+
     node_feat['none'] = ((node_feat['gen'] == 0) & (node_feat['ext'] == 0) & (node_feat['load'] == 0)).astype(float)
     node_feat['load'] = node_feat['load'] + node_feat['none']
     node_feat['load_gen'] = ((node_feat['load'] == 1) & (node_feat['gen'] == 1)).astype(float)
     node_feat['load'] = ((node_feat['load'] == 1) & (node_feat['load_gen'] == 0) & (node_feat['ext'] == 0)).astype(float)
     node_feat['gen'] = ((node_feat['gen'] == 1) & (node_feat['load_gen'] == 0)).astype(float)
 
-    # Select relevant columns
-    node_feat = node_feat[['load', 'gen', 'load_gen', 'ext', 'p_mw', 'q_mvar', 'vm_pu', 'va_degree']]
+    # remove duplicate columns/indices
+    node_feat = node_feat[~node_feat.index.duplicated(keep='first')]
+    node_feat = node_feat[['load', 'gen', 'load_gen', 'ext', 'p_mw', 'q_mvar', 'va_degree', 'vm_pu']]
+    zero_check = node_feat[(node_feat['load'] == 0) & (node_feat['gen'] == 0) & (node_feat['ext'] == 0) & (node_feat['load_gen'] == 0)]
+
+    if not zero_check.empty:
+        print("zero check failed")
+        print(node_feat)
+        print("zero check results")
+        print(zero_check)
+        quit()
+
     # Organize by type, but keep original indexing
     node_feat = pd.concat([
         node_feat[node_feat['load'] == 1],
@@ -84,38 +136,34 @@ def create_hetero_data_instance(graph, y_bus):
     edge_index = graph.line[['from_bus', 'to_bus']].reset_index(drop=True)
     edge_index['from_bus'] = edge_index['from_bus'].map(index_mapping)
     edge_index['to_bus'] = edge_index['to_bus'].map(index_mapping)
-    swapped = deepcopy(edge_index)
-    swapped[['from_bus', 'to_bus']] = edge_index[['to_bus', 'from_bus']]
 
-    # Get edge attributes, reset index to match edge_index, and make bidirectional
-    edge_attr = graph.line[['r_ohm_per_km',
-                           'x_ohm_per_km',
-                           'c_nf_per_km',
-                           'g_us_per_km',
-                           'max_i_ka',
-                           'parallel',
-                           'df',
-                           'length_km']].reset_index(drop=True)
+    edge_attr_lines_list = []
+    for edges in graph.line.itertuples():
+        # Calculate line admittance from impedance and convert to per-unit system
+        r_tot = float(edges.r_ohm_per_km) * float(edges.length_km)
+        x_tot = float(edges.x_ohm_per_km) * float(edges.length_km)
+        conductance_line, susceptance_line = impedance_to_admittance(r_tot, x_tot, graph.bus['vn_kv'][edges.from_bus], graph.sn_mva)
+        edge_attr_lines_list.append([conductance_line, susceptance_line])
     
+    edge_attr = pd.DataFrame(edge_attr_lines_list, columns=['r_tot', 'x_tot'])
+    
+
+
     # Get edges for transformers, reindex, and make bidirectional
     edge_index_trafo = graph.trafo[['lv_bus', 'hv_bus']].reset_index(drop=True)
     edge_index_trafo['lv_bus'] = edge_index_trafo['lv_bus'].map(index_mapping)
     edge_index_trafo['hv_bus'] = edge_index_trafo['hv_bus'].map(index_mapping)
-    swapped_trafo = deepcopy(edge_index_trafo)
-    swapped_trafo[['lv_bus', 'hv_bus']] = edge_index_trafo[['hv_bus', 'lv_bus']]
     
     
     # create a edge attribute dataframe for the transformers
-    edge_attr_trafo = pd.DataFrame(columns=['one', 'two', 'three']) # what are the computed features called?
-    edge_attr_list = []
+    edge_attr_trafo_list = []
     for trafo in graph.trafo.itertuples():
-        # Calculate transformer attributes
-        vkr_pu = float(trafo.vkr_percent / (trafo.sn_mva / (trafo.vn_lv_kv * math.sqrt(3))))
-        p_pu = float(math.sqrt((trafo.vk_percent ** 2) - (trafo.vkr_percent) ** 2) / (trafo.sn_mva / (trafo.vn_lv_kv * math.sqrt(3))))
-        q_pu = float(1.0)
-        edge_attr_list.append([vkr_pu, p_pu, q_pu])
+        r_tot = 0.0
+        x_tot = (trafo.vk_percent / 100) * (trafo.vn_lv_kv ** 2) / trafo.sn_mva
+        conductance, susceptance = impedance_to_admittance(r_tot, x_tot, trafo.vn_lv_kv, graph.sn_mva)
+        edge_attr_trafo_list.append([conductance, susceptance])
     
-    edge_attr_trafo = pd.DataFrame(edge_attr_list, columns=['one', 'two', 'three'])
+    edge_attr_trafo = pd.DataFrame(edge_attr_trafo_list, columns=['conductance', 'susceptance'])
         
     data = HeteroData()
 
