@@ -55,10 +55,10 @@ def train_model(arguments, train, val):
         epoch_val_loss = 0.0
         gnn.train()
         for batch in train_dataloader:
-            epoch_loss += train_batch(data=batch, model=gnn, optimizer=optimizer, criterion=criterion, physics_crit=arguments.physics, mix_weight=arguments.weights, device=device)
+            epoch_loss += train_batch(data=batch, model=gnn, optimizer=optimizer, criterion=criterion, loss_type=arguments.loss_type, mix_weight=arguments.mixed_loss_weight, device=device)
         gnn.eval()
         for batch in val_dataloader:
-            epoch_val_loss += evaluate_batch(data=batch, model=gnn, criterion=criterion, physics_crit=arguments.physics, device=device)
+            epoch_val_loss += evaluate_batch(data=batch, model=gnn, criterion=criterion, loss_type=arguments.loss_type, device=device)
 
         avg_epoch_loss = epoch_loss.item() / len(train_dataloader)
         avg_epoch_val_loss = epoch_val_loss.item() / len(val_dataloader)
@@ -84,14 +84,14 @@ def train_model(arguments, train, val):
     return gnn, losses, val_losses, last_batch
 
 
-def train_batch(data, model, optimizer, criterion, physics_crit='none', mix_weight=0.1, device='cpu'):
+def train_batch(data, model, optimizer, criterion, loss_type='standard', mix_weight=0.1, device='cpu'):
     data = data.to(device)
     optimizer.zero_grad()
     out = model(data)
-    if physics_crit != 'none':
+    if loss_type != 'standard':
         loss1 = physics_loss(data, out, log_loss=True, device=device)
 
-        if physics_crit == 'mixed':
+        if loss_type == 'mixed':
             loss2 = criterion(out, data.y)
             loss = loss1 + mix_weight * loss2
         else:
@@ -103,10 +103,10 @@ def train_batch(data, model, optimizer, criterion, physics_crit='none', mix_weig
     return loss
 
 
-def evaluate_batch(data, model, criterion, device='cpu', physics_crit='none'):
+def evaluate_batch(data, model, criterion, device='cpu', loss_type='standard'):
     data = data.to(device)
     out = model(data)
-    if physics_crit != 'none':
+    if loss_type != 'standard':
         loss = physics_loss(data, out, log_loss=False, device=device)
     else:
         loss = criterion(out, data.y) # ac(out, data.x, data.edge_index, data.edge_attr)

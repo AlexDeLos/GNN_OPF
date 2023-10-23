@@ -23,8 +23,7 @@ def main():
     train, val, test = load_data(arguments.train, 
                                  arguments.val, 
                                  arguments.test, 
-                                 arguments.gnn, 
-                                 load_physics=arguments.physics,
+                                 arguments.gnn,
                                  missing=arguments.value_mode == 'missing',
                                  volt=arguments.value_mode == 'voltage')  
 
