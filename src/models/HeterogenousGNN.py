@@ -39,7 +39,7 @@ class HeteroGNN(torch.nn.Module):
             conv_dict = {}
             for edge_type in edge_types:
                 conv_dict[edge_type] = conv_class((-1, -1), hidden_conv_dim, add_self_loops=False)
-            conv = HeteroConv(conv_dict, aggr='sum')
+            conv = HeteroConv(conv_dict, aggr='mean')
             self.convs.append(conv)
 
         # Apply n lin layers to each node type
@@ -72,7 +72,7 @@ class HeteroGNN(torch.nn.Module):
             else:
                 x_dict = conv(x_dict, edge_index_dict, edge_attr_dict)
 
-            x_dict = {k: x.relu() for k, x in x_dict.items()}
+            x_dict = {k: F.leaky_relu(x, 0.2) for k, x in x_dict.items()}
             x_dict = {k: F.dropout(x, p=self.dropout_rate, training=self.training) for k, x in x_dict.items()}
         
         for i in range(len(self.lins)-1):
