@@ -231,6 +231,11 @@ def create_hetero_data_instance(graph, y_bus, physics_data=False):
             if bidirectional_edge_index_node_type.shape[0] > 0:
                 data[node_type, con_type, node_type].edge_index = th.tensor(map_indices(bidirectional_edge_index_node_type, new_dict).values, dtype=th.long).t().contiguous()
                 data[node_type, con_type, node_type].edge_attr = th.tensor(bidirectional_edge_attr_node_type.values, dtype=th.float)
+
+                # Add reverse direction edges as well for bidirectional edges instead of one directional
+                reverse_edge_indices = th.stack((data[node_type, con_type, node_type].edge_index[1], data[node_type, con_type, node_type].edge_index[0]))
+                data[node_type, con_type, node_type].edge_index = th.cat((data[node_type, con_type, node_type].edge_index, reverse_edge_indices), -1)
+                data[node_type, con_type, node_type].edge_attr = th.cat((data[node_type, con_type, node_type].edge_attr, data[node_type, con_type, node_type].edge_attr))
             else:
                 data[node_type, con_type, node_type].edge_index = th.tensor([], dtype=th.long).t().contiguous()
                 data[node_type, con_type, node_type].edge_attr = th.tensor([], dtype=th.float)
