@@ -38,7 +38,10 @@ class HeteroGNN(torch.nn.Module):
         for _ in range(n_hidden_conv):
             conv_dict = {}
             for edge_type in edge_types:
-                conv_dict[edge_type] = conv_class((-1, -1), hidden_conv_dim, add_self_loops=False)
+                if conv_type == 'GAT':
+                    conv_dict[edge_type] = conv_class((-1, -1), hidden_conv_dim, edge_dim=-1, add_self_loops=False)
+                elif conv_type == 'SAGE':
+                    conv_dict[edge_type] = conv_class((-1, -1), hidden_conv_dim, add_self_loops=False)
             conv = HeteroConv(conv_dict, aggr='mean')
             self.convs.append(conv)
 
