@@ -59,7 +59,7 @@ def get_arguments():
     return args
 
 
-def load_data(train_dir, val_dir, test_dir, gnn_type, missing=False, volt=False):
+def load_data(train_dir, val_dir, test_dir, gnn_type, missing=False, volt=False, physics_data=False):
     try:
         train = read_from_pkl(f"{train_dir}/pickled.pkl")
         val = read_from_pkl(f"{val_dir}/pickled.pkl")
@@ -69,11 +69,11 @@ def load_data(train_dir, val_dir, test_dir, gnn_type, missing=False, volt=False)
         print("Data not found, loading from json files...")
         print("Training Data...")
 
-        train = load_data_helper(train_dir, gnn_type, missing=missing, volt=volt)
+        train = load_data_helper(train_dir, gnn_type, missing=missing, volt=volt, physics_data=physics_data)
         print("Validation Data...")
-        val = load_data_helper(val_dir, gnn_type, missing=missing, volt=volt)
+        val = load_data_helper(val_dir, gnn_type, missing=missing, volt=volt, physics_data=physics_data)
         print("Testing Data...")
-        test = load_data_helper(test_dir, gnn_type, missing=missing, volt=volt)
+        test = load_data_helper(test_dir, gnn_type, missing=missing, volt=volt, physics_data=physics_data)
 
         # save data to pkl
         write_to_pkl(train, f"{train_dir}/pickled.pkl")
@@ -85,7 +85,7 @@ def load_data(train_dir, val_dir, test_dir, gnn_type, missing=False, volt=False)
     return train, val, test
 
   
-def load_data_helper(dir, gnn_type, missing=False, volt=False):
+def load_data_helper(dir, gnn_type, missing=False, volt=False, physics_data=False):
     graph_path = f"{dir}/x"
     sol_path = f"{dir}/y"
     graph_paths = sorted(os.listdir(graph_path))
@@ -101,7 +101,7 @@ def load_data_helper(dir, gnn_type, missing=False, volt=False):
         if gnn_type[:6] != "Hetero":
             instance = create_physics_data_instance(graph, y_bus, missing, volt)
         else:
-            instance = create_hetero_data_instance(graph, y_bus)
+            instance = create_hetero_data_instance(graph, y_bus, physics_data=physics_data)
         data.append(instance)
 
     return data

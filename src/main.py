@@ -25,7 +25,8 @@ def main():
                                  arguments.test, 
                                  arguments.gnn,
                                  missing=arguments.value_mode == 'missing',
-                                 volt=arguments.value_mode == 'voltage')  
+                                 volt=arguments.value_mode == 'voltage',
+                                 physics_data=arguments.loss_type != 'standard')
 
     if arguments.normalize:
         print("Normalizing Data")
