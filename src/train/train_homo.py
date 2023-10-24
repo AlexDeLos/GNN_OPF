@@ -108,13 +108,13 @@ def train_batch(data, model, optimizer, criterion, loss_type='standard', mix_wei
 
 def vector_loss(data,out, device='cpu'):
     vec_mag_and_vec_angle = out.y[:,:2]
-    out_x = th.mul(th.cos(vec_mag_and_vec_angle[:,0]), vec_mag_and_vec_angle[:,1])
-    out_y = th.mul(th.sin(vec_mag_and_vec_angle[:,0]), vec_mag_and_vec_angle[:,1])
+    out_x = th.mul(th.cos(vec_mag_and_vec_angle[:,1]), vec_mag_and_vec_angle[:,0])
+    out_y = th.mul(th.sin(vec_mag_and_vec_angle[:,1]), vec_mag_and_vec_angle[:,0])
     out_vector = th.stack((out_x, out_y))
 
     data_mag_and_data_angle = data[:,:2]
-    data_x = th.cos(data_mag_and_data_angle[:,0]) * data_mag_and_data_angle[:,1]
-    data_y = th.sin(data_mag_and_data_angle[:,0]) * data_mag_and_data_angle[:,1]
+    data_x = th.mul(data_mag_and_data_angle[:,0], th.cos(data_mag_and_data_angle[:,1]))
+    data_y = th.mul(data_mag_and_data_angle[:,0], th.sin(data_mag_and_data_angle[:,1]))
     data_vector = th.stack((data_x, data_y))
 
 
@@ -122,7 +122,8 @@ def vector_loss(data,out, device='cpu'):
     return loss
 
 def distance(a,b):
-    return th.sum(th.subtract(a,b)**2,dim=1)
+    pdist = th.nn.PairwiseDistance(p=2)
+    return pdist(a.T,b.T)
 
 def evaluate_batch(data, model, criterion, device='cpu', loss_type='standard'):
     data = data.to(device)
