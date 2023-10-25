@@ -62,28 +62,30 @@ def get_arguments():
 def load_data(train_dir, val_dir, test_dir, gnn_type, missing=False, volt=False, physics_data=False):
     try:
         train = read_from_pkl(f"{train_dir}/pickled.pkl")
-        val = read_from_pkl(f"{val_dir}/pickled.pkl")
-        test = read_from_pkl(f"{test_dir}/pickled.pkl")
-        print("Data Loaded from pkl files")
     except:
-        print("Data not found, loading from json files...")
-        print("Training Data...")
-
+        print("Training data not found, loading from json files...")
         train = load_data_helper(train_dir, gnn_type, missing=missing, volt=volt, physics_data=physics_data)
         # save data to pkl
         write_to_pkl(train, f"{train_dir}/pickled.pkl")
+        print("Training data loaded and saved to pkl file")
 
-        print("Validation Data...")
+    try:
+        val = read_from_pkl(f"{val_dir}/pickled.pkl")
+    except:
+        print("Validation data not found, loading from json files...")
         val = load_data_helper(val_dir, gnn_type, missing=missing, volt=volt, physics_data=physics_data)
         write_to_pkl(val, f"{val_dir}/pickled.pkl")
+        print("Validation data loaded and saved to pkl file")
 
-        print("Testing Data...")
+    try:
+        test = read_from_pkl(f"{test_dir}/pickled.pkl")
+    except:
+        print("Test data not found, loading from json files...")
         # Physics_data true and missing/volt to false for testing sets, because we also need the ground truth power values, not just voltages
         test = load_data_helper(test_dir, gnn_type, missing=False, volt=False, physics_data=True)
         write_to_pkl(test, f"{test_dir}/pickled.pkl")
-
-        print("Data Loaded and saved to pkl files")
-
+        print("Test data loaded and saved to pkl file")
+        
     return train, val, test
 
   
