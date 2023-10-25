@@ -9,7 +9,7 @@ import pandapower.networks as pn
 import pandapower.toolbox as tb
 import random
 import string
-import subgraphs_methods
+import data_generation.subgraphs_methods
 import time
 import warnings
 # Suppress FutureWarning
@@ -37,7 +37,7 @@ def get_arguments():
     parser.add_argument("--min_size", type=int, default=5)
     parser.add_argument("--max_size", type=int, default=30)
     parser.add_argument("--n_1", type=bool, default=False)
-    parser.add_argument("--no_leakage", action="store_true", default=False)
+    parser.add_argument("--no_leakage", action="store_true", default=True)
     parser.add_argument("--subgraphing_method", choices=['rnd_neighbor', 'bfs', 'rnd_walk', 'partitioning'], default='rnd_neighbor')
 
     args = parser.parse_args()
