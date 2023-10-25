@@ -1,7 +1,7 @@
 from torch_geometric.nn import HeteroConv, GATConv, SAGEConv, Linear, GATv2Conv, GINEConv
 import torch
 import torch.nn.functional as F
-from torch.nn import Sequential, BatchNorm1d, LeakyReLU
+from torch.nn import Sequential, BatchNorm1d, LeakyReLU, ReLU
 
 class HeteroGNN(torch.nn.Module):
     class_name = "HeteroGNN"
@@ -43,7 +43,7 @@ class HeteroGNN(torch.nn.Module):
             raise ValueError(f"conv_type must be 'GAT', 'GATv2' or 'SAGE', not {conv_type}")
         
         self.n_heads = n_heads
-        for _ in range(n_hidden_conv):
+        for i in range(n_hidden_conv):
             conv_dict = {}
             for edge_type in edge_types:
                 if conv_type == 'GAT' or conv_type == 'GATv2':
@@ -53,17 +53,18 @@ class HeteroGNN(torch.nn.Module):
                 elif conv_type == 'GINE':
                     # https://github.com/pyg-team/pytorch_geometric/discussions/4607
                     # need to bring all node type to same dimensionality
-                    self.input_lins = torch.nn.ModuleDict()
-                    for node_type in output_dim_dict.keys():
-                        self.input_lins[node_type] = Linear(-1, hidden_conv_dim)
-                    self.input_lins['ext'] = Linear(-1, hidden_conv_dim) # since we miss the key for ext in output_dim_dict
+                    if i == 0:
+                        self.input_lins = torch.nn.ModuleDict()
+                        for node_type in output_dim_dict.keys():
+                            self.input_lins[node_type] = Linear(-1, hidden_conv_dim)
+                        self.input_lins['ext'] = Linear(-1, hidden_conv_dim) # since we miss the key for ext in output_dim_dict
                     conv_dict[edge_type] = conv_class(
                     Sequential(
                         Linear(hidden_conv_dim, hidden_conv_dim), 
                         BatchNorm1d(hidden_conv_dim), 
-                        LeakyReLU(0.2),
+                        ReLU(),
                         Linear(hidden_conv_dim, hidden_conv_dim), 
-                        LeakyReLU(0.2),
+                        ReLU(),
                     ),
                     edge_dim=-1
                 )
