@@ -34,7 +34,6 @@ def get_args():
     parser.add_argument("-s", "--save_dir", default=root_directory + "/Data")
     parser.add_argument("-n", "--num_networks", type=int, default=1)
     parser.add_argument("--down_lines", type=int, default=0)
-    parser.add_argument("--no_leakage", action="store_true", default=False)
     parser.add_argument("--from_case", choices=['case4gs', 'case5', 'case6ww', 'case9', 'case14', 'case24_ieee_rts', 'case30', 'case_ieee30', 'case39', 'case57', 'case89pegase', 'case118', 'case145', 'case_illinois200', 'case300', 'case1354pegase', 'case1888rte', 'case2848rte', 'case2869pegase', 'case3120sp', 'case6470rte', 'case6495rte', 'case6515rte', 'case9241', 'GBnetwork', 'GBreducednetwork', 'iceland'], default= None)
     args = parser.parse_args()
     print(args)
@@ -84,10 +83,7 @@ def expand_helper(args, graph, name):
             
 
         try:
-            if args.no_leakage:
-                print("no leakage")
-                new_graph = modify_network_values(new_graph)
-
+            new_graph = modify_network_values(new_graph)
             pp.runpp(new_graph, numba=False)
             num_generated_graphs += 1
             trials = 0

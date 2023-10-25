@@ -73,7 +73,8 @@ def load_data(train_dir, val_dir, test_dir, gnn_type, missing=False, volt=False,
         print("Validation Data...")
         val = load_data_helper(val_dir, gnn_type, missing=missing, volt=volt, physics_data=physics_data)
         print("Testing Data...")
-        test = load_data_helper(test_dir, gnn_type, missing=missing, volt=volt, physics_data=physics_data)
+        # Physics_data true and missing/volt to false for testing sets, because we also need the ground truth power values, not just voltages
+        test = load_data_helper(test_dir, gnn_type, missing=False, volt=False, physics_data=True)
 
         # save data to pkl
         write_to_pkl(train, f"{train_dir}/pickled.pkl")
