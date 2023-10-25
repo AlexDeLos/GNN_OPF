@@ -1,22 +1,22 @@
-from torch_geometric.nn import HeteroConv, GATConv, SAGEConv, Linear, GATv2Conv
+from torch_geometric.nn import HeteroConv, GATConv, SAGEConv, Linear, GATv2Conv, GINEConv
 import torch
 import torch.nn.functional as F
-
+from torch.nn import Sequential, BatchNorm1d, LeakyReLU
 
 class HeteroGNN(torch.nn.Module):
     class_name = "HeteroGNN"
     
     def __init__(
-            self, 
+            self,
             output_dim_dict, 
             edge_types, 
             n_hidden_conv=3, 
-            hidden_conv_dim=128,
-            n_heads = 2, 
+            hidden_conv_dim=64,
+            n_heads=1, 
             n_hidden_lin=2, 
-            hidden_lin_dim=128, 
+            hidden_lin_dim=64, 
             dropout_rate=0.3,
-            conv_type='GATv2', # GAT or GATv2 or SAGE 
+            conv_type='GINE', # GAT or GATv2 or SAGE or GINE
             jumping_knowledge=True,
             hetero_aggr='mean',
             *args, 
@@ -37,6 +37,8 @@ class HeteroGNN(torch.nn.Module):
             conv_class = GATv2Conv
         elif conv_type == 'SAGE':
             conv_class = SAGEConv
+        elif conv_type == 'GINE':
+            conv_class = GINEConv
         else:
             raise ValueError(f"conv_type must be 'GAT', 'GATv2' or 'SAGE', not {conv_type}")
         
@@ -48,6 +50,23 @@ class HeteroGNN(torch.nn.Module):
                     conv_dict[edge_type] = conv_class((-1, -1), hidden_conv_dim, heads=n_heads, concat=True, edge_dim=-1, dropout=0.2, add_self_loops=False)
                 elif conv_type == 'SAGE':
                     conv_dict[edge_type] = conv_class((-1, -1), hidden_conv_dim)
+                elif conv_type == 'GINE':
+                    # https://github.com/pyg-team/pytorch_geometric/discussions/4607
+                    # need to bring all node type to same dimensionality
+                    self.input_lins = torch.nn.ModuleDict()
+                    for node_type in output_dim_dict.keys():
+                        self.input_lins[node_type] = Linear(-1, hidden_conv_dim)
+                    self.input_lins['ext'] = Linear(-1, hidden_conv_dim) # since we miss the key for ext in output_dim_dict
+                    conv_dict[edge_type] = conv_class(
+                    Sequential(
+                        Linear(hidden_conv_dim, hidden_conv_dim), 
+                        BatchNorm1d(hidden_conv_dim), 
+                        LeakyReLU(0.2),
+                        Linear(hidden_conv_dim, hidden_conv_dim), 
+                        LeakyReLU(0.2),
+                    ),
+                    edge_dim=-1
+                )
             conv = HeteroConv(conv_dict, aggr=hetero_aggr)
             self.convs.append(conv)
 
@@ -76,6 +95,10 @@ class HeteroGNN(torch.nn.Module):
        
 
     def forward(self, x_dict, edge_index_dict, edge_attr_dict):
+        if self.conv_type == 'GINE':
+            x_dict = {k: self.input_lins[k](x) for k, x in x_dict.items()}
+            x_dict = {k: F.dropout(x, p=self.dropout_rate, training=self.training) for k, x in x_dict.items()}
+                
         jumping_knowledge_dict = {}
         for k in x_dict.keys():
             jumping_knowledge_dict[k] = []
