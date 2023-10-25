@@ -477,6 +477,106 @@ def physics_loss_hetero(data, output, log_loss=True, device='cpu'):
     return tot_loss
 
 
+def power_from_voltages_hetero(data, voltages, angles_are_radians=False):
+    """
+    Calculates the active and reactive power from the given voltage values (for hetero data).
+
+    Args:
+        data: power grid network (in hetero format)
+        voltages: hetero voltage results (dict of node types with corresponding voltage tensors)
+        angles_are_radians: angle values are given in radians or degrees
+
+    Returns:
+        p_mw and q_mvar of each node per node type
+    """
+    feature_map = {
+        'load': ['p_mw', 'q_mvar'],
+        'gen': ['p_mw', 'vm_pu'],
+        'load_gen': ['p_mw', 'q_mvar', 'vm_pu'],
+        'ext': ['vm_pu', 'va_degree']
+    }
+    y_map = {
+        'load': ['va_degree', 'vm_pu'],
+        'gen': ['va_degree'],
+        'load_gen': ['va_degree'],
+        'ext': None
+    }
+
+    conductance_dict = {}
+    susceptance_dict = {}
+    for edge_type in data.edge_attr_dict.keys():
+        if data.edge_attr_dict[edge_type].numel() > 0:
+            conductance_dict[edge_type] = -1.0 * data.edge_attr_dict[edge_type][:, 0]
+            susceptance_dict[edge_type] = -1.0 * data.edge_attr_dict[edge_type][:, 1]
+
+    # Create tensors for each node type to contain the voltage values (depends on node type which is fixed/predicted)
+    # Also create empty tensors for each node type to create the calculated active and reactive values for each node
+    combined_output = {}
+    active_power = {}
+    reactive_power = {}
+    cols = ['vm_pu', 'va_degree']
+    for node_type in data.x_dict.keys():
+        num_nodes = data.y_dict[node_type].shape[0]
+        combined_output_node = th.zeros((num_nodes, 2), dtype=th.float)
+
+        if node_type == 'load':
+            # Both vm_pu and va_degree are predicted for loads
+            combined_output_node[:, cols.index('vm_pu')] += voltages[node_type][:, y_map[node_type].index('vm_pu')]
+            combined_output_node[:, cols.index('va_degree')] += voltages[node_type][:, y_map[node_type].index('va_degree')]
+
+        elif node_type == 'gen' or node_type == 'load_gen':
+            # Add predicted va_degree
+            combined_output_node[:, cols.index('va_degree')] += voltages[node_type][:, y_map[node_type].index('va_degree')]
+            # Add fixed vm_pu
+            combined_output_node[:, cols.index('vm_pu')] += data.x_dict[node_type][:, feature_map[node_type].index('vm_pu')]
+
+        elif node_type == 'ext':
+            # Add fixed vm_pu and va_degree
+            combined_output_node[:, cols.index('vm_pu')] += data.x_dict[node_type][:, feature_map[node_type].index('vm_pu')]
+            combined_output_node[:, cols.index('va_degree')] += data.x_dict[node_type][:, feature_map[node_type].index('va_degree')]
+
+        # Add resulting combined fixed/predicted features tensor and create the empty power flow calculation tensors
+        combined_output[node_type] = combined_output_node
+        active_power[node_type] = th.zeros(num_nodes, dtype=th.float)
+        reactive_power[node_type] = th.zeros(num_nodes, dtype=th.float)
+
+
+    for edge_type in data.edge_attr_dict.keys():
+        if data.edge_attr_dict[edge_type].numel() > 0:
+            from_type = edge_type[0]
+            to_type = edge_type[2]
+
+            from_nodes = pyg_util.select(combined_output[from_type], data.edge_index_dict[edge_type][0], 0)
+            to_nodes = pyg_util.select(combined_output[to_type], data.edge_index_dict[edge_type][1], 0)
+            angle_diffs = (from_nodes[:, cols.index('va_degree')] - to_nodes[:, cols.index('va_degree')]) * math.pi / 180.0  # list of angle differences for all edges
+
+            # calculate incoming/outgoing values based on the edges connected to each node and the node's + neighbour's values
+            act_imb = th.abs(from_nodes[:, cols.index('vm_pu')]) * th.abs(to_nodes[:, cols.index('vm_pu')]) * (conductance_dict[edge_type] * th.cos(angle_diffs) + susceptance_dict[edge_type] * th.sin(angle_diffs))  # per edge power flow into/out of from_nodes
+            rea_imb = th.abs(from_nodes[:, cols.index('vm_pu')]) * th.abs(to_nodes[:, cols.index('vm_pu')]) * (conductance_dict[edge_type] * th.sin(angle_diffs) - susceptance_dict[edge_type] * th.cos(angle_diffs))
+
+            # aggregate all active and reactive powers for each node
+            # not all node indices may appear in the edge_index_dict[edge_type], so need to keep track of which indices are there and were aggregated in order to add them to the correct node's power flow values
+            num_nodes = active_power[from_type].shape[0]
+            aggr_act_imb = pyg_util.scatter(act_imb, data.edge_index_dict[edge_type][0], dim_size=num_nodes)
+            aggr_rea_imb = pyg_util.scatter(rea_imb, data.edge_index_dict[edge_type][0], dim_size=num_nodes)
+
+            # add diagonal (self-admittance) elements of each node as well (for the ones that occur in this specific edge_type, others will be 0 due to the scatter result)
+            aggr_act_imb += combined_output[from_type][:, cols.index('vm_pu')] * combined_output[from_type][:, cols.index('vm_pu')] * pyg_util.scatter(data.edge_attr_dict[edge_type][:, 0], data.edge_index_dict[edge_type][0], dim_size=num_nodes)
+            aggr_rea_imb += combined_output[from_type][:, cols.index('vm_pu')] * combined_output[from_type][:, cols.index('vm_pu')] * (-1.0 * pyg_util.scatter(data.edge_attr_dict[edge_type][:, 1], data.edge_index_dict[edge_type][0], dim_size=num_nodes))
+
+            # Add values to the power flow tensors for the respective node type
+            active_power[from_type] += aggr_act_imb
+            reactive_power[from_type] += aggr_rea_imb
+
+    res = {}
+    for node_type in data.x_dict.keys():
+        active_power[node_type] = (-1.0 * active_power[node_type]).reshape(-1, 1)
+        reactive_power[node_type] = (-1.0 * reactive_power[node_type]).reshape(-1, 1)
+        res[node_type] = th.cat((active_power[node_type], reactive_power[node_type]), 1)
+
+    return res
+
+
 def visualize_hetero(hetero):
     G = nx.Graph()
     color_map = []
