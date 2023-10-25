@@ -257,3 +257,42 @@ def physics_loss(network, output, log_loss=True, device='cpu'):
         tot_loss = th.sum(th.abs(active_imbalance) + th.abs(reactive_imbalance))
 
     return tot_loss
+
+
+def power_from_voltages(network, voltages, angles_are_radians=False):
+    """
+    Calculates the active and reactive power for each node depending on the given network and vm_pu and va_degree values.
+
+    Args:
+        network: power grid network with all nodes, edges
+        voltages: 2d tensor of [vm_pu, va_degree] for the nodes
+
+    Returns:
+        2d tensor of [p_mw, q_mvar] for each node
+    """
+    conductances = -1.0 * network.edge_attr[:, 0]
+    susceptances = -1.0 * network.edge_attr[:, 1]
+
+    out_idx = {'vm_pu': 0, 'va_degree': 1}
+    # Combine node features with corresponding edges
+    from_nodes = pyg_util.select(voltages, network.edge_index[0], 0)  # list of duplicated node outputs based on edges
+    to_nodes = pyg_util.select(voltages, network.edge_index[1], 0)
+    if angles_are_radians:
+        angle_diffs = (from_nodes[:, out_idx['va_degree']] - to_nodes[:, out_idx['va_degree']])  # list of angle differences for all edges
+    else:
+        angle_diffs = (from_nodes[:, out_idx['va_degree']] - to_nodes[:, out_idx['va_degree']]) * math.pi / 180.0  # list of angle differences for all edges
+
+    # calculate incoming/outgoing values based on the edges connected to each node and the node's + neighbour's values
+    act_pow_lines = th.abs(from_nodes[:, out_idx['vm_pu']]) * th.abs(to_nodes[:, out_idx['vm_pu']]) * (conductances * th.cos(angle_diffs) + susceptances * th.sin(angle_diffs))  # per edge power flow into/out of from_nodes
+    rea_pow_lines = th.abs(from_nodes[:, out_idx['vm_pu']]) * th.abs(to_nodes[:, out_idx['vm_pu']]) * (conductances * th.sin(angle_diffs) - susceptances * th.cos(angle_diffs))
+
+    act_pow_node = pyg_util.scatter(act_pow_lines, network.edge_index[0])  # aggregate all active powers for each node
+    rea_pow_node = pyg_util.scatter(rea_pow_lines, network.edge_index[0])  # same for reactive
+
+    # add diagonal (self-admittance) elements of each node as well (angle diff is 0; only cos sections have an effect)
+    act_pow_node += voltages[:, out_idx['vm_pu']] * voltages[:, out_idx['vm_pu']] * pyg_util.scatter(network.edge_attr[:, 0], network.edge_index[0])
+    # for reactive self-admittance we also take into account the shunt reactances and not only line reactances
+    rea_pow_node += voltages[:, out_idx['vm_pu']] * voltages[:, out_idx['vm_pu']] * (-1.0 * (pyg_util.scatter(network.edge_attr[:, 1], network.edge_index[0])))
+
+    # Return -1 times the values, since we use negative values for gens and positive for loads
+    return th.cat(((-1.0 * act_pow_node).reshape(-1, 1), (-1.0 * rea_pow_node).reshape(-1, 1)), 1)
