@@ -10,13 +10,15 @@ class HeteroGNN(torch.nn.Module):
             self, 
             output_dim_dict, 
             edge_types, 
-            n_hidden_conv=2, 
-            hidden_conv_dim=32, 
-            n_hidden_lin=1, 
-            hidden_lin_dim=32, 
-            dropout_rate=0.1,
+            n_hidden_conv=3, 
+            hidden_conv_dim=128,
+            n_heads = 2, 
+            n_hidden_lin=2, 
+            hidden_lin_dim=128, 
+            dropout_rate=0.3,
             conv_type='GATv2', # GAT or GATv2 or SAGE 
             jumping_knowledge=True,
+            hetero_aggr='mean',
             *args, 
             **kwargs
         ):
@@ -38,15 +40,15 @@ class HeteroGNN(torch.nn.Module):
         else:
             raise ValueError(f"conv_type must be 'GAT', 'GATv2' or 'SAGE', not {conv_type}")
         
-        n_heads = 2
+        self.n_heads = n_heads
         for _ in range(n_hidden_conv):
             conv_dict = {}
             for edge_type in edge_types:
                 if conv_type == 'GAT' or conv_type == 'GATv2':
-                    conv_dict[edge_type] = conv_class((-1, -1), hidden_conv_dim, heads=n_heads, concat=True, edge_dim=-1, add_self_loops=False)
+                    conv_dict[edge_type] = conv_class((-1, -1), hidden_conv_dim, heads=n_heads, concat=True, edge_dim=-1, dropout=0.2, add_self_loops=False)
                 elif conv_type == 'SAGE':
-                    conv_dict[edge_type] = conv_class((-1, -1), hidden_conv_dim, add_self_loops=False)
-            conv = HeteroConv(conv_dict, aggr='mean')
+                    conv_dict[edge_type] = conv_class((-1, -1), hidden_conv_dim)
+            conv = HeteroConv(conv_dict, aggr=hetero_aggr)
             self.convs.append(conv)
 
         # Apply n lin layers to each node type

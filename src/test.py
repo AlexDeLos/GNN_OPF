@@ -72,6 +72,10 @@ def test(model, data):
     mask = np.isinf(p_errors)
     p_errors[mask] = 0
 
+    print("within 0.1%", np.sum(abs(p_errors) < 0.1, axis=0) / len(p_errors))
+    print("within 0.5%", np.sum(abs(p_errors) < 0.5, axis=0) / len(p_errors))
+    print("within 1%", np.sum(abs(p_errors) < 1, axis=0) / len(p_errors))
+    print("within 2%", np.sum(abs(p_errors) < 2, axis=0) / len(p_errors))
     print("within 5%", np.sum(abs(p_errors) < 5, axis=0) / len(p_errors))
     print("within 10%", np.sum(abs(p_errors) < 10, axis=0) / len(p_errors))
     print("within 15%", np.sum(abs(p_errors) < 15, axis=0) / len(p_errors))
@@ -85,27 +89,28 @@ def test_hetero(model, data):
     error_dict = {
         'load': [],
         'gen': [],
-        'load_gen': []
+        'load_gen': [],
+        'ext': []
     }
-    first = True
     for g in loader:
         out = model(g.x_dict, g.edge_index_dict, g.edge_attr_dict)
         for node_type, y in g.y_dict.items():
             error = th.abs(th.sub(out[node_type], y))
             p_error = th.div(error, y) * 100
-            if first:
-                print('in test', node_type)
-                print(th.cat((out[node_type], y), axis=1))
-                print(p_error)
             error_dict[node_type].append(p_error.detach().numpy())
-        first = False
 
     error_dict['load'] = np.concatenate(error_dict['load']).reshape((-1, 2))
     error_dict['gen'] = np.concatenate(error_dict['gen']).reshape((-1, 1))
     error_dict['load_gen'] = np.concatenate(error_dict['load_gen']).reshape((-1, 1))
 
     for k, v in error_dict.items():
+        if k == 'ext':
+            continue
         print(k, len(v))
+        print("within 0.1%", np.sum(abs(v) < 0.1, axis=0) / len(v))
+        print("within 0.5%", np.sum(abs(v) < 0.5, axis=0) / len(v))
+        print("within 1%", np.sum(abs(v) < 1, axis=0) / len(v))
+        print("within 2%", np.sum(abs(v) < 2, axis=0) / len(v))
         print("within 5%", np.sum(abs(v) < 5, axis=0) / len(v))
         print("within 10%", np.sum(abs(v) < 10, axis=0) / len(v))
         print("within 15%", np.sum(abs(v) < 15, axis=0) / len(v))
