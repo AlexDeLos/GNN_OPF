@@ -76,12 +76,14 @@ def expand_helper(args, graph, name):
             new_graph.gen.at[i,'p_mw'] = new_graph.gen.at[i,'p_mw'] * change
     
         i = 0
+        changed_lines = []
         while i != args.down_lines:
             random_line = random.choice(new_graph.line.index)
             if new_graph.line.at[random_line,'in_service'] == True:
                 new_graph.line.at[random_line,'in_service'] = False
+                changed_lines.append(random_line)
                 i += 1
-            
+        
             
 
         try:
@@ -96,7 +98,7 @@ def expand_helper(args, graph, name):
             trials += 1
             continue
 
-        subgraph_length = len(graph.bus)
+        subgraph_length = len(new_graph.bus)
         uid = ''.join([random.choice(string.ascii_letters
             + string.digits) for _ in range(8)])  
         
@@ -107,6 +109,9 @@ def expand_helper(args, graph, name):
         new_graph.res_gen.to_csv(f"{args.save_dir}/y/{name}_{subgraph_length}_expanded_{uid}_gen.csv")
         new_graph.res_line.to_csv(f"{args.save_dir}/y/{name}_{subgraph_length}_expanded_{uid}_line.csv")
         new_graph.res_bus.to_csv(f"{args.save_dir}/y/{name}_{subgraph_length}_expanded_{uid}_bus.csv")
+        for line in changed_lines:
+            new_graph.line.at[line,'in_service'] = True
+        print(num_generated_graphs)
     return num_generated_graphs
 
 def expand(args):
@@ -116,7 +121,10 @@ def expand(args):
     if args.from_case != None:
         print("Generating networks from scratch")
         graph = generate.get_network(args.from_case)
-        n = expand_helper(args, graph, args.from_case)
+        n=0
+        while n<args.num_networks:
+            n += expand_helper(args, graph.copy(), args.from_case) 
+            args.num_networks -= n
     else:
         p = f"{args.data_path}/{args.dataset}"
         print(f"Loading networks from {p}")
