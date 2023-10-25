@@ -74,9 +74,7 @@ def train_batch_hetero(data, model, optimizer, criterion, device='cpu', vector =
     optimizer.zero_grad()
     out_dict = model(data.x_dict, data.edge_index_dict, data.edge_attr_dict)
     loss = 0
-    if vector:
-        loss = vector_loss(out_dict, data, criterion)
-    elif loss_type == 'standard':
+    if loss_type == 'standard':
         for node_type, y in data.y_dict.items():
             # prevent nan loss
             if y.shape[0] == 0:
@@ -91,17 +89,17 @@ def train_batch_hetero(data, model, optimizer, criterion, device='cpu', vector =
     optimizer.step()
     return loss
 
+#! [0] is angle in degrees [1] is magnitude
+#! input angle is in degrees
 def vector_loss(out,data, device='cpu'):
-
-
-    vec_mag_and_vec_angle = out['load'][:,-2:]
-    out_x = th.mul(th.cos(vec_mag_and_vec_angle[:,1]), vec_mag_and_vec_angle[:,0])
-    out_y = th.mul(th.sin(vec_mag_and_vec_angle[:,1]), vec_mag_and_vec_angle[:,0])
+    vec_mag_and_vec_angle = out
+    out_x = th.mul(th.cos(th.deg2rad(vec_mag_and_vec_angle[:,0])), vec_mag_and_vec_angle[:,1])
+    out_y = th.mul(th.sin(th.deg2rad(vec_mag_and_vec_angle[:,0])), vec_mag_and_vec_angle[:,1])
     out_vector = th.stack((out_x, out_y))
 
-    data_mag_and_data_angle = data.y_dict['load'][:,-2:]
-    data_x = th.mul(data_mag_and_data_angle[:,0], th.cos(data_mag_and_data_angle[:,1]))
-    data_y = th.mul(data_mag_and_data_angle[:,0], th.sin(data_mag_and_data_angle[:,1]))
+    data_mag_and_data_angle = data
+    data_x = th.mul(data_mag_and_data_angle[:,1], th.cos(th.deg2rad(data_mag_and_data_angle[:,0])))
+    data_y = th.mul(data_mag_and_data_angle[:,1], th.sin(th.deg2rad(data_mag_and_data_angle[:,0])))
     data_vector = th.stack((data_x, data_y))
 
 
@@ -113,7 +111,10 @@ def distance(a,b):
     return pdist(a.T,b.T)
 
 
-def evaluate_batch_hetero(data, model, criterion, device='cpu', loss_type='standard'):
+#? Combine both vec loss and loss
+#? add more weight to the magnitude?
+#? what are the angle units???
+def evaluate_batch_hetero(data, model, criterion, device='cpu', vector = True, loss_type='standard'):
     data = data.to(device)
     out_dict = model(data.x_dict, data.edge_index_dict, data.edge_attr_dict)
     loss = 0
