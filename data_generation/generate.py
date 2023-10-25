@@ -9,7 +9,7 @@ import pandapower.networks as pn
 import pandapower.toolbox as tb
 import random
 import string
-import subgraphs_methods
+import data_generation.subgraphs_methods
 import time
 import warnings
 # Suppress FutureWarning
@@ -36,8 +36,7 @@ def get_arguments():
 
     parser.add_argument("--min_size", type=int, default=5)
     parser.add_argument("--max_size", type=int, default=30)
-    parser.add_argument("--n_1", type=bool, default=False)
-    parser.add_argument("--no_leakage", action="store_true", default=False)
+    # parser.add_argument("--n_1", type=bool, default=False)
     parser.add_argument("--subgraphing_method", choices=['rnd_neighbor', 'bfs', 'rnd_walk', 'partitioning'], default='rnd_neighbor')
 
     args = parser.parse_args()
@@ -133,15 +132,15 @@ def create_networks(arguments):
         starting_points = full_net.gen.bus
         while n_subgraph_generated < arguments.num_subgraphs:
             print(f"generating network {n_subgraph_generated + 1}")
-            if arguments.n_1:
-                subgraph_busses = list(full_net.bus.index)
-                downed_bus = np.random.randint(0, len(subgraph_busses))
-                del subgraph_busses[downed_bus]
+            # if arguments.n_1:
+            #     subgraph_busses = list(full_net.bus.index)
+            #     downed_bus = np.random.randint(0, len(subgraph_busses))
+            #     del subgraph_busses[downed_bus]
         
-            else:
-                subgraph_length = np.random.randint(arguments.min_size, min(arguments.max_size, len(full_net.bus)))
-                initial_bus = starting_points[np.random.randint(0, len(starting_points))]
-                subgraph_busses = subgraphing_method(full_net, initial_bus, subgraph_length)
+            # else:
+            subgraph_length = np.random.randint(arguments.min_size, min(arguments.max_size, len(full_net.bus)))
+            initial_bus = starting_points[np.random.randint(0, len(starting_points))]
+            subgraph_busses = subgraphing_method(full_net, initial_bus, subgraph_length)
         
             is_subgraph_solved = solve_and_save(full_net, subgraph_busses, arguments)
             
@@ -157,8 +156,7 @@ def solve_and_save(full_net, subgraph_busses, arguments):
     subgraph_length = len(subgraph_busses)
 
     try:
-        if arguments.no_leakage:
-            subgraph_net = modify_network_values(subgraph_net)
+        subgraph_net = modify_network_values(subgraph_net)
 
         # check if the subgraph contains a slack bus, if not add one by setting the slack bus to a random bus
         # if full_net.ext_grid.bus.item() not in subgraph_busses:
