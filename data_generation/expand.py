@@ -74,10 +74,7 @@ def expand_helper(args, graph, name):
             new_graph.gen.at[i,'p_mw'] = new_graph.gen.at[i,'p_mw'] * change
 
         try:
-            if args.no_leakage:
-                print("no leakage")
-                new_graph = modify_network_values(new_graph)
-
+            new_graph = modify_network_values(new_graph)
             pp.runpp(new_graph, numba=False)
             num_generated_graphs += 1
             trials = 0

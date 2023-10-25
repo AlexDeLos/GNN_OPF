@@ -37,7 +37,6 @@ def get_arguments():
     parser.add_argument("--min_size", type=int, default=5)
     parser.add_argument("--max_size", type=int, default=30)
     parser.add_argument("--n_1", type=bool, default=False)
-    parser.add_argument("--no_leakage", action="store_true", default=True)
     parser.add_argument("--subgraphing_method", choices=['rnd_neighbor', 'bfs', 'rnd_walk', 'partitioning'], default='rnd_neighbor')
 
     args = parser.parse_args()
@@ -157,8 +156,7 @@ def solve_and_save(full_net, subgraph_busses, arguments):
     subgraph_length = len(subgraph_busses)
 
     try:
-        if arguments.no_leakage:
-            subgraph_net = modify_network_values(subgraph_net)
+        subgraph_net = modify_network_values(subgraph_net)
 
         # check if the subgraph contains a slack bus, if not add one by setting the slack bus to a random bus
         # if full_net.ext_grid.bus.item() not in subgraph_busses:
