@@ -42,7 +42,6 @@ def get_args():
 def expand_helper(args, graph, name):
     num_generated_graphs = 0
     trials = 0
-    n = 0
     while num_generated_graphs < args.num_networks:
         if trials == 30: # avoid infinite loop, stop after 30 trials
             print(f"Could not generate a new network for {name} in 30 trials, skipping...")
