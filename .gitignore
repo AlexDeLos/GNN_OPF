@@ -181,6 +181,7 @@ trained_models/
 .idea/
 
 loaded_data/
+v/
 plots/
 
 Data/
