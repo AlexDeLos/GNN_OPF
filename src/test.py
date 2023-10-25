@@ -24,12 +24,12 @@ def main():
             data, _, _ = normalize_data(data, data, data)
         else: 
             data, _, _ = normalize_data_hetero(data, data, data)
-    if "HeteroGNN" in args.model_path:
+    if "HeteroGNN" in args.gnn_type:
         model = load_model_hetero(args.gnn_type, args.model_path, data)
     else:
         model = load_model(args.gnn_type, args.model_path, data)
     model.eval()
-    if "HeteroGNN" in args.model_path:
+    if "HeteroGNN" in args.gnn_type:
         test_hetero(model, data)
     else:
         test(model, data)
@@ -84,6 +84,7 @@ def test(model, data):
 
     return errors, p_errors
 
+  
 def test_hetero(model, data):
     loader = DataLoader(data)
     error_dict = {

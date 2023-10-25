@@ -3,6 +3,7 @@ from torch_geometric.loader import DataLoader as pyg_DataLoader
 import tqdm
 import os
 import sys
+import numpy as np
 # local imports
 # add parent directory to sys.path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -84,7 +85,7 @@ def train_model(arguments, train, val):
     return gnn, losses, val_losses, last_batch
 
 
-def train_batch(data, model, optimizer, criterion, loss_type='standard', mix_weight=0.1, device='cpu'):
+def train_batch(data, model, optimizer, criterion, loss_type='standard',vector =False, mix_weight=0.1, device='cpu'):
     data = data.to(device)
     optimizer.zero_grad()
     out = model(data)
@@ -96,18 +97,47 @@ def train_batch(data, model, optimizer, criterion, loss_type='standard', mix_wei
             loss = loss1 + mix_weight * loss2
         else:
             loss = loss1
+    elif vector:
+        loss = vector_loss(out, data.y, criterion)
     else:
         loss = criterion(out, data.y)
+        
     loss.backward()
     optimizer.step()
     return loss
 
+def vector_loss(out,data, device='cpu'):
+    vec_mag_and_vec_angle = out[:,-2:]
+    out_x = th.mul(th.cos(th.deg2rad(vec_mag_and_vec_angle[:,0])), vec_mag_and_vec_angle[:,1])
+    out_y = th.mul(th.sin(th.deg2rad(vec_mag_and_vec_angle[:,0])), vec_mag_and_vec_angle[:,1])
+    out_vector = th.stack((out_x, out_y))
 
-def evaluate_batch(data, model, criterion, device='cpu', loss_type='standard'):
+    data_mag_and_data_angle = data[:,-2:]
+    data_x = th.mul(data_mag_and_data_angle[:,1], th.cos(th.deg2rad(data_mag_and_data_angle[:,0])))
+    data_y = th.mul(data_mag_and_data_angle[:,1], th.sin(th.deg2rad(data_mag_and_data_angle[:,0])))
+    data_vector = th.stack((data_x, data_y))
+
+
+    loss = th.mean(distance(out_vector, data_vector))
+    return loss
+
+def distance(a,b):
+    pdist = th.nn.PairwiseDistance(p=2)
+    return pdist(a.T,b.T)
+
+def evaluate_batch(data, model, criterion, device='cpu', vector = True, mix_weight=0.1, loss_type='standard'):
     data = data.to(device)
     out = model(data)
     if loss_type != 'standard':
-        loss = physics_loss(data, out, log_loss=False, device=device)
+        loss1 = physics_loss(data, out, log_loss=True, device=device)
+
+        if loss_type == 'mixed':
+            loss2 = criterion(out, data.y)
+            loss = loss1 + mix_weight * loss2
+        else:
+            loss = loss1
+    elif vector:
+        loss = vector_loss(out, data, criterion)
     else:
-        loss = criterion(out, data.y) # ac(out, data.x, data.edge_index, data.edge_attr)
+        loss = criterion(out, data)
     return loss
