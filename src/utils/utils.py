@@ -70,15 +70,16 @@ def load_data(train_dir, val_dir, test_dir, gnn_type, missing=False, volt=False,
         print("Training Data...")
 
         train = load_data_helper(train_dir, gnn_type, missing=missing, volt=volt, physics_data=physics_data)
+        # save data to pkl
+        write_to_pkl(train, f"{train_dir}/pickled.pkl")
+
         print("Validation Data...")
         val = load_data_helper(val_dir, gnn_type, missing=missing, volt=volt, physics_data=physics_data)
+        write_to_pkl(val, f"{val_dir}/pickled.pkl")
+
         print("Testing Data...")
         # Physics_data true and missing/volt to false for testing sets, because we also need the ground truth power values, not just voltages
         test = load_data_helper(test_dir, gnn_type, missing=False, volt=False, physics_data=True)
-
-        # save data to pkl
-        write_to_pkl(train, f"{train_dir}/pickled.pkl")
-        write_to_pkl(val, f"{val_dir}/pickled.pkl")
         write_to_pkl(test, f"{test_dir}/pickled.pkl")
 
         print("Data Loaded and saved to pkl files")
@@ -96,6 +97,9 @@ def load_data_helper(dir, gnn_type, missing=False, volt=False, physics_data=Fals
     for i, g in tqdm.tqdm(enumerate(graph_paths)):
         graph = pp.from_json(f"{graph_path}/{g}")
         y_bus = pd.read_csv(f"{sol_path}/{sol_paths[i * 3]}", index_col=0)
+        if i == 104:
+            # delete this instance because it has a zero in the y_bus
+            continue
         # y_gen = pd.read_csv(f"{sol_path}/{sol_paths[i * 3 + 1]}", index_col=0)
         # y_line = pd.read_csv(f"{sol_path}/{sol_paths[i * 3 + 2]}", index_col=0)
 
