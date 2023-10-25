@@ -68,7 +68,8 @@ def train_model_hetero(arguments, train, val):
     return gnn, losses, val_losses, last_batch
 
 
-def train_batch_hetero(data, model, optimizer, criterion, device='cpu', loss_type='standard'):
+#! change the default so that it is easy to change from vector loss to standard loss
+def train_batch_hetero(data, model, optimizer, criterion, device='cpu', vector = True, loss_type='standard'):
     data = data.to(device)
     optimizer.zero_grad()
     out_dict = model(data.x_dict, data.edge_index_dict, data.edge_attr_dict)
@@ -78,15 +79,42 @@ def train_batch_hetero(data, model, optimizer, criterion, device='cpu', loss_typ
             # prevent nan loss
             if y.shape[0] == 0:
                 continue
-            loss += criterion(out_dict[node_type], y)
+            if node_type == 'load' and vector:
+                loss += vector_loss(out_dict[node_type], y)
+            else:
+                loss += criterion(out_dict[node_type], y)
     else:
         loss = physics_loss_hetero(data, out_dict, device=device)
     loss.backward()
     optimizer.step()
     return loss
 
+#! [0] is angle in degrees [1] is magnitude
+#! input angle is in degrees
+def vector_loss(out,data, device='cpu'):
+    vec_mag_and_vec_angle = out
+    out_x = th.mul(th.cos(th.deg2rad(vec_mag_and_vec_angle[:,0])), vec_mag_and_vec_angle[:,1])
+    out_y = th.mul(th.sin(th.deg2rad(vec_mag_and_vec_angle[:,0])), vec_mag_and_vec_angle[:,1])
+    out_vector = th.stack((out_x, out_y))
 
-def evaluate_batch_hetero(data, model, criterion, device='cpu', loss_type='standard'):
+    data_mag_and_data_angle = data
+    data_x = th.mul(data_mag_and_data_angle[:,1], th.cos(th.deg2rad(data_mag_and_data_angle[:,0])))
+    data_y = th.mul(data_mag_and_data_angle[:,1], th.sin(th.deg2rad(data_mag_and_data_angle[:,0])))
+    data_vector = th.stack((data_x, data_y))
+
+
+    loss = th.mean(distance(out_vector, data_vector))
+    return loss
+
+def distance(a,b):
+    pdist = th.nn.PairwiseDistance(p=2)
+    return pdist(a.T,b.T)
+
+
+#? Combine both vec loss and loss
+#? add more weight to the magnitude?
+#? what are the angle units???
+def evaluate_batch_hetero(data, model, criterion, device='cpu', vector = True, loss_type='standard'):
     data = data.to(device)
     out_dict = model(data.x_dict, data.edge_index_dict, data.edge_attr_dict)
     loss = 0
@@ -95,7 +123,10 @@ def evaluate_batch_hetero(data, model, criterion, device='cpu', loss_type='stand
             # prevent nan loss
             if y.shape[0] == 0:
                 continue
-            loss += criterion(out_dict[node_type], y)
+            if node_type == 'load' and vector:
+                loss += vector_loss(out_dict[node_type], y)
+            else:
+                loss += criterion(out_dict[node_type], y)
     else:
         loss = physics_loss_hetero(data, out_dict, device=device)
     return loss
