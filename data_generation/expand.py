@@ -33,7 +33,7 @@ def get_args():
     parser.add_argument("--dataset", choices=['train', 'val', 'test'], default='train')
     parser.add_argument("-s", "--save_dir", default=root_directory + "/Data")
     parser.add_argument("-n", "--num_networks", type=int, default=1)
-    parser.add_argument("-down_lines", type=int, default=0)
+    parser.add_argument("--down_lines", type=int, default=0)
     parser.add_argument("--no_leakage", action="store_true", default=False)
     parser.add_argument("--from_case", choices=['case4gs', 'case5', 'case6ww', 'case9', 'case14', 'case24_ieee_rts', 'case30', 'case_ieee30', 'case39', 'case57', 'case89pegase', 'case118', 'case145', 'case_illinois200', 'case300', 'case1354pegase', 'case1888rte', 'case2848rte', 'case2869pegase', 'case3120sp', 'case6470rte', 'case6495rte', 'case6515rte', 'case9241', 'GBnetwork', 'GBreducednetwork', 'iceland'], default= None)
     args = parser.parse_args()
@@ -78,10 +78,11 @@ def expand_helper(args, graph, name):
         i = 0
         while i != args.down_lines:
             random_line = random.choice(new_graph.line.index)
-            if new_graph.line.at[random_line,'in_service'] == False:
-                continue
-            new_graph.line.at[random_line,'in_service'] = False
-            i += 1
+            if new_graph.line.at[random_line,'in_service'] == True:
+                new_graph.line.at[random_line,'in_service'] = False
+                i += 1
+            
+            
 
         try:
             if args.no_leakage:
