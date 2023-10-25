@@ -98,7 +98,7 @@ def train_batch(data, model, optimizer, criterion, loss_type='standard',vector =
         else:
             loss = loss1
     elif vector:
-        loss = vector_loss(out, data.y, criterion)
+        loss = vector_loss(out, data, criterion)
     else:
         loss = criterion(out, data.y)
         
@@ -112,7 +112,7 @@ def vector_loss(out,data, device='cpu'):
     out_y = th.mul(th.sin(vec_mag_and_vec_angle[:,1]), vec_mag_and_vec_angle[:,0])
     out_vector = th.stack((out_x, out_y))
 
-    data_mag_and_data_angle = data[:,-2:]
+    data_mag_and_data_angle = data.y[:,-2:]
     data_x = th.mul(data_mag_and_data_angle[:,0], th.cos(data_mag_and_data_angle[:,1]))
     data_y = th.mul(data_mag_and_data_angle[:,0], th.sin(data_mag_and_data_angle[:,1]))
     data_vector = th.stack((data_x, data_y))
