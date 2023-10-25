@@ -13,6 +13,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from utils.utils import load_model, load_model_hetero, read_from_pkl
 from utils.utils_homo import normalize_data
 from utils.utils_hetero import normalize_data_hetero
+from utils.utils_physics import power_from_voltages
 
 
 def main():
@@ -49,26 +50,23 @@ def parse_args():
     return args
 
 
-def test(model, data):
+def test(model, data, predict_only_voltages=False):
     print("testing")
     loader = DataLoader(data)
     errors = []
     p_errors = []
-    first = True
     for g in loader:
         out = model(g)
-        # if first:
-        #     print("Y")
-        #     print(g.y)
-        #     print("Pred")
-        #     print(out)
-            # quit()
-            # first = False
-            # print(th.cat([g.y, out], dim=1))
+        if predict_only_voltages and out.shape[1] == 2:
+            # Assumes output is [vm_pu, va_degree]
+            power_values = power_from_voltages(g, out, angles_are_radians=False)
+            out = th.cat((power_values, out), 1)
+        # TODO: need to have g.y also contain expected power flow values in case we want to check the calculated power values
         error = th.abs(th.sub(g.y, out))
         p_error = th.div(error, g.y) * 100
         errors.append(error.detach().numpy())
         p_errors.append(p_error.detach().numpy())
+
     errors = np.concatenate(errors)
     errors = errors.reshape((-1, 2))
     print(errors.shape, np.shape(errors), "shape of errors")
