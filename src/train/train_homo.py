@@ -85,7 +85,7 @@ def train_model(arguments, train, val):
     return gnn, losses, val_losses, last_batch
 
 
-def train_batch(data, model, optimizer, criterion, loss_type='standard', mix_weight=0.1, device='cpu'):
+def train_batch(data, model, optimizer, criterion, loss_type='standard',vector =False, mix_weight=0.1, device='cpu'):
     data = data.to(device)
     optimizer.zero_grad()
     out = model(data)
@@ -97,22 +97,22 @@ def train_batch(data, model, optimizer, criterion, loss_type='standard', mix_wei
             loss = loss1 + mix_weight * loss2
         else:
             loss = loss1
-    elif vector_loss:
-        loss = vector_loss(out, data, criterion)
+    elif vector:
+        loss = vector_loss(out, data.y, criterion)
     else:
-        loss = criterion(out, data)
+        loss = criterion(out, data.y)
         
     loss.backward()
     optimizer.step()
     return loss
 
-def vector_loss(data,out, device='cpu'):
-    vec_mag_and_vec_angle = out.y[:,:2]
+def vector_loss(out,data, device='cpu'):
+    vec_mag_and_vec_angle = out[:,-2:]
     out_x = th.mul(th.cos(vec_mag_and_vec_angle[:,1]), vec_mag_and_vec_angle[:,0])
     out_y = th.mul(th.sin(vec_mag_and_vec_angle[:,1]), vec_mag_and_vec_angle[:,0])
     out_vector = th.stack((out_x, out_y))
 
-    data_mag_and_data_angle = data[:,:2]
+    data_mag_and_data_angle = data[:,-2:]
     data_x = th.mul(data_mag_and_data_angle[:,0], th.cos(data_mag_and_data_angle[:,1]))
     data_y = th.mul(data_mag_and_data_angle[:,0], th.sin(data_mag_and_data_angle[:,1]))
     data_vector = th.stack((data_x, data_y))
@@ -125,11 +125,19 @@ def distance(a,b):
     pdist = th.nn.PairwiseDistance(p=2)
     return pdist(a.T,b.T)
 
-def evaluate_batch(data, model, criterion, device='cpu', loss_type='standard'):
+def evaluate_batch(data, model, criterion, device='cpu', vector = True, mix_weight=0.1, loss_type='standard'):
     data = data.to(device)
     out = model(data)
     if loss_type != 'standard':
-        loss = physics_loss(data, out, log_loss=False, device=device)
+        loss1 = physics_loss(data, out, log_loss=True, device=device)
+
+        if loss_type == 'mixed':
+            loss2 = criterion(out, data.y)
+            loss = loss1 + mix_weight * loss2
+        else:
+            loss = loss1
+    elif vector:
+        loss = vector_loss(out, data, criterion)
     else:
-        loss = criterion(out, data.y) # ac(out, data.x, data.edge_index, data.edge_attr)
+        loss = criterion(out, data)
     return loss
