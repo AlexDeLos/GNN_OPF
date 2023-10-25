@@ -36,7 +36,7 @@ def get_arguments():
 
     parser.add_argument("--min_size", type=int, default=5)
     parser.add_argument("--max_size", type=int, default=30)
-    parser.add_argument("--n_1", type=bool, default=False)
+    # parser.add_argument("--n_1", type=bool, default=False)
     parser.add_argument("--no_leakage", action="store_true", default=False)
     parser.add_argument("--subgraphing_method", choices=['rnd_neighbor', 'bfs', 'rnd_walk', 'partitioning'], default='rnd_neighbor')
 
@@ -133,15 +133,15 @@ def create_networks(arguments):
         starting_points = full_net.gen.bus
         while n_subgraph_generated < arguments.num_subgraphs:
             print(f"generating network {n_subgraph_generated + 1}")
-            if arguments.n_1:
-                subgraph_busses = list(full_net.bus.index)
-                downed_bus = np.random.randint(0, len(subgraph_busses))
-                del subgraph_busses[downed_bus]
+            # if arguments.n_1:
+            #     subgraph_busses = list(full_net.bus.index)
+            #     downed_bus = np.random.randint(0, len(subgraph_busses))
+            #     del subgraph_busses[downed_bus]
         
-            else:
-                subgraph_length = np.random.randint(arguments.min_size, min(arguments.max_size, len(full_net.bus)))
-                initial_bus = starting_points[np.random.randint(0, len(starting_points))]
-                subgraph_busses = subgraphing_method(full_net, initial_bus, subgraph_length)
+            # else:
+            subgraph_length = np.random.randint(arguments.min_size, min(arguments.max_size, len(full_net.bus)))
+            initial_bus = starting_points[np.random.randint(0, len(starting_points))]
+            subgraph_busses = subgraphing_method(full_net, initial_bus, subgraph_length)
         
             is_subgraph_solved = solve_and_save(full_net, subgraph_busses, arguments)
             
