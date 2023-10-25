@@ -99,9 +99,6 @@ def load_data_helper(dir, gnn_type, missing=False, volt=False, physics_data=Fals
     for i, g in tqdm.tqdm(enumerate(graph_paths)):
         graph = pp.from_json(f"{graph_path}/{g}")
         y_bus = pd.read_csv(f"{sol_path}/{sol_paths[i * 3]}", index_col=0)
-        if i == 104:
-            # delete this instance because it has a zero in the y_bus
-            continue
         # y_gen = pd.read_csv(f"{sol_path}/{sol_paths[i * 3 + 1]}", index_col=0)
         # y_line = pd.read_csv(f"{sol_path}/{sol_paths[i * 3 + 2]}", index_col=0)
 
