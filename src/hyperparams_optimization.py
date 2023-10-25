@@ -8,6 +8,7 @@ import sys
 # add parent directory to sys.path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from train.train_homo import train_batch, evaluate_batch
+from train.train_hetero import train_batch_hetero, evaluate_batch_hetero
 from utils.utils import get_gnn, load_data, get_criterion
 from utils.utils_homo import normalize_data
 
@@ -188,14 +189,110 @@ def hyperparams_optimization(
     print(f'Best hyperparameters: {best_params}\nBest validation loss: {best_value}')
 
 
+# Hyperparameter optimization heterogenous model
+def hyperparams_optimization_hetero(
+        train,
+        val,
+        n_trials=50, 
+        batch_size_values=[32, 64], 
+        dropout_rate_range = (0.1, 0.5),
+        num_epochs=150, 
+        patience=20,
+        optimizer_class=torch.optim.Adam,
+        criterion_function="MSELoss",
+    ):
+   
+
+    def objective(trial):
+        output_dims = {node_type: train[0].y_dict[node_type].shape[1] for node_type in train[0].y_dict.keys()}
+        batch_size = trial.suggest_categorical('batch_size', batch_size_values)
+        train_dataloader = pyg_DataLoader(train, batch_size=batch_size, shuffle=True)
+        val_dataloader = pyg_DataLoader(val, batch_size=batch_size, shuffle=False)
+
+        gnn_class = get_gnn('HeteroGNN')
+
+        dropout_rate = trial.suggest_float('dropout_rate', *dropout_rate_range)
+        criterion = get_criterion(criterion_function)
+        n_hidden_conv = trial.suggest_int('n_hidden_conv', 1, 5)   
+        hidden_conv_dim = trial.suggest_int('hidden_conv_dim', 64, 1024)
+        heads = trial.suggest_int('heads', 1, 4)
+        n_hidden_lin = trial.suggest_int('n_hidden_lin', 1, 5)
+        hidden_lin_dim = trial.suggest_int('hidden_lin_dim', 64, 1024)
+        jumping_knowledge = trial.suggest_categorical('jumping_knowledge', [True, False]) 
+        hetero_aggr = trial.suggest_categorical('hetero_aggr', ['mean', 'max', 'min', 'sum'])           
+
+        gnn = gnn_class(output_dim_dict=output_dims,
+                        edge_types=train[0].edge_index_dict.keys(),
+                        n_hidden_conv=n_hidden_conv,
+                        hidden_conv_dim=hidden_conv_dim,
+                        n_heads=heads,
+                        n_hidden_lin=n_hidden_lin,
+                        hidden_lin_dim=hidden_lin_dim,
+                        dropout_rate=dropout_rate,
+                        jumping_knowledge=jumping_knowledge,
+                        hetero_aggr=hetero_aggr,
+                        )
+
+        print(f"GNN: \n{gnn}")
+        device = 'cuda' if torch.cuda.is_available() else 'cpu'
+        print(f"Current device: {device}")
+        gnn = gnn.to(device)
+
+        optimizer = optimizer_class(params=gnn.parameters(), lr=1e-4)
+
+        early_stop = 0
+        losses = []
+        val_losses = []
+
+        for epoch in tqdm.tqdm(range(num_epochs)): #args epochs
+            epoch_loss = 0.0
+            epoch_val_loss = 0.0
+            gnn.train()
+            for batch in train_dataloader:
+                epoch_loss += train_batch_hetero(data=batch, model=gnn, optimizer=optimizer, criterion=criterion, device=device)
+            gnn.eval()
+            for batch in val_dataloader:
+                epoch_val_loss += evaluate_batch_hetero(data=batch, model=gnn, criterion=criterion, device=device)
+
+            avg_epoch_loss = epoch_loss.item() / len(train_dataloader)
+            avg_epoch_val_loss = epoch_val_loss.item() / len(val_dataloader)
+
+            losses.append(avg_epoch_loss)
+            val_losses.append(avg_epoch_val_loss)
+
+            if epoch % 10 == 0:
+                print(f'Epoch: {epoch:03d}, trn_Loss: {avg_epoch_loss:.3f}, val_loss: {avg_epoch_val_loss:.3f}')
+            
+            #Early stopping
+            try:  
+                if val_losses[-1]>=val_losses[-2]:
+                    early_stop += 1
+                    if early_stop == patience:
+                        print("Early stopping! Epoch:", epoch)
+                        break
+                else:
+                    early_stop = 0
+            except:
+                early_stop = 0
+            
+        
+        return avg_epoch_val_loss
+
+    # Optimize hyperparameters
+    study = optuna.create_study(direction='minimize')
+    study.optimize(objective, n_trials=n_trials)
+
+    best_params = study.best_params
+    best_value = study.best_value
+    print(f'Best hyperparameters: {best_params}\nBest validation loss: {best_value}')
+
+
 if __name__ == "__main__":
     print("Loading Data")
     # Make sure to change it to the correct path on your data
-    train, val, test = load_data("./Data_sanity3(rnd_walk)/train","./Data_sanity3(rnd_walk)/val","./Data_sanity3(rnd_walk)/val")
-    train, val, test = normalize_data(train, val, test)
+    train, val, _ = load_data("./Data/train","./Data/val","./Data/test", "HeteroGNN")
     print(f"Data Loaded \n",
           f"Number of training samples = {len(train)}\n",
-          f"Number of validation samples = {len(val)}\n",
-          f"Number of testing samples = {len(test)}\n",)
-    
-    hyperparams_optimization(train=train, model_class_name="GINE")
+          f"Number of validation samples = {len(val)}\n")
+
+    hyperparams_optimization_hetero(train=train, val=val)

@@ -1,4 +1,4 @@
-from torch_geometric.nn import HeteroConv, GATConv, SAGEConv, Linear
+from torch_geometric.nn import HeteroConv, GATConv, SAGEConv, Linear, GATv2Conv
 import torch
 import torch.nn.functional as F
 
@@ -10,12 +10,15 @@ class HeteroGNN(torch.nn.Module):
             self, 
             output_dim_dict, 
             edge_types, 
-            n_hidden_conv=2, 
-            hidden_conv_dim=32, 
-            n_hidden_lin=1, 
-            hidden_lin_dim=32, 
-            dropout_rate=0.1,
-            conv_type='SAGE', # GAT or SAGE 
+            n_hidden_conv=3, 
+            hidden_conv_dim=128,
+            n_heads = 2, 
+            n_hidden_lin=2, 
+            hidden_lin_dim=128, 
+            dropout_rate=0.3,
+            conv_type='GATv2', # GAT or GATv2 or SAGE 
+            jumping_knowledge=True,
+            hetero_aggr='mean',
             *args, 
             **kwargs
         ):
@@ -30,16 +33,22 @@ class HeteroGNN(torch.nn.Module):
         self.conv_type = conv_type
         if conv_type == 'GAT':
             conv_class = GATConv
+        elif conv_type =='GATv2':
+            conv_class = GATv2Conv
         elif conv_type == 'SAGE':
             conv_class = SAGEConv
         else:
-            raise ValueError(f"conv_type must be 'GAT' or 'SAGE', not {conv_type}")
+            raise ValueError(f"conv_type must be 'GAT', 'GATv2' or 'SAGE', not {conv_type}")
         
+        self.n_heads = n_heads
         for _ in range(n_hidden_conv):
             conv_dict = {}
             for edge_type in edge_types:
-                conv_dict[edge_type] = conv_class((-1, -1), hidden_conv_dim, add_self_loops=False)
-            conv = HeteroConv(conv_dict, aggr='sum')
+                if conv_type == 'GAT' or conv_type == 'GATv2':
+                    conv_dict[edge_type] = conv_class((-1, -1), hidden_conv_dim, heads=n_heads, concat=True, edge_dim=-1, dropout=0.2, add_self_loops=False)
+                elif conv_type == 'SAGE':
+                    conv_dict[edge_type] = conv_class((-1, -1), hidden_conv_dim)
+            conv = HeteroConv(conv_dict, aggr=hetero_aggr)
             self.convs.append(conv)
 
         # Apply n lin layers to each node type
@@ -48,7 +57,7 @@ class HeteroGNN(torch.nn.Module):
             lin_dict = {}
             for node_type in output_dim_dict.keys():
                 if i == 0:
-                    lin_dict[node_type] = Linear(hidden_conv_dim, hidden_lin_dim)
+                    lin_dict[node_type] = Linear(hidden_conv_dim * n_heads, hidden_lin_dim)
                 else:
                     lin_dict[node_type] = Linear(hidden_lin_dim, hidden_lin_dim)
             self.lins[str(i)] = torch.nn.ModuleDict(lin_dict)
@@ -63,17 +72,28 @@ class HeteroGNN(torch.nn.Module):
         self.lins[str(n_hidden_lin)] = torch.nn.ModuleDict(final_lin_dict)
 
         self.dropout_rate = dropout_rate
+        self.jumping_knowledge = jumping_knowledge
        
 
     def forward(self, x_dict, edge_index_dict, edge_attr_dict):
+        jumping_knowledge_dict = {}
+        for k in x_dict.keys():
+            jumping_knowledge_dict[k] = []
+
         for conv in self.convs:
             if self.conv_type == 'SAGE':
                 x_dict = conv(x_dict, edge_index_dict)
             else:
                 x_dict = conv(x_dict, edge_index_dict, edge_attr_dict)
 
-            x_dict = {k: x.relu() for k, x in x_dict.items()}
+            x_dict = {k: F.leaky_relu(x, 0.2) for k, x in x_dict.items()}
             x_dict = {k: F.dropout(x, p=self.dropout_rate, training=self.training) for k, x in x_dict.items()}
+            for key in x_dict.keys():
+                jumping_knowledge_dict[key].append(x_dict[key])
+        
+        if self.jumping_knowledge:
+            # mean of the hidden states of each conv layer
+            x_dict = {k: (sum(jumping_knowledge_dict[k]) / len(jumping_knowledge_dict[k])) for k in jumping_knowledge_dict.keys()}
         
         for i in range(len(self.lins)-1):
             for node_type in self.out_channels_dict.keys():
