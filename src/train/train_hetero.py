@@ -6,7 +6,7 @@ import sys
 # local imports
 # add parent directory to sys.path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from utils.utils import get_gnn, get_optim, get_criterion
+from utils.utils import get_gnn, get_optim, get_criterion, save_model
 from utils.utils_hetero import physics_loss_hetero
 
 
@@ -52,6 +52,7 @@ def train_model_hetero(arguments, train, val):
 
         if epoch % 10 == 0:
             print(f'Epoch: {epoch:03d}, trn_Loss: {avg_epoch_loss:.6f}, val_loss: {avg_epoch_val_loss:.6f}')
+            save_model(gnn, arguments.model_name, epoch=epoch)
 
         # Early stopping
         try:  
