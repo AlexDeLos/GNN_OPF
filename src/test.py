@@ -12,7 +12,8 @@ import sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from utils.utils import load_model, load_model_hetero, read_from_pkl
 from utils.utils_homo import normalize_data
-from utils.utils_hetero import normalize_data_hetero
+from utils.utils_hetero import normalize_data_hetero, power_from_voltages_hetero
+from utils.utils_physics import power_from_voltages
 
 
 def main():
@@ -24,12 +25,12 @@ def main():
             data, _, _ = normalize_data(data, data, data)
         else: 
             data, _, _ = normalize_data_hetero(data, data, data)
-    if "HeteroGNN" in args.model_path:
+    if "HeteroGNN" in args.gnn_type:
         model = load_model_hetero(args.gnn_type, args.model_path, data)
     else:
         model = load_model(args.gnn_type, args.model_path, data)
     model.eval()
-    if "HeteroGNN" in args.model_path:
+    if "HeteroGNN" in args.gnn_type:
         test_hetero(model, data)
     else:
         test(model, data)
@@ -49,41 +50,38 @@ def parse_args():
     return args
 
 
-def test(model, data):
+def test(model, data, predict_only_voltages=True):
     print("testing")
     loader = DataLoader(data)
     errors = []
     p_errors = []
-    first = True
     for g in loader:
         out = model(g)
-        # if first:
-        #     print("Y")
-        #     print(g.y)
-        #     print("Pred")
-        #     print(out)
-            # quit()
-            # first = False
-            # print(th.cat([g.y, out], dim=1))
+        if predict_only_voltages and out.shape[1] == 2:
+            # Assumes output is [vm_pu, va_degree]
+            power_values = power_from_voltages(g, out, angles_are_radians=False)
+            out = th.cat((power_values, out), 1)
+        # out should now always have [p_mw, q_mvar, vm_pu, va_degree]
         error = th.abs(th.sub(g.y, out))
         p_error = th.div(error, g.y) * 100
         errors.append(error.detach().numpy())
         p_errors.append(p_error.detach().numpy())
+
     errors = np.concatenate(errors)
-    errors = errors.reshape((-1, 2))
+    errors = errors.reshape((-1, 4))
     print(errors.shape, np.shape(errors), "shape of errors")
 
     p_errors = np.concatenate(p_errors)
-    errors = errors.reshape((-1, 2))
+    errors = errors.reshape((-1, 4))
     print(errors.shape, np.shape(errors), "shape of errors")
 
     mask = np.isinf(p_errors)
     p_errors[mask] = 0
 
-    # plt.hist(errors)
-    # plt.show()
-    # plt.hist(p_errors)
-    # plt.show()
+    print("within 0.1%", np.sum(abs(p_errors) < 0.1, axis=0) / len(p_errors))
+    print("within 0.5%", np.sum(abs(p_errors) < 0.5, axis=0) / len(p_errors))
+    print("within 1%", np.sum(abs(p_errors) < 1, axis=0) / len(p_errors))
+    print("within 2%", np.sum(abs(p_errors) < 2, axis=0) / len(p_errors))
     print("within 5%", np.sum(abs(p_errors) < 5, axis=0) / len(p_errors))
     print("within 10%", np.sum(abs(p_errors) < 10, axis=0) / len(p_errors))
     print("within 15%", np.sum(abs(p_errors) < 15, axis=0) / len(p_errors))
@@ -92,112 +90,56 @@ def test(model, data):
 
     return errors, p_errors
 
+  
 def test_hetero(model, data):
     loader = DataLoader(data)
-    load_errors = []
-    gen_errors = []
-    load_gen_errors = []
-    first = True
+    error_dict = {
+        'load': [],
+        'gen': [],
+        'load_gen': [],
+        'ext': []
+    }
     for g in loader:
-        out = model(g.x_dict, g.edge_index_dict)
-        if first:
-            for node_type, y in g.y_dict.items():
-                print('in test', node_type)
-                print(th.cat((out[node_type], y), axis=1))
-            quit()
-        error = th.abs(th.sub(g.y, out))
-        p_error = th.div(error, g.y) * 100
-        errors.append(error.detach().numpy())
-        p_errors.append(p_error.detach().numpy())
+        # Outputs only voltage mag/degree predictions (when required depending o node type)
+        out = model(g.x_dict, g.edge_index_dict, g.edge_attr_dict)
 
-    errors = np.concatenate(errors)
-    errors = errors.reshape((-1, 2))
+        # Calculate power values from fixed and predicted voltages. Dict of tensors([p_mw, q_mvar]) per node type.
+        # Function not tested yet
+        power_values = power_from_voltages_hetero(g, out)
 
-    p_errors = np.concatenate(p_errors)
-    p_errors = p_errors.reshape((-1, 2))
-    print(np.shape(p_errors))
+        # y should contain the missing 2 values per node type (which depends on node type)
+        for node_type, y in g.y_dict.items():
+            # We only add the missing act or reactive power which should be predicted:
+            #   gens miss reactive power, ext miss both
+            if node_type == 'gen' or node_type == 'load_gen':
+                out[node_type] = th.cat((power_values[node_type][:, 1].reshape(-1, 1), out[node_type].reshape(-1, 1)), 1)
+            elif node_type == 'ext':
+                out[node_type] = power_values[node_type]
+            error = th.abs(th.sub(out[node_type], y))
+            p_error = th.div(error, y) * 100
+            error_dict[node_type].append(p_error.detach().numpy())
 
-    mask = np.isinf(p_errors)
-    p_errors[mask] = 0
+    error_dict['load'] = np.concatenate(error_dict['load']).reshape((-1, 2))
+    error_dict['gen'] = np.concatenate(error_dict['gen']).reshape((-1, 2))
+    error_dict['load_gen'] = np.concatenate(error_dict['load_gen']).reshape((-1, 2))
+    error_dict['ext'] = np.concatenate(error_dict['ext']).reshape((-1, 2))
 
-    plt.hist(errors)
-    plt.show()
-    plt.hist(p_errors)
-    plt.show()
+    for k, v in error_dict.items():
+        # We dont skip ext now since we evaluate the predicted (calculated) power values
+        # if k == 'ext':
+        #     continue
+        print(k, len(v))
+        print("within 0.1%", np.sum(abs(v) < 0.1, axis=0) / len(v))
+        print("within 0.5%", np.sum(abs(v) < 0.5, axis=0) / len(v))
+        print("within 1%", np.sum(abs(v) < 1, axis=0) / len(v))
+        print("within 2%", np.sum(abs(v) < 2, axis=0) / len(v))
+        print("within 5%", np.sum(abs(v) < 5, axis=0) / len(v))
+        print("within 10%", np.sum(abs(v) < 10, axis=0) / len(v))
+        print("within 15%", np.sum(abs(v) < 15, axis=0) / len(v))
+        print("within 25%", np.sum(abs(v) < 25, axis=0) / len(v))
+        print("within 50%", np.sum(abs(v) < 50, axis=0) / len(v))
 
-    print("within 5%", np.sum(abs(p_errors) < 5, axis=0) / len(p_errors))
-    print("within 10%", np.sum(abs(p_errors) < 10, axis=0) / len(p_errors))
-    print("within 15%", np.sum(abs(p_errors) < 15, axis=0) / len(p_errors))
-    print("within 25%", np.sum(abs(p_errors) < 25, axis=0) / len(p_errors))
-    print("within 50%", np.sum(abs(p_errors) < 50, axis=0) / len(p_errors))
-
-    return errors, p_errors
-  
-def new_test(model, data):
-    loader = DataLoader(data)
-    load_errors = []
-    p_load_errors = []
-
-    gen_errors = []
-    p_gen_errors = []
-
-    ext_errors = []
-    p_ext_errors = []
-
-    none_errors = []
-    p_none_errors = []
-
-    first = True
-    for g in loader:
-        out = model(g)
-        error = th.sub(g.y, out)
-        p_error = th.div(error, g.y) * 100
-        load_indices = (g.x[:, 0] == 1).nonzero()
-        gen_indices = (g.x[:, 1] == 1).nonzero()
-        ext_indices = (g.x[:, 2] == 1).nonzero()
-        none_indices = (g.x[:, 3] == 1).nonzero()
-
-        if first:
-            print(len(load_indices))
-            print(len(gen_indices))
-            print(len(ext_indices))
-            print(len(none_indices))
-            first = False
-
-        load_errors.append(error[load_indices].detach().numpy())
-        gen_errors.append(error[gen_indices].detach().numpy())
-        ext_errors.append(error[ext_indices].detach().numpy())
-        none_errors.append(error[none_indices].detach().numpy())
-
-        p_load_errors.append(p_error[load_indices].detach().numpy())
-        p_gen_errors.append(p_error[gen_indices].detach().numpy())
-        p_ext_errors.append(p_error[ext_indices].detach().numpy())
-        p_none_errors.append(p_error[none_indices].detach().numpy())
-
-
-    process_errors(p_load_errors)
-    process_errors(p_gen_errors)
-    process_errors(p_ext_errors)
-    process_errors(p_none_errors)
-
-def process_errors(errors):
-        errors = np.concatenate(errors)
-        errors = errors.reshape((-1, 2))
-        print(len(errors))
-        mask = np.isinf(errors)
-        errors[mask] = 0
-        num_correct_5 = np.sum(abs(errors) < 5, axis=0)
-        num_correct_10 = np.sum(abs(errors) < 10, axis=0)
-        num_correct_15 = np.sum(abs(errors) < 15, axis=0)
-        num_correct_25 = np.sum(abs(errors) < 25, axis=0)
-        num_correct_50 = np.sum(abs(errors) < 50, axis=0)
-
-        print("within", num_correct_5 / len(errors))
-        print("within", num_correct_10 / len(errors))
-        print("within", num_correct_15 / len(errors))
-        print("within", num_correct_25 / len(errors))
-        print("within", num_correct_50 / len(errors))
-
+    return error_dict
 
 def normalize_test():
     graph_path = f"Data/bfs_gen/large/x"
