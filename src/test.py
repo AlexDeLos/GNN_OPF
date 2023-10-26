@@ -104,7 +104,6 @@ def test_hetero(model, data):
         out = model(g.x_dict, g.edge_index_dict, g.edge_attr_dict)
 
         # Calculate power values from fixed and predicted voltages. Dict of tensors([p_mw, q_mvar]) per node type.
-        # Function not tested yet
         power_values = power_from_voltages_hetero(g, out)
 
         # y should contain the missing 2 values per node type (which depends on node type)

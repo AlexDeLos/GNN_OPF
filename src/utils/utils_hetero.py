@@ -515,8 +515,10 @@ def power_from_voltages_hetero(data, voltages, angles_are_radians=False):
     active_power = {}
     reactive_power = {}
     cols = ['vm_pu', 'va_degree']
-    for node_type in data.x_dict.keys():
-        num_nodes = data.y_dict[node_type].shape[0]
+    node_types = list(data.x_dict.keys())
+    node_types.append('ext')
+    for node_type in node_types:
+        num_nodes = data.x_dict[node_type].shape[0]
         combined_output_node = th.zeros((num_nodes, 2), dtype=th.float)
 
         if node_type == 'load':
