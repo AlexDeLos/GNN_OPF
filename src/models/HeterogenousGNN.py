@@ -15,7 +15,7 @@ class HeteroGNN(torch.nn.Module):
             n_hidden_lin=1, 
             hidden_lin_dim=32, 
             dropout_rate=0.1,
-            conv_type='SAGE', # GAT or SAGE 
+            conv_type='GAT', # GAT or SAGE 
             *args, 
             **kwargs
         ):
