@@ -112,8 +112,8 @@ def test_hetero(model, data):
             #   gens miss reactive power, ext miss both
             if node_type == 'gen' or node_type == 'load_gen':
                 out[node_type] = th.cat((power_values[node_type][:, 1].reshape(-1, 1), out[node_type].reshape(-1, 1)), 1)
-            elif node_type == 'ext':
-                out[node_type] = power_values[node_type]
+            # elif node_type == 'ext':
+            #     out[node_type] = power_values[node_type]
             error = th.abs(th.sub(out[node_type], y))
             p_error = th.div(error, y) * 100
             error_dict[node_type].append(p_error.detach().numpy())
@@ -121,12 +121,12 @@ def test_hetero(model, data):
     error_dict['load'] = np.concatenate(error_dict['load']).reshape((-1, 2))
     error_dict['gen'] = np.concatenate(error_dict['gen']).reshape((-1, 2))
     error_dict['load_gen'] = np.concatenate(error_dict['load_gen']).reshape((-1, 2))
-    error_dict['ext'] = np.concatenate(error_dict['ext']).reshape((-1, 2))
+    # error_dict['ext'] = np.concatenate(error_dict['ext']).reshape((-1, 2))
 
     for k, v in error_dict.items():
         # We dont skip ext now since we evaluate the predicted (calculated) power values
-        # if k == 'ext':
-        #     continue
+        if k == 'ext':
+            continue
         print(k, len(v))
         print("within 0.1%", np.sum(abs(v) < 0.1, axis=0) / len(v))
         print("within 0.5%", np.sum(abs(v) < 0.5, axis=0) / len(v))
