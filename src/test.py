@@ -75,7 +75,7 @@ def test(model, data, predict_only_voltages=True):
     errors = errors.reshape((-1, 4))
     print(errors.shape, np.shape(errors), "shape of errors")
 
-    mask = np.isinf(p_errors)
+    mask = np.logical_or(np.isinf(p_errors), np.isnan(p_errors))
     p_errors[mask] = 0
 
     print("within 0.1%", np.sum(abs(p_errors) < 0.1, axis=0) / len(p_errors))
