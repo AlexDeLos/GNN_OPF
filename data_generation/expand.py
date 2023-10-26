@@ -106,7 +106,7 @@ def expand_helper(args, graph, name):
         new_graph.res_bus.to_csv(f"{args.save_dir}/y/{name}_{subgraph_length}_expanded_{uid}_bus.csv")
         for line in changed_lines:
             new_graph.line.at[line,'in_service'] = True
-        print(num_generated_graphs)
+        
     return num_generated_graphs
 
 def expand(args):

@@ -9,7 +9,7 @@ import pandapower.networks as pn
 import pandapower.toolbox as tb
 import random
 import string
-import data_generation.subgraphs_methods
+import subgraphs_methods
 import time
 import warnings
 # Suppress FutureWarning

@@ -62,27 +62,30 @@ def get_arguments():
 def load_data(train_dir, val_dir, test_dir, gnn_type, missing=False, volt=False, physics_data=False):
     try:
         train = read_from_pkl(f"{train_dir}/pickled.pkl")
-        val = read_from_pkl(f"{val_dir}/pickled.pkl")
-        test = read_from_pkl(f"{test_dir}/pickled.pkl")
-        print("Data Loaded from pkl files")
     except:
-        print("Data not found, loading from json files...")
-        print("Training Data...")
-
+        print("Training data not found, loading from json files...")
         train = load_data_helper(train_dir, gnn_type, missing=missing, volt=volt, physics_data=physics_data)
-        print("Validation Data...")
-        val = load_data_helper(val_dir, gnn_type, missing=missing, volt=volt, physics_data=physics_data)
-        print("Testing Data...")
-        # Physics_data true and missing/volt to false for testing sets, because we also need the ground truth power values, not just voltages
-        test = load_data_helper(test_dir, gnn_type, missing=False, volt=False, physics_data=True)
-
         # save data to pkl
         write_to_pkl(train, f"{train_dir}/pickled.pkl")
+        print("Training data loaded and saved to pkl file")
+
+    try:
+        val = read_from_pkl(f"{val_dir}/pickled.pkl")
+    except:
+        print("Validation data not found, loading from json files...")
+        val = load_data_helper(val_dir, gnn_type, missing=missing, volt=volt, physics_data=physics_data)
         write_to_pkl(val, f"{val_dir}/pickled.pkl")
+        print("Validation data loaded and saved to pkl file")
+
+    try:
+        test = read_from_pkl(f"{test_dir}/pickled.pkl")
+    except:
+        print("Test data not found, loading from json files...")
+        # Physics_data true and missing/volt to false for testing sets, because we also need the ground truth power values, not just voltages
+        test = load_data_helper(test_dir, gnn_type, missing=False, volt=False, physics_data=True)
         write_to_pkl(test, f"{test_dir}/pickled.pkl")
-
-        print("Data Loaded and saved to pkl files")
-
+        print("Test data loaded and saved to pkl file")
+        
     return train, val, test
 
   
@@ -159,14 +162,17 @@ def get_criterion(criterion_name):
         return nn.HuberLoss()
 
 
-def save_model(model, model_name):
+def save_model(model, model_name, epoch=None):
     model_name = model_name + "-" + model.class_name
     # if file is moved in another directory level relative to the root (currently in root/utils/src), this needs to be changed
     root_directory = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    save_directory = root_directory + "/trained_models"
+    save_directory = root_directory + "/trained_models/" + model_name
     if not os.path.exists(save_directory):
         os.mkdir(save_directory)
-    th.save(model.state_dict(), f"{save_directory}/{model_name}.pt")
+    if epoch is not None:
+        th.save(model.state_dict(), f"{save_directory}/{model_name}_epoch_{epoch}.pt")
+    else:
+        th.save(model.state_dict(), f"{save_directory}/{model_name}_final.pt")
     
     
 def load_model(gnn_type, path, data):
