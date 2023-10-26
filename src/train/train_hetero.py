@@ -125,9 +125,19 @@ def evaluate_batch_hetero(data, model, criterion, device='cpu', vector = True, l
             if y.shape[0] == 0:
                 continue
             if node_type == 'load' and vector:
-                loss += vector_loss(out_dict[node_type], y)
+                y = th.nan_to_num(y)
+                ret= vector_loss(out_dict[node_type], y)
+                if th.isnan(ret):
+                    print("nan loss")
+                else:
+                    loss += ret
             else:
-                loss += criterion(out_dict[node_type], y)
+                y = th.nan_to_num(y)
+                ret = criterion(out_dict[node_type], y)
+                if th.isnan(ret):
+                    print("nan loss")
+                else:
+                    loss += ret
     else:
         loss = physics_loss_hetero(data, out_dict, device=device)
     return loss
