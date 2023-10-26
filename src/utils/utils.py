@@ -12,6 +12,7 @@ import random
 import string
 import torch as th
 import torch.nn as nn
+from torch_geometric.loader import DataLoader as pyg_DataLoader
 import tqdm
 import os
 import sys
@@ -193,6 +194,11 @@ def load_model_hetero(gnn_type, path, data):
     output_dims = {node_type: data[0].y_dict[node_type].shape[1] for node_type in data[0].y_dict.keys()}
     gnn_class = get_gnn(gnn_type)
     gnn = gnn_class(output_dim_dict=output_dims, edge_types=data[0].edge_index_dict.keys())
+
+    data_loader = pyg_DataLoader(data[:1], batch_size=1, shuffle=False)
+    for batch in data_loader:
+        gnn(batch.x_dict, batch.edge_index_dict, batch.edge_attr_dict)
+
     gnn.load_state_dict(th.load(path))
     return gnn
 
