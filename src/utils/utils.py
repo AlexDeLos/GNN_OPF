@@ -162,14 +162,17 @@ def get_criterion(criterion_name):
         return nn.HuberLoss()
 
 
-def save_model(model, model_name):
+def save_model(model, model_name, epoch=None):
     model_name = model_name + "-" + model.class_name
     # if file is moved in another directory level relative to the root (currently in root/utils/src), this needs to be changed
     root_directory = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    save_directory = root_directory + "/trained_models"
+    save_directory = root_directory + "/trained_models/" + model_name
     if not os.path.exists(save_directory):
         os.mkdir(save_directory)
-    th.save(model.state_dict(), f"{save_directory}/{model_name}.pt")
+    if epoch is not None:
+        th.save(model.state_dict(), f"{save_directory}/{model_name}_epoch_{epoch}.pt")
+    else:
+        th.save(model.state_dict(), f"{save_directory}/{model_name}_final.pt")
     
     
 def load_model(gnn_type, path, data):
