@@ -164,7 +164,7 @@ def get_criterion(criterion_name):
         return nn.HuberLoss()
 
 
-def save_model(model, model_name, epoch=None):
+def save_model(model, model_name, epoch=None, best=False):
     model_name = model_name + "-" + model.class_name
     # if file is moved in another directory level relative to the root (currently in root/utils/src), this needs to be changed
     root_directory = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -173,6 +173,8 @@ def save_model(model, model_name, epoch=None):
         os.mkdir(save_directory)
     if epoch is not None:
         th.save(model.state_dict(), f"{save_directory}/{model_name}_epoch_{epoch}.pt")
+    elif best:
+        th.save(model.state_dict(), f"{save_directory}/best-{model_name}.pt")
     else:
         th.save(model.state_dict(), f"{save_directory}/{model_name}_final.pt")
     
@@ -195,7 +197,7 @@ def load_model_hetero(gnn_type, path, data):
     output_dims = {node_type: data[0].y_dict[node_type].shape[1] for node_type in data[0].y_dict.keys()}
     gnn_class = get_gnn(gnn_type)
     gnn = gnn_class(output_dim_dict=output_dims, edge_types=data[0].edge_index_dict.keys())
-
+    gnn.eval()
     data_loader = pyg_DataLoader(data[:1], batch_size=1, shuffle=False)
     for batch in data_loader:
         gnn(batch.x_dict, batch.edge_index_dict, batch.edge_attr_dict)
