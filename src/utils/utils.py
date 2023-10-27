@@ -40,7 +40,7 @@ def get_arguments():
     parser.add_argument("-o", "--optimizer", default="Adam")
     parser.add_argument("-c", "--criterion", default="MSELoss")
     parser.add_argument("-b", "--batch_size", default=32, type=int)
-    parser.add_argument("-n", "--n_epochs", default=50, type=int)
+    parser.add_argument("-n", "--n_epochs", default=200, type=int)
     parser.add_argument("-l", "--learning_rate", default=1e-3, type=float)
     parser.add_argument("-w", "--weight_decay", default=0.05, type=float)
     parser.add_argument("--mixed_loss_weight", default=0.1, type=float)
