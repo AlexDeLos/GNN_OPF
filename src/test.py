@@ -19,6 +19,10 @@ from utils.utils_physics import power_from_voltages
 def main():
     args = parse_args()
     data = read_from_pkl(f"{args.data_path}/pickled.pkl")
+    if args.model_load_data_path is not None:
+        data_model_loading = read_from_pkl(f"{args.model_load_data_path}/pickled.pkl")
+    else:
+        data_model_loading = data
     if args.normalize:
         print("Normalizing Data")
         if args.gnn_type[:6] != "Hetero":
@@ -26,9 +30,9 @@ def main():
         else: 
             data, _, _ = normalize_data_hetero(data, data, data)
     if "HeteroGNN" in args.gnn_type:
-        model = load_model_hetero(args.gnn_type, args.model_path, data)
+        model = load_model_hetero(args.gnn_type, args.model_path, data_model_loading)
     else:
-        model = load_model(args.gnn_type, args.model_path, data)
+        model = load_model(args.gnn_type, args.model_path, data_model_loading)
     model.eval()
     if "HeteroGNN" in args.gnn_type:
         test_hetero(model, data)
@@ -40,6 +44,8 @@ def parse_args():
     parser.add_argument("-g", "--gnn_type", required=True)
     parser.add_argument("-m", "--model_path", required=True)
     parser.add_argument("-d", "--data_path", required=True)
+    # Can be val or train data (as long as it has same output dims as when training the model). Used for loading model with correct output dims.
+    parser.add_argument("-l", "--model_load_data_path", required=False)
     parser.add_argument("--n_hidden_gnn", default=1, type=int)
     parser.add_argument("--gnn_hidden_dim", default=16, type=int)
     parser.add_argument("--n_hidden_lin", default=0, type=int)
@@ -112,21 +118,25 @@ def test_hetero(model, data):
             #   gens miss reactive power, ext miss both
             if node_type == 'gen' or node_type == 'load_gen':
                 out[node_type] = th.cat((power_values[node_type][:, 1].reshape(-1, 1), out[node_type].reshape(-1, 1)), 1)
-            # elif node_type == 'ext':
-            #     out[node_type] = power_values[node_type]
+            elif node_type == 'ext':
+                out[node_type] = power_values[node_type]
             error = th.abs(th.sub(out[node_type], y))
             p_error = th.div(error, y) * 100
             error_dict[node_type].append(p_error.detach().numpy())
 
+    # ['va_degree', 'vm_pu']
     error_dict['load'] = np.concatenate(error_dict['load']).reshape((-1, 2))
+    # ['q_mvar', 'va_degree']
     error_dict['gen'] = np.concatenate(error_dict['gen']).reshape((-1, 2))
+    # ['q_mvar', 'va_degree']
     error_dict['load_gen'] = np.concatenate(error_dict['load_gen']).reshape((-1, 2))
-    # error_dict['ext'] = np.concatenate(error_dict['ext']).reshape((-1, 2))
+    # ['p_mw', 'q_mvar']
+    error_dict['ext'] = np.concatenate(error_dict['ext']).reshape((-1, 2))
 
     for k, v in error_dict.items():
         # We dont skip ext now since we evaluate the predicted (calculated) power values
-        if k == 'ext':
-            continue
+        # if k == 'ext':
+        #     continue
         print(k, len(v))
         print("within 0.1%", np.sum(abs(v) < 0.1, axis=0) / len(v))
         print("within 0.5%", np.sum(abs(v) < 0.5, axis=0) / len(v))
