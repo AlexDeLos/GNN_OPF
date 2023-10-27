@@ -1,6 +1,7 @@
 import os
 import argparse
 import numpy as np
+import torch as th
 from torch_geometric.loader import DataLoader
 from utils.utils import load_model, load_model_hetero, read_from_pkl
 from utils.utils_hetero import physics_loss_hetero
@@ -36,24 +37,28 @@ def parse_args():
 
 def test_hetero_physics(model, data):
     loader = DataLoader(data)
+    imbalances_dict = {
+        'load': [],
+        'gen': [],
+        'load_gen': [],
+        'ext': []
+    }
     error_dict = {
         'load': [],
         'gen': [],
         'load_gen': [],
         'ext': []
     }
-    node_count_dict = {
-        'load': 0,
-        'gen': 0,
-        'load_gen': 0,
-        'ext': 0
-    }
-    first = True
+    node_count_dict = None
+
     i = 0
     for g in loader:
-        i+=1
+        i += 1
         if i % 50 == 0:
             print(f"Graph: {i}")
+
+        if node_count_dict is None:
+            node_count_dict = {node_type: g.x_dict[node_type].shape[0] for node_type in g.x_dict.keys()}
 
         # Outputs only voltage mag/degree predictions (when required depending on node type)
         out = model(g.x_dict, g.edge_index_dict, g.edge_attr_dict)
@@ -62,20 +67,37 @@ def test_hetero_physics(model, data):
         loss = physics_loss_hetero(g, out, log_loss=False, per_node_type=True)
 
         # Add total active+reactive power imbalance per node type and node counts to dicts (all tested on same graph; counts don't change)
-        for node_type, _ in g.y_dict.items():
-            error_dict[node_type].append(loss[node_type].detach().numpy())
-            if first:
-                node_count_dict[node_type] = g.x_dict[node_type].shape[0]
+        for node_type, y in g.y_dict.items():
+            # Add graph imbalance
+            imbalances_dict[node_type].append(loss[node_type].detach().numpy())
 
-        first = False
+            # Add per node errors
+            error = th.abs(th.sub(out[node_type], y))
+            p_error = th.div(error, y) * 100
+            error_dict[node_type].append(p_error.detach().numpy())
 
-    for node_type, imbalance in error_dict.items():
+    for node_type, imbalance in imbalances_dict.items():
         node_count = node_count_dict[node_type]
-        avg_imbalances_per_graph = np.stack(error_dict[node_type]).reshape((-1, 1)) / node_count
+        avg_imbalances_per_graph = np.stack(imbalances_dict[node_type]).reshape((-1, 1)) / node_count
         worst_imbalance = np.max(avg_imbalances_per_graph)
+
         print(f"\n##### {node_type} #####")
         print(f"Worst avg. imbalance per node for a graph: {worst_imbalance}")
-        print(f"Overall avg. imbalance: {np.sum(avg_imbalances_per_graph) / len(loader)}")
+        print(f"Overall avg. imbalance: {np.sum(avg_imbalances_per_graph) / len(loader)}\n")
+
+    for k in error_dict.keys():
+        v = np.concatenate(error_dict[k]).reshape((-1, 2))
+
+        print(f"\n{k}, {len(v)}")
+        print("within 0.1%", np.sum(abs(v) < 0.1, axis=0) / len(v))
+        print("within 0.5%", np.sum(abs(v) < 0.5, axis=0) / len(v))
+        print("within 1%", np.sum(abs(v) < 1, axis=0) / len(v))
+        print("within 2%", np.sum(abs(v) < 2, axis=0) / len(v))
+        print("within 5%", np.sum(abs(v) < 5, axis=0) / len(v))
+        print("within 10%", np.sum(abs(v) < 10, axis=0) / len(v))
+        print("within 15%", np.sum(abs(v) < 15, axis=0) / len(v))
+        print("within 25%", np.sum(abs(v) < 25, axis=0) / len(v))
+        print("within 50%", np.sum(abs(v) < 50, axis=0) / len(v))
 
     return
 
