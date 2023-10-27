@@ -1,7 +1,8 @@
 from torch_geometric.nn import HeteroConv, GATConv, SAGEConv, Linear, GATv2Conv, GINEConv
 import torch
 import torch.nn.functional as F
-from torch.nn import Sequential, BatchNorm1d, Dropout, ReLU
+from torch.nn import Sequential, BatchNorm1d, LeakyReLU, ReLU, Dropout
+import torch as th
 
 class HeteroGNN(torch.nn.Module):
     class_name = "HeteroGNN"
@@ -9,12 +10,12 @@ class HeteroGNN(torch.nn.Module):
     def __init__(
             self,
             output_dim_dict, 
-            edge_types, 
-            n_hidden_conv=2,
-            hidden_conv_dim=32,
-            n_heads = 1,
-            n_hidden_lin=2, 
-            hidden_lin_dim=32, 
+            edge_types,
+            n_hidden_conv=5,
+            hidden_conv_dim=24,
+            n_heads=1,
+            n_hidden_lin=1,
+            hidden_lin_dim=38,
             dropout_rate=0.3,
             conv_type='GINE', # GAT or GATv2 or SAGE or GINE
             jumping_knowledge=True,
@@ -62,10 +63,10 @@ class HeteroGNN(torch.nn.Module):
                     Sequential(
                         Linear(hidden_conv_dim, hidden_conv_dim), 
                         BatchNorm1d(hidden_conv_dim), 
-                        Dropout(dropout_rate),
+                        # Dropout(dropout_rate),
                         ReLU(),
                         Linear(hidden_conv_dim, hidden_conv_dim), 
-                        Dropout(dropout_rate),
+                        # Dropout(dropout_rate),
                         ReLU(),
                     ),
                     edge_dim=-1
@@ -124,7 +125,7 @@ class HeteroGNN(torch.nn.Module):
         for i in range(len(self.lins)-1):
             for node_type in self.out_channels_dict.keys():
                 x_dict[node_type] = self.lins[str(i)][node_type](x_dict[node_type].relu())
-                x_dict[node_type] = F.dropout(x_dict[node_type], p=self.dropout_rate, training=self.training)
+                # x_dict[node_type] = F.dropout(x_dict[node_type], p=self.dropout_rate, training=self.training)
 
         out_dict = {}
         for node_type in self.out_channels_dict.keys():
