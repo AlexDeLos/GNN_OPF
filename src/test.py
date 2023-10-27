@@ -19,6 +19,10 @@ from utils.utils_physics import power_from_voltages
 def main():
     args = parse_args()
     data = read_from_pkl(f"{args.data_path}/pickled.pkl")
+    if args.model_load_data_path is not None:
+        data_model_loading = read_from_pkl(f"{args.model_load_data_path}/pickled.pkl")
+    else:
+        data_model_loading = data
     if args.normalize:
         print("Normalizing Data")
         if args.gnn_type[:6] != "Hetero":
@@ -26,20 +30,23 @@ def main():
         else: 
             data, _, _ = normalize_data_hetero(data, data, data)
     if "HeteroGNN" in args.gnn_type:
-        model = load_model_hetero(args.gnn_type, args.model_path, data)
+        model = load_model_hetero(args.gnn_type, args.model_path, data_model_loading)
     else:
-        model = load_model(args.gnn_type, args.model_path, data)
+        model = load_model(args.gnn_type, args.model_path, data_model_loading)
     model.eval()
     if "HeteroGNN" in args.gnn_type:
-        test_hetero(model, data)
+        test_hetero(model, data, calc_power_vals=args.model_load_data_path is not None)
     else:
-        test(model, data)
+        test(model, data, calc_power_vals=args.model_load_data_path is not None)
 
 def parse_args():
     parser = argparse.ArgumentParser("Testing powerfloww GNN models")
     parser.add_argument("-g", "--gnn_type", required=True)
     parser.add_argument("-m", "--model_path", required=True)
     parser.add_argument("-d", "--data_path", required=True)
+    # Provide train or val data path if model was trained to predict missing voltages, but testing also checks power values which have to be calculated.
+    # If not provided, assumes test set has same labels as train set (power values will not be calculated).
+    parser.add_argument("-l", "--model_load_data_path", required=False)
     parser.add_argument("--n_hidden_gnn", default=1, type=int)
     parser.add_argument("--gnn_hidden_dim", default=16, type=int)
     parser.add_argument("--n_hidden_lin", default=0, type=int)
@@ -50,29 +57,34 @@ def parse_args():
     return args
 
 
-def test(model, data, predict_only_voltages=True):
+def test(model, data, calc_power_vals=False):
     print("testing")
     loader = DataLoader(data)
     errors = []
     p_errors = []
+    output_shape = None
     for g in loader:
         out = model(g)
-        if predict_only_voltages and out.shape[1] == 2:
+
+        if output_shape is None:
+            output_shape = g.y.shape[1]
+
+        if calc_power_vals and out.shape[1] == 2:
             # Assumes output is [vm_pu, va_degree]
             power_values = power_from_voltages(g, out, angles_are_radians=False)
+            # Out should now have [p_mw, q_mvar, vm_pu, va_degree]
             out = th.cat((power_values, out), 1)
-        # out should now always have [p_mw, q_mvar, vm_pu, va_degree]
         error = th.abs(th.sub(g.y, out))
         p_error = th.div(error, g.y) * 100
         errors.append(error.detach().numpy())
         p_errors.append(p_error.detach().numpy())
 
     errors = np.concatenate(errors)
-    errors = errors.reshape((-1, 4))
+    errors = errors.reshape((-1, output_shape))
     print(errors.shape, np.shape(errors), "shape of errors")
 
     p_errors = np.concatenate(p_errors)
-    errors = errors.reshape((-1, 4))
+    errors = errors.reshape((-1, output_shape))
     print(errors.shape, np.shape(errors), "shape of errors")
 
     mask = np.logical_or(np.isinf(p_errors), np.isnan(p_errors))
@@ -91,7 +103,7 @@ def test(model, data, predict_only_voltages=True):
     return errors, p_errors
 
   
-def test_hetero(model, data):
+def test_hetero(model, data, calc_power_vals):
     loader = DataLoader(data)
     error_dict = {
         'load': [],
@@ -99,35 +111,37 @@ def test_hetero(model, data):
         'load_gen': [],
         'ext': []
     }
+    dims_dict = None
+
     for g in loader:
+        # Get output dims of test set
+        if dims_dict is None:
+            dims_dict = {node_type: g.y_dict[node_type].shape[1] for node_type in g.y_dict.keys()}
+
         # Outputs only voltage mag/degree predictions (when required depending o node type)
         out = model(g.x_dict, g.edge_index_dict, g.edge_attr_dict)
 
         # Calculate power values from fixed and predicted voltages. Dict of tensors([p_mw, q_mvar]) per node type.
-        power_values = power_from_voltages_hetero(g, out)
+        if calc_power_vals:
+            power_values = power_from_voltages_hetero(g, out)
 
         # y should contain the missing 2 values per node type (which depends on node type)
         for node_type, y in g.y_dict.items():
-            # We only add the missing act or reactive power which should be predicted:
-            #   gens miss reactive power, ext miss both
-            if node_type == 'gen' or node_type == 'load_gen':
-                out[node_type] = th.cat((power_values[node_type][:, 1].reshape(-1, 1), out[node_type].reshape(-1, 1)), 1)
-            # elif node_type == 'ext':
-            #     out[node_type] = power_values[node_type]
+            if calc_power_vals:
+                # We only add the missing act or reactive power which should be predicted:
+                #   gens miss reactive power, ext miss both
+                if node_type == 'gen' or node_type == 'load_gen':
+                    out[node_type] = th.cat((power_values[node_type][:, 1].reshape(-1, 1), out[node_type].reshape(-1, 1)), 1)
+                elif node_type == 'ext':
+                    out[node_type] = power_values[node_type]
             error = th.abs(th.sub(out[node_type], y))
             p_error = th.div(error, y) * 100
             error_dict[node_type].append(p_error.detach().numpy())
 
-    error_dict['load'] = np.concatenate(error_dict['load']).reshape((-1, 2))
-    error_dict['gen'] = np.concatenate(error_dict['gen']).reshape((-1, 2))
-    error_dict['load_gen'] = np.concatenate(error_dict['load_gen']).reshape((-1, 2))
-    # error_dict['ext'] = np.concatenate(error_dict['ext']).reshape((-1, 2))
+    for k in dims_dict.keys():
+        v = np.concatenate(error_dict[k]).reshape((-1, dims_dict[k]))
 
-    for k, v in error_dict.items():
-        # We dont skip ext now since we evaluate the predicted (calculated) power values
-        if k == 'ext':
-            continue
-        print(k, len(v))
+        print(f"\n{k}, {len(v)}")
         print("within 0.1%", np.sum(abs(v) < 0.1, axis=0) / len(v))
         print("within 0.5%", np.sum(abs(v) < 0.5, axis=0) / len(v))
         print("within 1%", np.sum(abs(v) < 1, axis=0) / len(v))
