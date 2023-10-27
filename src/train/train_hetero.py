@@ -18,8 +18,11 @@ def train_model_hetero(arguments, train, val):
     val_dataloader = pyg_DataLoader(val, batch_size=batch_size, shuffle=False)
     
     gnn_class = get_gnn(arguments.gnn)
-
     gnn = gnn_class(output_dim_dict=output_dims, edge_types=train[0].edge_index_dict.keys())
+    epoch_saved = 0
+    if arguments.from_checkpoint != None:
+        epoch_saved = int(arguments.from_checkpoint.split("_")[-1].split(".")[0])
+        gnn.load_state_dict(th.load(arguments.from_checkpoint))
     
     print(f"GNN: \n{gnn}")
 
@@ -34,7 +37,8 @@ def train_model_hetero(arguments, train, val):
     losses = []
     val_losses = []
     last_batch = None
-    for epoch in tqdm.tqdm(range(arguments.n_epochs)): #args epochs range(arguments.n_epochs)
+    for epoch in tqdm.tqdm(range(epoch_saved,arguments.n_epochs)): #args epochs range(arguments.n_epochs)
+        
         epoch_loss = 0.0
         epoch_val_loss = 0.0
         gnn.train()
@@ -125,9 +129,19 @@ def evaluate_batch_hetero(data, model, criterion, device='cpu', vector = True, l
             if y.shape[0] == 0:
                 continue
             if node_type == 'load' and vector:
-                loss += vector_loss(out_dict[node_type], y)
+                y = th.nan_to_num(y)
+                ret= vector_loss(out_dict[node_type], y)
+                if th.isnan(ret):
+                    print("nan loss")
+                else:
+                    loss += ret
             else:
-                loss += criterion(out_dict[node_type], y)
+                y = th.nan_to_num(y)
+                ret = criterion(out_dict[node_type], y)
+                if th.isnan(ret):
+                    print("nan loss")
+                else:
+                    loss += ret
     else:
         loss = physics_loss_hetero(data, out_dict, device=device)
     return loss
