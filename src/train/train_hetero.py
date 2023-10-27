@@ -84,8 +84,8 @@ def train_batch_hetero(data, model, optimizer, criterion, device='cpu', vector =
             # prevent nan loss
             if y.shape[0] == 0:
                 continue
-            if node_type == 'load' and vector:
-                loss += vector_loss(out_dict[node_type], y)
+            if vector:
+                loss += vector_loss(out_dict[node_type], y, x=data.x_dict[node_type], node_type=node_type, device=device)
             else:
                 loss += criterion(out_dict[node_type], y)
     else:
@@ -96,13 +96,27 @@ def train_batch_hetero(data, model, optimizer, criterion, device='cpu', vector =
 
 #! [0] is angle in degrees [1] is magnitude
 #! input angle is in degrees
-def vector_loss(out,data, device='cpu'):
-    vec_mag_and_vec_angle = out
+def vector_loss(out, y, x, node_type, device='cpu'):
+    if node_type == 'load':
+        vec_mag_and_vec_angle = out
+    if node_type == 'gen':
+        # stack the output y and the second column of input x
+        vec_mag_and_vec_angle = th.stack((out[:,0], x[:,1]), dim=1)
+    if node_type == 'load_gen':
+        # stack the output y and the third column of input x
+        vec_mag_and_vec_angle = th.stack((out[:,0], x[:,2]), dim=1)
+    
     out_x = th.mul(th.cos(th.deg2rad(vec_mag_and_vec_angle[:,0])), vec_mag_and_vec_angle[:,1])
     out_y = th.mul(th.sin(th.deg2rad(vec_mag_and_vec_angle[:,0])), vec_mag_and_vec_angle[:,1])
     out_vector = th.stack((out_x, out_y))
 
-    data_mag_and_data_angle = data
+    if node_type == 'load':
+        data_mag_and_data_angle = y
+    if node_type == 'gen':
+        data_mag_and_data_angle = th.stack((y[:,0], x[:,1]), dim=1)
+    if node_type == 'load_gen':
+        data_mag_and_data_angle = th.stack((y[:,0], x[:,2]), dim=1)
+        
     data_x = th.mul(data_mag_and_data_angle[:,1], th.cos(th.deg2rad(data_mag_and_data_angle[:,0])))
     data_y = th.mul(data_mag_and_data_angle[:,1], th.sin(th.deg2rad(data_mag_and_data_angle[:,0])))
     data_vector = th.stack((data_x, data_y))
@@ -128,20 +142,15 @@ def evaluate_batch_hetero(data, model, criterion, device='cpu', vector = True, l
             # prevent nan loss
             if y.shape[0] == 0:
                 continue
-            if node_type == 'load' and vector:
+            if vector:
                 y = th.nan_to_num(y)
-                ret= vector_loss(out_dict[node_type], y)
+                ret= vector_loss(out_dict[node_type], y, data.x_dict[node_type], node_type=node_type, device=device)
                 if th.isnan(ret):
                     print("nan loss")
                 else:
                     loss += ret
             else:
-                y = th.nan_to_num(y)
-                ret = criterion(out_dict[node_type], y)
-                if th.isnan(ret):
-                    print("nan loss")
-                else:
-                    loss += ret
+                loss += criterion(out_dict[node_type], y)
     else:
         loss = physics_loss_hetero(data, out_dict, device=device)
     return loss
