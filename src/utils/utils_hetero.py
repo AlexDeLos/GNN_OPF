@@ -367,7 +367,7 @@ def normalize_data_hetero(train, val, test, standard_normalization=True):
     return train, val, test
 
 
-def physics_loss_hetero(data, output, log_loss=True, device='cpu'):
+def physics_loss_hetero(data, output, log_loss=True, per_node_type=False, device='cpu'):
     # Take all edge type and compute -1 * feature 1 and -1 * feature 2 to get off-diagonal admittance matrix values
     conductance_dict = {}
     susceptance_dict = {}
@@ -469,6 +469,10 @@ def physics_loss_hetero(data, output, log_loss=True, device='cpu'):
         for node_type in data.x_dict.keys():
             aggr_imbalances += th.sum(active_imbalance[node_type] * active_imbalance[node_type] + reactive_imbalance[node_type] * reactive_imbalance[node_type])
         tot_loss = th.log(1.0 + aggr_imbalances)
+    elif not log_loss and per_node_type:
+        tot_loss = {}
+        for node_type in data.x_dict.keys():
+            tot_loss[node_type] = th.sum(th.abs(active_imbalance[node_type]) + th.abs(reactive_imbalance[node_type]))
     else:
         tot_loss = th.tensor([0.0], device=device)
         for node_type in data.x_dict.keys():
