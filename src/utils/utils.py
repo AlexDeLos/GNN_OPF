@@ -31,9 +31,9 @@ def get_arguments():
     parser.add_argument("gnn", choices=["GAT", "MessagePassing", "GraphSAGE", "GINE", "HeteroGNN"], default="GAT")
     # if file is moved in another directory level relative to the root (currently in root/utils/src), this needs to be changed
     root_directory = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    parser.add_argument("--train", default=root_directory + "/Data_phys_rnd_walk/train")
-    parser.add_argument("--val", default=root_directory + "/Data_phys_rnd_walk/val")
-    parser.add_argument("--test", default=root_directory + "/Data_phys_rnd_walk/test")
+    parser.add_argument("--train", default=root_directory + "/Data/train")
+    parser.add_argument("--val", default=root_directory + "/Data/val")
+    parser.add_argument("--test", default=root_directory + "/Data/test")
     parser.add_argument("-s", "--save_model", action="store_true", default=True)
     parser.add_argument("-m", "--model_name", default=''.join([random.choice(string.ascii_letters + string.digits) for _ in range(8)]))
     parser.add_argument("-p", "--plot", action="store_true", default=True)
