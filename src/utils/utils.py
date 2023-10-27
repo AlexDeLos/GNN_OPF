@@ -55,6 +55,7 @@ def get_arguments():
     parser.add_argument("--loss_type", choices=['standard', 'physics', 'mixed'], default='standard')
     parser.add_argument("--value_mode", choices=['all', 'missing', 'voltage'], default='all')
     parser.add_argument("--pretrain", action="store_true", default=False)
+    parser.add_argument("--from_checkpoint", default=None, type=str)
 
     args = parser.parse_args()
     return args
