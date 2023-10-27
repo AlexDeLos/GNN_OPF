@@ -10,13 +10,13 @@ class HeteroGNN(torch.nn.Module):
             self,
             output_dim_dict, 
             edge_types, 
-            n_hidden_conv=3,
-            hidden_conv_dim=128,
-            n_heads = 3,
+            n_hidden_conv=2,
+            hidden_conv_dim=32,
+            n_heads = 1,
             n_hidden_lin=2, 
-            hidden_lin_dim=128, 
+            hidden_lin_dim=32, 
             dropout_rate=0.3,
-            conv_type='GATv2', # GAT or GATv2 or SAGE or GINE
+            conv_type='GINE', # GAT or GATv2 or SAGE or GINE
             jumping_knowledge=True,
             hetero_aggr='mean',
             *args, 
