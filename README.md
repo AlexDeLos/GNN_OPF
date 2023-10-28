@@ -41,6 +41,8 @@ pip3 install -r requirements.txt
     ├── test.py
     ├── test_physics.py
     ├── train
+    │   ├── train_hetero.py
+    │   └── train_homo.py
     ├── models
     │   ├── GAT.py
     │   ├── GINE.py
@@ -58,25 +60,30 @@ pip3 install -r requirements.txt
 ## Generate dataset
 
 #### Inductive dataset
-By default it will generate 15 subgraphs for each power grid listed [here](https://pandapower.readthedocs.io/en/v2.4.0/networks/power_system_test_cases.html). 
-The default subgraphing technique is `rnd_neighbor`, refer to `data_generation/generate.py` for all the possible customizable arguments and their default values. Data will be saved in the `./Data` folder.
 ```
 bash data_generation/generate_inductive_dataset.sh ./Data
 ```
+By default it will generate 15 subgraphs for each power grid listed [here](https://pandapower.readthedocs.io/en/v2.4.0/networks/power_system_test_cases.html). 
+The default subgraphing technique is `rnd_neighbor`, refer to `data_generation/generate.py` for all the possible customizable arguments and their default values. Data will be saved in the `./Data` folder.
 
 
 #### Transductive dataset
-
-By default it will take [case118](https://pandapower.readthedocs.io/en/v2.4.0/networks/power_system_test_cases.html#case-118) power grid and create syntethic data (modifying node features) while maintaing the same power grid topology. It will create 3 datasets: `train`, `val`, `test`, each containing 1000 instances. Refer to `data_generation/expand.py` for all the possible customizable arguments and their default values. It is also possible to create new syntethic instances for all graphs inside a directory.  
 ```
 bash data_generation/generate_inductive_dataset.sh ./Data
 ```
+By default it will take [case118](https://pandapower.readthedocs.io/en/v2.4.0/networks/power_system_test_cases.html#case-118) power grid and create syntethic data (modifying node features) while maintaing the same power grid topology. It will create 3 datasets: `train`, `val`, `test`, each containing 1000 instances. Refer to `data_generation/expand.py` for all the possible customizable arguments and their default values. 
+
+It is also possible to create new syntethic instances for all graphs inside a directory. The following script will create 10 syntethic instances for each data instance in the `./Data/train` folder and save them in the same folder `./Data/train`.
+```
+python data_generation/expand.py --data_path=./Data --dataset=train --num_networks=10 --save_dir=./Data/train
+```
+
 
 ## Train a model
 
 ### Train
-The first time the model is trained, it will create the data instances from the raw data and save them to pickle files inside the dataset folders. The data instances created in pickle files will only be compatible for heterogenous graphs tranining (or viceversa). To run homogenous graph models new data instances need to be created by removing or moving the heterogenous pickle files from the dataset directories (or viceversa).
-Check src/utils/utils.py for all possible arguments and training settings. The default parameter arguments for the different architectures are not currently used as they differ between architectures and each architecture performs best with different parameters.
+The first time the model is trained, it will create the data instances from the raw data and save them to pickle files inside the dataset folders (i.e. `Data/train/pickled.pkl`). The data instances created in pickle files will only be compatible for heterogenous graphs tranining, and not homogenous, and viceversa. To run homogenous graph models new data instances need to be created by removing or moving the heterogenous pickle files from the dataset directories (or viceversa).
+Check `src/utils/utils.py` for all possible arguments and training settings to run when calling `python src/main.py`. The default parameter arguments for the different architectures are not currently used as they differ between architectures and each architecture performs best with different parameters.
 
 #### Heterogenous graph model
 To train a heterogenous model run the following command. To customize the heterogenous convolution used (`GAT`, `GATv2`, `GINE`, `SAGE`), as well all the other model hyperparameters, modify the `__init__` arguments of `HeteroGNN` class inside `src/models/HeterogenousGNN` file. 
