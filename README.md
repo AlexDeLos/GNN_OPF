@@ -33,7 +33,7 @@ pip3 install -r requirements.txt
 │   ├── expand.py
 │   ├── generate.py
 │   ├── generate_inductive_dataset.sh
-│   ├── generate_transductive_physics_dataset.sh
+│   ├── generate_transductive_dataset.sh
 │   └── subgraphs_methods.py
 └── src
     ├── hyperparams_optimization.py
