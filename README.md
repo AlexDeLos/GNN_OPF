@@ -48,11 +48,11 @@ pip3 install -r requirements.txt
     │   ├── HeterogenousGNN.py
     │   ├── MessagePassing.py
     └── utils
-       ├── utils.py
-       ├── utils_hetero.py
-       ├── utils_homo.py
-       ├── utils_physics.py
-       └── utils_plot.py
+        ├── utils.py
+        ├── utils_hetero.py
+        ├── utils_homo.py
+        ├── utils_physics.py
+        └── utils_plot.py
 ```
 
 ## Generate dataset
