@@ -3,6 +3,8 @@ import torch
 import torch.nn.functional as F
 from torch.nn import Sequential, BatchNorm1d, LeakyReLU, ReLU, Dropout
 import torch as th
+from torch_geometric.nn.models import JumpingKnowledge
+
 
 class HeteroGNN(torch.nn.Module):
     class_name = "HeteroGNN"
@@ -18,8 +20,8 @@ class HeteroGNN(torch.nn.Module):
             hidden_lin_dim=38,
             dropout_rate=0.3,
             conv_type='GINE', # GAT or GATv2 or SAGE or GINE
-            jumping_knowledge=True,
-            hetero_aggr='sum',
+            jumping_knowledge='mean', # max or lstm or mean, None to disable
+            hetero_aggr='sum', # sum or mean or max or mul
             *args, 
             **kwargs
         ):
@@ -96,6 +98,14 @@ class HeteroGNN(torch.nn.Module):
 
         self.dropout_rate = dropout_rate
         self.jumping_knowledge = jumping_knowledge
+        self.jk_dict = {}
+        if jumping_knowledge == 'max' or jumping_knowledge == 'lstm':
+            for node_type in output_dim_dict.keys():
+                self.jk_dict[node_type] = JumpingKnowledge(mode=jumping_knowledge, channels=hidden_conv_dim * n_heads, num_layers=n_hidden_conv)
+            self.jk_dict['ext'] = JumpingKnowledge(mode=jumping_knowledge, channels=hidden_conv_dim * n_heads, num_layers=n_hidden_conv)
+            
+
+        
        
 
     def forward(self, x_dict, edge_index_dict, edge_attr_dict):
@@ -103,9 +113,9 @@ class HeteroGNN(torch.nn.Module):
             x_dict = {k: self.input_lins[k](x) for k, x in x_dict.items()}
             x_dict = {k: F.dropout(x, p=self.dropout_rate, training=self.training) for k, x in x_dict.items()}
                 
-        jumping_knowledge_dict = {}
+        jk_lists_dict = {}
         for k in x_dict.keys():
-            jumping_knowledge_dict[k] = []
+            jk_lists_dict[k] = []
 
         for conv in self.convs:
             if self.conv_type == 'SAGE':
@@ -116,11 +126,15 @@ class HeteroGNN(torch.nn.Module):
             x_dict = {k: F.leaky_relu(x, 0.2) for k, x in x_dict.items()}
             x_dict = {k: F.dropout(x, p=self.dropout_rate, training=self.training) for k, x in x_dict.items()}
             for key in x_dict.keys():
-                jumping_knowledge_dict[key].append(x_dict[key])
+                jk_lists_dict[key].append(x_dict[key])
         
-        if self.jumping_knowledge:
-            # mean of the hidden states of each conv layer
-            x_dict = {k: (sum(jumping_knowledge_dict[k]) / len(jumping_knowledge_dict[k])) for k in jumping_knowledge_dict.keys()}
+        # if jumping_knowledge is None, we don't use it
+        if self.jumping_knowledge == 'max' or self.jumping_knowledge == 'lstm':
+            x_dict = {k: self.jk_dict[k](jk_lists_dict[k]) for k in x_dict.keys()}
+        elif self.jumping_knowledge == 'mean':
+            # since mean is not implemented in pytorch geometric JumpingKnowledge, we do it manually
+            x_dict = {k: (sum(jk_lists_dict[k]) / len(jk_lists_dict[k])) for k in jk_lists_dict.keys()}
+
         
         for i in range(len(self.lins)-1):
             for node_type in self.out_channels_dict.keys():
