@@ -35,26 +35,24 @@ pip3 install -r requirements.txt
 │   ├── generate_inductive_dataset.sh
 │   ├── generate_transductive_physics_dataset.sh
 │   └── subgraphs_methods.py
-├── src
-│   ├── hyperparams_optimization.py
-│   ├── main.py
-│   ├── test.py
-│   ├── test_physics.py
-│   ├── train
-│   ├── models
-│       ├── GAT.py
-│       ├── GINE.py
-│       ├── GraphSAGE.py
-│       ├── HeterogenousGNN.py
-│       ├── MessagePassing.py
-│   └── utils
-│       ├── utils.py
-│       ├── utils_hetero.py
-│       ├── utils_homo.py
-│       ├── utils_physics.py
-│       └── utils_plot.py
-│
-├── test.sh
+└── src
+    ├── hyperparams_optimization.py
+    ├── main.py
+    ├── test.py
+    ├── test_physics.py
+    ├── train
+    ├── models
+    │   ├── GAT.py
+    │   ├── GINE.py
+    │   ├── GraphSAGE.py
+    │   ├── HeterogenousGNN.py
+    │   ├── MessagePassing.py
+    └── utils
+       ├── utils.py
+       ├── utils_hetero.py
+       ├── utils_homo.py
+       ├── utils_physics.py
+       └── utils_plot.py
 ```
 
 ## Generate dataset
