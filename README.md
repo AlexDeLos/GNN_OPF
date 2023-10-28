@@ -59,7 +59,7 @@ pip3 install -r requirements.txt
 
 #### Inductive dataset
 By default it will generate 15 subgraphs for each power grid listed [here](https://pandapower.readthedocs.io/en/v2.4.0/networks/power_system_test_cases.html). 
-The default subgraphing technique is `rnd_neighbor`, refer to `data_generation/generate.py` for all the possible customizable arguments and their default values.
+The default subgraphing technique is `rnd_neighbor`, refer to `data_generation/generate.py` for all the possible customizable arguments and their default values. Data will be saved in the `./Data` folder.
 ```
 bash data_generation/generate_inductive_dataset.sh ./Data
 ```
@@ -85,7 +85,7 @@ python src/main.py HeteroGNN
 ```
 
 #### Homogenous graph model
-To train a homogenous model run the following command, other options in addition to `GAT` are (`GINE`, `GraphSAGE`, `MessagePassing`).
+To train a homogenous model run the following command, other options in addition to `GAT` are `GINE`, `GraphSAGE`, `MessagePassing`.
 ```
 python src/main.py GAT
 ```
