@@ -133,9 +133,9 @@ class HeteroGNN(torch.nn.Module):
             if node_type == 'load':
                 temp_x = self.lins[str(len(self.lins) - 1)][node_type](x_dict[node_type])
 
-                out_dict[node_type] = th.zeros(temp_x.shape, device=temp_x.get_device())
+                out_dict[node_type] = th.zeros(temp_x.shape, device=temp_x.device)
                 out_dict[node_type][:, 0] += temp_x[:, 0]
-                out_dict[node_type][:, 1] += F.leaky_relu(temp_x[:, 1], 0.2)
+                out_dict[node_type][:, 1] += F.leaky_relu(temp_x[:, 1])
             else:
                 out_dict[node_type] = self.lins[str(len(self.lins) - 1)][node_type](x_dict[node_type])
 
