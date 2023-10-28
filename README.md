@@ -69,7 +69,7 @@ The default subgraphing technique is `rnd_neighbor`, refer to `data_generation/g
 
 #### Transductive dataset
 ```
-bash data_generation/generate_inductive_dataset.sh ./Data
+bash data_generation/generate_transductive_dataset.sh ./Data
 ```
 By default it will take [case118](https://pandapower.readthedocs.io/en/v2.4.0/networks/power_system_test_cases.html#case-118) power grid and create syntethic data (modifying node features) while maintaing the same power grid topology. It will create 3 datasets: `train`, `val`, `test`, each containing 1000 instances. Refer to `data_generation/expand.py` for all the possible customizable arguments and their default values. 
 
