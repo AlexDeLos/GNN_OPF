@@ -149,7 +149,7 @@ class HeteroGNN(torch.nn.Module):
 
                 out_dict[node_type] = th.zeros(temp_x.shape, device=temp_x.device)
                 out_dict[node_type][:, 0] += temp_x[:, 0]
-                out_dict[node_type][:, 1] += F.leaky_relu(temp_x[:, 1])
+                out_dict[node_type][:, 1] += th.abs(temp_x[:, 1])
             else:
                 out_dict[node_type] = self.lins[str(len(self.lins) - 1)][node_type](x_dict[node_type])
 
