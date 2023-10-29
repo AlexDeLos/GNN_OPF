@@ -32,7 +32,7 @@ def train_model_hetero(arguments, train, val):
 
     optimizer_class = get_optim(arguments.optimizer)
     optimizer = optimizer_class(gnn.parameters(), lr=arguments.learning_rate)
-    scheduler = th.optim.lr_scheduler.ReduceLROnPlateau(optimizer, verbose=True)
+    # scheduler = th.optim.lr_scheduler.ReduceLROnPlateau(optimizer, verbose=True)
     criterion = get_criterion(arguments.criterion)
 
     losses = []
@@ -61,7 +61,7 @@ def train_model_hetero(arguments, train, val):
         if epoch % 10 == 0:
             print(f'Epoch: {epoch:03d}, trn_Loss: {avg_epoch_loss:.6f}, val_loss: {avg_epoch_val_loss:.6f}')
             save_model(gnn, arguments.model_name, epoch=epoch)
-        scheduler.step(avg_epoch_val_loss)
+        # scheduler.step(avg_epoch_val_loss)
 
         # Early stopping
         try:  
