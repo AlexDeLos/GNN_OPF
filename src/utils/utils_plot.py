@@ -210,31 +210,39 @@ def dfs(visited, graph, node, depth, ret_array):
         for node_connected in get_neighbors(graph, node):
             dfs(visited, graph, node_connected, depth + 1, ret_array)
 
+
 # compare two models performance 
-def plot_percent_curve(csv1, csv2):
+def plot_percent_curve(csv_dict, col_name='load_vm_pu', colors=['red', 'blue', 'green']):
     # read df from csv
-    df1 = pd.read_csv(csv1)
-    df2 = pd.read_csv(csv2)
+    names = []
+    dfs = []
+    for name, csv in csv_dict.items():
+        names.append(name)
+        dfs.append(pd.read_csv(csv))
+
     # columns are: load_vm_pu, load_va_deg, gen_va_deg, load_gen_va_deg
     col_dict = {}
-    for i, col in enumerate(df1.columns):
+    for i, col in enumerate(dfs[0].columns):
         col_dict[col] = i
     
     # column to plot
-    col_name = 'load_vm_pu'
     col = col_dict[col_name]
 
-    y1 = df1.iloc[:, col] * 100
-    y2 = df2.iloc[:, col] * 100
+    for idx, df in enumerate(dfs):
+        y = df.iloc[:, col] * 100
+        plt.plot(y, color=colors[idx])
 
-    plt.plot(y1, color='red')
-    plt.plot(y2, color='blue')
-    
-    plt.title(f"{col_name}")
+    cols_to_title_dict = {
+        'load_vm_pu': 'Voltage Magnitude Error Load Busses',
+        'load_va_deg': 'Voltage Angle Error Load Busses',
+        'gen_va_deg': 'Voltage Angle Error Generator Busses',
+        'load_gen_va_deg': 'Voltage Angle Error Load-Generator Busses',
+    }
+
+    plt.title(f"{cols_to_title_dict[col_name]}")
     plt.xlabel("Error threshold in %")
     plt.ylabel("Percentage of nodes within percent error threshold")
     plt.yticks(np.arange(0, 101, 10))
     plt.xticks(np.arange(0, 101, 5))
-    # change according to what you are comparing
-    plt.legend(["no_edge_attr", "edge_attr"])
+    plt.legend(names)
     plt.show()
