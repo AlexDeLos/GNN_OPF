@@ -63,6 +63,8 @@ def parse_args():
 
 
 def test(model, data, calc_power_vals=False):
+    # disable scientifc notation
+    np.set_printoptions(suppress=True)
     print("testing")
     loader = DataLoader(data)
     errors = []
@@ -109,6 +111,7 @@ def test(model, data, calc_power_vals=False):
 
   
 def test_hetero(model, data, calc_power_vals, save, path, name):
+    np.set_printoptions(suppress=True)
     loader = DataLoader(data)
     error_dict = {
         'load': [],

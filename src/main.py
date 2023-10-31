@@ -8,7 +8,7 @@ from train.train_hetero import train_model_hetero
 from utils.utils import get_arguments, load_data, save_model
 from utils.utils_hetero import normalize_data_hetero
 from utils.utils_homo import normalize_data
-from utils.utils_plot import distance_plot, plot_losses
+from utils.utils_plot import distance_plot, plot_losses, plot_percent_curve
 import warnings
 
 # Suppress FutureWarning
