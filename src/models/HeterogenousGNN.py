@@ -13,14 +13,14 @@ class HeteroGNN(torch.nn.Module):
             self,
             output_dim_dict, 
             edge_types,
-            n_hidden_conv=5,
+            n_hidden_conv=2,
             hidden_conv_dim=24,
             n_heads=1,
             n_hidden_lin=1,
             hidden_lin_dim=38,
-            dropout_rate=0.3,
+            dropout_rate=0.2,
             conv_type='GINE', # GAT or GATv2 or SAGE or GINE
-            jumping_knowledge='mean', # max or lstm or mean, None to disable
+            jumping_knowledge='lstm', # max or lstm or mean, None to disable
             hetero_aggr='sum', # sum or mean or max or mul
             *args, 
             **kwargs
@@ -104,9 +104,6 @@ class HeteroGNN(torch.nn.Module):
                 self.jk_dict[node_type] = JumpingKnowledge(mode=jumping_knowledge, channels=hidden_conv_dim * n_heads, num_layers=n_hidden_conv)
             self.jk_dict['ext'] = JumpingKnowledge(mode=jumping_knowledge, channels=hidden_conv_dim * n_heads, num_layers=n_hidden_conv)
             
-
-        
-       
 
     def forward(self, x_dict, edge_index_dict, edge_attr_dict):
         if self.conv_type == 'GINE':
