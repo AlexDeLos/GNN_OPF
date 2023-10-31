@@ -1,6 +1,17 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
+# # FULL graph
+
+# n_hidden_conv=5,
+# hidden_conv_dim=24,
+# n_heads=1,
+# n_hidden_lin=1,
+# hidden_lin_dim=38,
+# dropout_rate=0.3,
+# conv_type='GINE', # GAT or GATv2 or SAGE or GINE
+# jumping_knowledge='mean', # max or lstm or mean, None to disable
+# hetero_aggr='sum', # sum or mean or max or mul
 
 # RND neighbor
 
