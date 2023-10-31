@@ -1,6 +1,8 @@
 import argparse
 import matplotlib.pyplot as plt
+from pathlib import Path
 import numpy as np
+import pandas as pd
 import pandapower as pp
 import torch as th
 from torch_geometric.loader import DataLoader
@@ -35,7 +37,7 @@ def main():
         model = load_model(args.gnn_type, args.model_path, data_model_loading)
     model.eval()
     if "HeteroGNN" in args.gnn_type:
-        test_hetero(model, data, calc_power_vals=args.model_load_data_path is not None)
+        test_hetero(model, data, calc_power_vals=args.model_load_data_path is not None, save=args.no_save, path=args.save_path, name=args.save_name)
     else:
         test(model, data, calc_power_vals=args.model_load_data_path is not None)
 
@@ -53,6 +55,9 @@ def parse_args():
     parser.add_argument("--lin_hidden_dim", default=32, type=int)
     parser.add_argument("--normalize", action='store_true', default=False)
     parser.add_argument("--no_linear", action="store_true", default=False)
+    parser.add_argument("--no_save", action="store_false", default=True)
+    parser.add_argument("--save_path", default='./Data/results')
+    parser.add_argument("--save_name", default="results")
     args = parser.parse_args()
     return args
 
@@ -103,7 +108,7 @@ def test(model, data, calc_power_vals=False):
     return errors, p_errors
 
   
-def test_hetero(model, data, calc_power_vals):
+def test_hetero(model, data, calc_power_vals, save, path, name):
     loader = DataLoader(data)
     error_dict = {
         'load': [],
@@ -131,6 +136,8 @@ def test_hetero(model, data, calc_power_vals):
                 # We only add the missing act or reactive power which should be predicted:
                 #   gens miss reactive power, ext miss both
                 if node_type == 'gen' or node_type == 'load_gen':
+                    # print(power_values[node_type])
+                    # print(out[node_type])
                     out[node_type] = th.cat((power_values[node_type][:, 1].reshape(-1, 1), out[node_type].reshape(-1, 1)), 1)
                 elif node_type == 'ext':
                     out[node_type] = power_values[node_type]
@@ -138,6 +145,7 @@ def test_hetero(model, data, calc_power_vals):
             p_error = th.div(error, y) * 100
             error_dict[node_type].append(p_error.detach().numpy())
 
+    df_data = {}
     for k in dims_dict.keys():
         v = np.concatenate(error_dict[k]).reshape((-1, dims_dict[k]))
 
@@ -151,8 +159,33 @@ def test_hetero(model, data, calc_power_vals):
         print("within 15%", np.sum(abs(v) < 15, axis=0) / len(v))
         print("within 25%", np.sum(abs(v) < 25, axis=0) / len(v))
         print("within 50%", np.sum(abs(v) < 50, axis=0) / len(v))
+        
+        if save:
+            length = len(v)
+            within = np.array([np.sum(abs(v) < i, axis=0) / length for i in range(1, 101)])
+            if k == 'load':
+                vm_pu_within = within[:, 1]
+                va_degree_within = within[:, 0]
+                df_data[f'{k}_vm_pu'] = vm_pu_within
+                df_data[f'{k}_va_deg'] = va_degree_within
+
+            elif k == 'gen' or k == 'load_gen':
+                va_degree_within = within[:, 1]
+                df_data[f'{k}_va_deg'] = va_degree_within
+    if save:
+        df = pd.DataFrame(data=df_data)
+        Path(f"{path}/").mkdir(parents=True, exist_ok=True)
+        df.to_csv(f'{path}/{name}.csv')
+
 
     return error_dict
+
+def plot_within(data, title):
+    plt.plot(range(1, 101), data, color='red')
+    plt.title(title)
+    plt.xlabel("Error Threshold in %")
+    plt.ylabel("Percent within error threshold")
+    plt.show()
 
 def normalize_test():
     graph_path = f"Data/bfs_gen/large/x"

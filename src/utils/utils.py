@@ -55,7 +55,7 @@ def get_arguments():
     parser.add_argument("--loss_type", choices=['standard', 'physics', 'mixed'], default='standard')
     parser.add_argument("--value_mode", choices=['all', 'missing', 'voltage'], default='all')
     parser.add_argument("--pretrain", action="store_true", default=False)
-    parser.add_argument("--from_checkpoint", default=None, type=str)
+    parser.add_argument("--from_checkpoint", default=None, type=str) 
 
     args = parser.parse_args()
     return args
@@ -201,8 +201,8 @@ def load_model_hetero(gnn_type, path, data):
     data_loader = pyg_DataLoader(data[:1], batch_size=1, shuffle=False)
     for batch in data_loader:
         gnn(batch.x_dict, batch.edge_index_dict, batch.edge_attr_dict)
-
     gnn.load_state_dict(th.load(path))
+
     return gnn
 
 
