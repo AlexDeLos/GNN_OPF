@@ -248,7 +248,8 @@ def plot_percent_curve(csv_dict, col_name='load_vm_pu', colors=['red', 'blue', '
         'load_va_deg': 'Voltage Angle Error Load Busses',
         'gen_va_deg': 'Voltage Angle Error Generator Busses',
         'load_gen_va_deg': 'Voltage Angle Error Load-Generator Busses',
-        'va_degree': 'Voltage Angle Error All Busses'
+        'va_degree': 'Voltage Angle Error All Busses',
+        'q_mvar': 'Reactive Power Error All Busses'
     }
 
     plt.title(f"{cols_to_title_dict[col_name]}")
