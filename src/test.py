@@ -63,6 +63,17 @@ def parse_args():
 
 
 def test(model, data, calc_power_vals=False):
+    """
+    Test the given model on the provided data.
+
+    Args:
+        model (torch.nn.Module): The model to test.
+        data (torch_geometric.data.Data): The data to use for testing.
+        calc_power_vals (bool, optional): Whether to calculate power values from the output. Defaults to False.
+
+    Returns:
+        Tuple[np.ndarray, np.ndarray]: A tuple containing two numpy arrays: the errors and the percentage errors.
+    """
     # disable scientifc notation
     np.set_printoptions(suppress=True)
     print("testing")
@@ -111,6 +122,20 @@ def test(model, data, calc_power_vals=False):
 
   
 def test_hetero(model, data, calc_power_vals, save, path, name):
+    """
+    Test the given model on the provided data and calculate the error between the predicted and actual values.
+    
+    Args:
+    - model: The model to be tested.
+    - data: The data to be used for testing.
+    - calc_power_vals: A boolean flag indicating whether to calculate power values from fixed and predicted voltages.
+    - save: A boolean flag indicating whether to save the results to a CSV file.
+    - path: The path where the CSV file should be saved.
+    - name: The name of the CSV file.
+    
+    Returns:
+    - error_dict: A dictionary containing the error for each node type.
+    """
     np.set_printoptions(suppress=True)
     loader = DataLoader(data)
     error_dict = {
