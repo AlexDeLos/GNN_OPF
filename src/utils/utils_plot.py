@@ -212,7 +212,18 @@ def dfs(visited, graph, node, depth, ret_array):
 
 
 # compare two models performance 
-def plot_percent_curve(csv_dict, col_name='load_vm_pu', colors=['red', 'blue', 'green', 'orange']):
+def plot_percent_curve(csv_dict, col_name='load_vm_pu', colors=['red', 'blue', 'green']):
+    """
+    Plots a curve showing the percentage of nodes within a certain percent error threshold for a given column.
+
+    Args:
+        csv_dict (dict): A dictionary containing the names and file paths of the CSV files to read.
+        col_name (str): The name of the column to plot.
+        colors (list): A list of colors to use for each curve.
+
+    Returns:
+        None
+    """
     # read df from csv
     names = []
     dfs = []
@@ -237,6 +248,7 @@ def plot_percent_curve(csv_dict, col_name='load_vm_pu', colors=['red', 'blue', '
         'load_va_deg': 'Voltage Angle Error Load Busses',
         'gen_va_deg': 'Voltage Angle Error Generator Busses',
         'load_gen_va_deg': 'Voltage Angle Error Load-Generator Busses',
+        'va_degree': 'Voltage Angle Error All Busses'
     }
 
     plt.title(f"{cols_to_title_dict[col_name]}")
@@ -246,3 +258,4 @@ def plot_percent_curve(csv_dict, col_name='load_vm_pu', colors=['red', 'blue', '
     plt.xticks(np.arange(0, 101, 5))
     plt.legend(names)
     plt.show()
+
