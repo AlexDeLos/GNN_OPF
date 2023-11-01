@@ -46,7 +46,7 @@ def expand_helper(args, graph, name):
         if trials == 30: # avoid infinite loop, stop after 30 trials
             print(f"Could not generate a new network for {name} in 30 trials, skipping...")
             break
-        new_graph = pp.pandapowerNet(graph.copy())
+        new_graph = pp.pandapowerNet(deepcopy(graph))
         old_p_mws= []
         new_p_mws = []
         #basis from all the variation in the network
@@ -113,7 +113,7 @@ def expand(args):
         graph = generate.get_network(args.from_case)
         n=0
         while n<args.num_networks:
-            n += expand_helper(args, graph.copy(), args.from_case) 
+            n += expand_helper(args, deepcopy(graph), args.from_case) 
             args.num_networks -= n
     else:
         p = f"{args.data_path}/{args.dataset}"
