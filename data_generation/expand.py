@@ -76,7 +76,7 @@ def expand_helper(args, graph, name):
         i = 0
         while i != args.down_lines:
             random_line = random.choice(new_graph.line.index)
-            if new_graph.line.at[random_line,'in_service'] == True:
+            if new_graph.line.at[random_line,'in_service'] == True and random_line != 0:
                 new_graph.line.drop(random_line, inplace=True)
                 i += 1
             
