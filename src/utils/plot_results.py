@@ -1,5 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
+import pandas as pd
+from utils_plot import plot_percent_curve
 
 # # FULL graph
 
@@ -49,25 +51,51 @@ import matplotlib.pyplot as plt
 # jumping_knowledge='lstm', 
 # hetero_aggr='sum',
 
-# Load
 
-load_vm_pu_bfs = np.array([])
- 
-load_vm_pu_rnd_walk = np.array([])
-load_vm_pu_rnd_neighbor = np.array([])
+COLS = ['load_vm_pu','load_va_deg','gen_va_deg','load_gen_va_deg']
 
-load_va_degree_bfs = np.array([])
-load_va_degree_rnd_walk = np.array([])
-load_va_degree_rnd_neighbor = np.array([])
+# Edge Features
+print("Edge Features")
+d_edge_feat = {
+    'GINE': './Data/results/edge_features/gine_edge.csv',
+    'GINE no feat': './Data/results/edge_features/gine_no_edge.csv',
+    'GraphSAGE': './Data/results/edge_features/sage_edge.csv',
+    'GraphSAGE no feat': './Data/results/edge_features/sage_no_edge.csv',
+}
 
-# Load / Generator
+for c in COLS:
+    plot_percent_curve(d_edge_feat, c)
 
-load_gen_va_degree_bfs = np.array([])
-load_gen_va_degree_rnd_walk = np.array([])
-load_gen_va_degree_rnd_neighbor = np.array([])
+# N-1
+print("N - 1")
+d_minus = {
+    'N - 0': './Data/results/minus/physics_0_results.csv',
+    'N - 1': './Data/results/minus/physics_1_results.csv',
+    'N - 2': './Data/results/minus/physics_2_results.csv',
+    'N - 3': './Data/results/minus/physics_3_results.csv',
+}
 
-# Gen
+for c in COLS:
+    plot_percent_curve(d_minus, c)
 
-gen_va_degree_bfs = np.array([])
-gen_va_degree_rnd_walk = np.array([])
-gen_va_degree_rnd_neighbor = np.array([])
+# Subgraphing Methods
+print("Subgraphing Methods")
+d_subgraphing = {
+    'BFS': './Data/results/subgraphing/bfs.csv',
+    'Random Walk': './Data/results/subgraphing/rnd_walk.csv',
+    'Random Neighbor': './Data/results/subgraphing/rnd_neighbor.csv',
+
+}
+
+for c in COLS:
+    plot_percent_curve(d_subgraphing, c)
+
+# Supervised / Unsupervised
+print("Supervised / Unsupervised")
+supervised = {
+    'Supervised': './Data/results/supervised/supervised.csv',
+    'Unsupervised': './Data/results/supervised/unsupervised.csv',
+}
+
+for c in COLS:
+    plot_percent_curve(supervised, c)
