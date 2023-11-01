@@ -212,7 +212,7 @@ def dfs(visited, graph, node, depth, ret_array):
 
 
 # compare two models performance 
-def plot_percent_curve(csv_dict, col_name='load_vm_pu', colors=['red', 'blue', 'green']):
+def plot_percent_curve(csv_dict, col_name='load_vm_pu', colors=['red', 'blue', 'green', 'orange']):
     # read df from csv
     names = []
     dfs = []

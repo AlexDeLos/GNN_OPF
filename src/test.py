@@ -149,6 +149,7 @@ def test_hetero(model, data, calc_power_vals, save, path, name):
             error_dict[node_type].append(p_error.detach().numpy())
 
     df_data = {}
+    va_arr = []
     for k in dims_dict.keys():
         v = np.concatenate(error_dict[k]).reshape((-1, dims_dict[k]))
 
@@ -171,10 +172,20 @@ def test_hetero(model, data, calc_power_vals, save, path, name):
                 va_degree_within = within[:, 0]
                 df_data[f'{k}_vm_pu'] = vm_pu_within
                 df_data[f'{k}_va_deg'] = va_degree_within
+                va_arr.append(v[:, 0])
 
             elif k == 'gen' or k == 'load_gen':
                 va_degree_within = within[:, 1]
                 df_data[f'{k}_va_deg'] = va_degree_within
+                va_arr.append(v[:, 1])
+    if save:
+        va = np.concatenate(va_arr)
+        length = len(va)
+        within = np.array([np.sum(abs(va) < i, axis=0) / length for i in range(1, 101)])
+        df_data['va_degree'] = within
+
+        
+
     if save:
         df = pd.DataFrame(data=df_data)
         Path(f"{path}/").mkdir(parents=True, exist_ok=True)

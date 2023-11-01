@@ -1,6 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
+from utils_plot import plot_percent_curve
 
 # # FULL graph
 
@@ -50,46 +51,51 @@ import pandas as pd
 # jumping_knowledge='lstm', 
 # hetero_aggr='sum',
 
-def plot_within(data, names, title):
-    for i, d in enumerate(data):
-        plt.plot(range(1, 101), d, label=names[i])
-    plt.title(title)
-    plt.legend()
-    plt.xlabel("Error Threshold in %")
-    plt.ylabel("Percent within error threshold")
-    plt.show()
 
-bfs = pd.read_csv('./Data/results/subgraphing/bfs.csv')
-rnd_neighbor = pd.read_csv('./Data/results/subgraphing/rnd_neighbor.csv')
-rnd_walk = pd.read_csv('./Data/results/subgraphing/rnd_walk.csv')
+COLS = ['load_vm_pu','load_va_deg','gen_va_deg','load_gen_va_deg']
 
-names = ['BFS', 'Random Neighbor', 'Random Walk']
-titles  = ['Load Voltage Magnitude', 'Load Voltage Angle', 'Load & Generator Voltage Angle', 'Generator Voltage Angle']
+# Edge Features
+print("Edge Features")
+d_edge_feat = {
+    'GINE': './Data/results/edge_features/gine_edge.csv',
+    'GINE no feat': './Data/results/edge_features/gine_no_edge.csv',
+    'GraphSAGE': './Data/results/edge_features/sage_edge.csv',
+    'GraphSAGE no feat': './Data/results/edge_features/sage_no_edge.csv',
+}
 
-for i, col in enumerate(bfs.columns.values.tolist()):
-    bfs_data = bfs[col].to_numpy()
-    neighbor_data = rnd_neighbor[col].to_numpy()
-    walk_data = rnd_walk[col].to_numpy()
-    plot_within([bfs_data, neighbor_data, walk_data], names, titles[i])
+for c in COLS:
+    plot_percent_curve(d_edge_feat, c)
 
-# # Load
+# N-1
+print("N - 1")
+d_minus = {
+    'N - 0': './Data/results/minus/physics_0_results.csv',
+    'N - 1': './Data/results/minus/physics_1_results.csv',
+    'N - 2': './Data/results/minus/physics_2_results.csv',
+    'N - 3': './Data/results/minus/physics_3_results.csv',
+}
 
-# load_vm_pu_bfs = bfs['load_vm_pu'].to_numpy()
-# load_vm_pu_rnd_neighbor = rnd_neighbor['load_vm_pu'].to_numpy()
-# load_vm_pu_rnd_walk = rnd_walk['load_vm_pu'].to_numpy()
+for c in COLS:
+    plot_percent_curve(d_minus, c)
 
-# load_va_degree_bfs = bfs['load_va_deg'].to_numpy()
-# load_va_degree_rnd_neighbor = rnd_neighbor['load_va_deg'].to_numpy()
-# load_va_degree_rnd_walk = rnd_walk['load_va_deg'].to_numpy()
+# Subgraphing Methods
+print("Subgraphing Methods")
+d_subgraphing = {
+    'BFS': './Data/results/subgraphing/bfs.csv',
+    'Random Walk': './Data/results/subgraphing/rnd_walk.csv',
+    'Random Neighbor': './Data/results/subgraphing/rnd_neighbor.csv',
 
-# # Load / Generator
+}
 
-# load_gen_va_degree_bfs = bfs['load_gen_va_deg'].to_numpy()
-# load_gen_va_degree_rnd_neighbor = rnd_neighbor['load_gen_va_deg'].to_numpy()
-# load_gen_va_degree_rnd_walk = rnd_walk['load_gen_va_deg'].to_numpy()
+for c in COLS:
+    plot_percent_curve(d_subgraphing, c)
 
-# # Gen
+# Supervised / Unsupervised
+print("Supervised / Unsupervised")
+supervised = {
+    'Supervised': './Data/results/supervised/supervised.csv',
+    'Unsupervised': './Data/results/supervised/unsupervised.csv',
+}
 
-# gen_va_degree_bfs = bfs['gen_va_deg'].to_numpy()
-# gen_va_degree_rnd_neighbor = rnd_neighbor['gen_va_deg'].to_numpy()
-# gen_va_degree_rnd_walk = rnd_walk['gen_va_deg'].to_numpy()
+for c in COLS:
+    plot_percent_curve(supervised, c)
