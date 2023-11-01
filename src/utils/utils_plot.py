@@ -211,8 +211,18 @@ def dfs(visited, graph, node, depth, ret_array):
             dfs(visited, graph, node_connected, depth + 1, ret_array)
 
 
-# compare two models performance 
 def plot_percent_curve(csv_dict, col_name='load_vm_pu', colors=['red', 'blue', 'green']):
+    """
+    Plots a curve showing the percentage of nodes within a certain percent error threshold for a given column.
+
+    Args:
+        csv_dict (dict): A dictionary containing the names and file paths of the CSV files to read.
+        col_name (str): The name of the column to plot.
+        colors (list): A list of colors to use for each curve.
+
+    Returns:
+        None
+    """
     # read df from csv
     names = []
     dfs = []

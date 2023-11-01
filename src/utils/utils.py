@@ -201,7 +201,7 @@ def load_model_hetero(gnn_type, path, data):
     data_loader = pyg_DataLoader(data[:1], batch_size=1, shuffle=False)
     for batch in data_loader:
         gnn(batch.x_dict, batch.edge_index_dict, batch.edge_attr_dict)
-    gnn.load_state_dict(th.load(path))
+    gnn.load_state_dict(th.load(path), map_location=th.device('cpu'))
 
     return gnn
 
