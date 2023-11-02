@@ -89,7 +89,7 @@ def expand_helper(args, graph, name):
         except:
             trials += 1
             continue
-
+        
         subgraph_length = len(new_graph.bus)
         uid = ''.join([random.choice(string.ascii_letters
             + string.digits) for _ in range(8)])  
