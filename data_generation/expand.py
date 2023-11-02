@@ -46,7 +46,7 @@ def expand_helper(args, graph, name):
         if trials == 30: # avoid infinite loop, stop after 30 trials
             print(f"Could not generate a new network for {name} in 30 trials, skipping...")
             break
-        new_graph = pp.pandapowerNet(graph.copy())
+        new_graph = pp.pandapowerNet(deepcopy(graph))
         old_p_mws= []
         new_p_mws = []
         #basis from all the variation in the network
@@ -74,14 +74,11 @@ def expand_helper(args, graph, name):
             new_graph.gen.at[i,'p_mw'] = new_graph.gen.at[i,'p_mw'] * change
     
         i = 0
-        changed_lines = []
         while i != args.down_lines:
             random_line = random.choice(new_graph.line.index)
-            if new_graph.line.at[random_line,'in_service'] == True:
-                new_graph.line.at[random_line,'in_service'] = False
-                changed_lines.append(random_line)
+            if new_graph.line.at[random_line,'in_service'] == True and random_line != 0:
+                new_graph.line.drop(random_line, inplace=True)
                 i += 1
-        
             
 
         try:
@@ -104,8 +101,6 @@ def expand_helper(args, graph, name):
         new_graph.res_gen.to_csv(f"{args.save_dir}/y/{name}_{subgraph_length}_expanded_{uid}_gen.csv")
         new_graph.res_line.to_csv(f"{args.save_dir}/y/{name}_{subgraph_length}_expanded_{uid}_line.csv")
         new_graph.res_bus.to_csv(f"{args.save_dir}/y/{name}_{subgraph_length}_expanded_{uid}_bus.csv")
-        for line in changed_lines:
-            new_graph.line.at[line,'in_service'] = True
         
     return num_generated_graphs
 
@@ -118,7 +113,7 @@ def expand(args):
         graph = generate.get_network(args.from_case)
         n=0
         while n<args.num_networks:
-            n += expand_helper(args, graph.copy(), args.from_case) 
+            n += expand_helper(args, deepcopy(graph), args.from_case) 
             args.num_networks -= n
     else:
         p = f"{args.data_path}/{args.dataset}"
