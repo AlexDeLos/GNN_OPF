@@ -118,7 +118,7 @@ def expand(args):
         graph = generate.get_network(args.from_case)
         n=0
         while n<args.num_networks:
-            n += expand_helper(args, graph.copy(), args.from_case) 
+            n += expand_helper(args, graph.deepcopy(), args.from_case) 
             args.num_networks -= n
     else:
         p = f"{args.data_path}/{args.dataset}"
