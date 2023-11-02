@@ -180,7 +180,7 @@ def create_hetero_data_instance(graph, y_bus, physics_data=False):
     edge_attr_trafo = pd.DataFrame(edge_attr_trafo_list, columns=['conductance', 'susceptance'])
         
     data = HeteroData()
-
+    va_deg = node_feat[node_feat['ext'] == 1]['va_degree'].to_numpy()[0]
     # Add features for each node type
     for node_type in node_types:
         mask = node_feat[node_type] == 1
@@ -188,12 +188,20 @@ def create_hetero_data_instance(graph, y_bus, physics_data=False):
         sub_df = node_feat[mask]
         features = feature_map[node_type]
         x = th.tensor(sub_df[features].values, dtype=th.float)
+        if physics_data:
+            if node_type == 'ext':
+                x -= th.tensor(va_deg, dtype=float).expand_as(x[:, 1])
         data[node_type].x = x
         
         y_features = y_map[node_type]
         if y_features is not None:
             sub_df_y = target[mask]
             y = th.tensor(sub_df_y[y_features].values, dtype=th.float)
+            if physics_data:
+                if node_type == 'load':
+                    y[:, 0] -= th.tensor(va_deg, dtype=float).expand_as(y[:, 0])
+                elif node_type == 'gen' or node_type == 'load_gen':
+                    y[:, 1] -= th.tensor(va_deg, dtype=float).expand_as(y[:, 1])
             data[node_type].y = y 
 
     
