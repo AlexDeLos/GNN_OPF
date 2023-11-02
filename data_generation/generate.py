@@ -157,7 +157,7 @@ def solve_and_save(full_net, subgraph_busses, arguments):
 
     try:
         subgraph_net = modify_network_values(subgraph_net)
-
+        subgraph_net.sn_mva = 100
         # check if the subgraph contains a slack bus, if not add one by setting the slack bus to a random bus
         # if full_net.ext_grid.bus.item() not in subgraph_busses:
         #     slack_bus = subgraph_busses[np.random.randint(0, len(subgraph_busses))]
