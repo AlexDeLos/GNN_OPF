@@ -270,6 +270,21 @@ def create_hetero_data_instance(graph, y_bus, physics_data=False):
                 data[node_type_b, con_type, node_type_a].edge_index = data[node_type_a, con_type, node_type_b].edge_index.flip(0)
                 data[node_type_b, con_type, node_type_a].edge_attr = data[node_type_a, con_type, node_type_b].edge_attr
 
+    # add a new edge type, connecting each single node to the ext grid, it should have no edge attributes, but the edge index
+    # should be a direct edge from ext grid to each node
+    for node_type in node_types:
+        if node_type == 'ext':
+            continue
+        ext_node_type = node_feat[node_feat['ext'] == 1].index
+        # since there is a single ext gri node, the from_bus column will contain n times  ext grid node index
+        ext_to_node_type = pd.DataFrame(columns=['from_bus', 'to_bus'])
+        # create an array repeating the ext grid node index n times
+        ext_to_node_type['from_bus'] = ext_node_type.repeat(node_feat[node_feat[node_type] == 1].shape[0])
+        ext_to_node_type['to_bus'] = node_feat[node_feat[node_type] == 1].index
+        
+        data['ext', 'angle_influences', node_type].edge_index = th.tensor(map_indices(ext_to_node_type, new_dict).values, dtype=th.long).t().contiguous()
+        data['ext', 'angle_influences', node_type].edge_attr = th.tensor([], dtype=th.float)
+
     # visualize_hetero(data)
     return data
 
