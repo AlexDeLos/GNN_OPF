@@ -18,5 +18,5 @@ Random Neighbor (DONE)
 
 Supervised / Unsupervised
 physics loss
-vector loss
+vector loss  (DONE - random walk)
 
