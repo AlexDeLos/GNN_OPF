@@ -5,12 +5,14 @@ import numpy as np
 import os
 from pathlib import Path
 import pandapower as pp
+import pandapower.plotting as ppl
 import random
 import string
 import tqdm
 import time
 import generate
 import warnings
+import networkx as nx
 from generate import modify_network_values
 # Suppress all warnings
 warnings.filterwarnings("ignore")
@@ -74,11 +76,17 @@ def expand_helper(args, graph, name):
             new_graph.gen.at[i,'p_mw'] = new_graph.gen.at[i,'p_mw'] * change
     
         i = 0
+        i = 0
         while i != args.down_lines:
             random_line = random.choice(new_graph.line.index)
             if new_graph.line.at[random_line,'in_service'] == True and random_line != 0:
-                new_graph.line.drop(random_line, inplace=True)
-                i += 1
+                new_graph.line.at[random_line,'in_service'] = False
+                gr_temp = ppl.create_nxgraph(new_graph)
+                if not nx.is_connected(gr_temp):
+                    new_graph.line.at[random_line,'in_service'] = True
+                    continue
+                else:
+                    i += 1
             
 
         try:

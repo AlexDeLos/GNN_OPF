@@ -56,7 +56,10 @@ def main():
     
     if arguments.plot_node_error:
         print("Plotting node error per distance from generator")
-        distance_plot(model, last_batch)
+        if arguments.gnn[:6] != "Hetero":
+            distance_plot(model, last_batch)
+        else:
+            distance_plot(model, last_batch, hetero=True)
     
     
 if __name__ == "__main__":

@@ -7,9 +7,9 @@ from utils.utils_plot import distance_plot, plot_losses, plot_percent_curve
 
 def main():
     csv_dict = {
-        'physics_loss_-0' : 'Data/results/physics_0_results(deep).csv',
+        # 'physics_loss_-0' : 'Data/results/physics_0_results(deep).csv',
         'physics_loss_-1' : 'Data/results/physics_1_results(deep).csv',
-        'physics_loss_-2' : 'Data/results/physics_2_results(deep).csv',
+        # 'physics_loss_-2' : 'Data/results/physics_2_results(deep).csv',
         'physics_loss_-3' : 'Data/results/physics_3_results(deep).csv',
         'physics_loss_-10' : 'Data/results/physics_10_results(deep).csv',
         # 'physics_loss_-15' : 'Data/results/physics_15_results(new_column).csv',

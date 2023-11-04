@@ -56,7 +56,7 @@ def plot_losses(losses, val_losses, model_name):
     plt.show()
 
 
-def distance_plot(model, batch):
+def distance_plot(model, batch, hetero=False):
     """
     Plots the error with distance from the generator for a given model and batch.
 
@@ -67,28 +67,16 @@ def distance_plot(model, batch):
     Returns:
         None
     """
-    out = model(batch)
-    distance_loss,len = get_distance_loss(out,batch.y,batch)
-    plt.plot(list(range(0,len)), distance_loss, color ='maroon')
-    plt.title("Error with distance from the generator")
-    plt.ylabel("Error")
-    plt.xticks(range(0,len))
-    plt.xlabel("Nodes away from the generator the node was located")
-    
-    # if file is moved in another directory level relative to the root (currently in root/utils/src), this needs to be changed
-    root_directory = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    plot_directory = root_directory + "/plots"
-    if not os.path.exists(plot_directory):
-        os.mkdir(plot_directory)
-
-    timestamp = pd.Timestamp.now().strftime("%Y-%m-%d %H:%M")
-
-    model_name = "distance_plot" + "_" + model.class_name + "_" + str(timestamp)
-    plt.savefig(f"{plot_directory}/{model_name}.png", format="png")
-    plt.show()
+    out = None
+    if hetero:
+        out = model(batch.x_dict, batch.edge_index_dict, batch.edge_attr_dict)
+    else:
+        out = model(batch)
+    return get_distance_loss(out,batch.y_dict ,batch, hetero=hetero)
 
 
-def get_distance_loss(out, labels, data):
+
+def get_distance_loss(out, labels, data, hetero):
     """
     Calculates the distance loss between the predicted output and the ground truth labels.
 
@@ -102,21 +90,40 @@ def get_distance_loss(out, labels, data):
     """
     res = [0]
     normalization_vector = [0]
-    distances = get_distance_from_generator(data)
-    for i, dis in enumerate(distances):
-        if dis != -1:
-            if dis > len(res)-1:
-                res = res + [0]*(dis-len(res) +1)
-                normalization_vector = normalization_vector + [0]*(dis-len(normalization_vector) +1)
-            normalization_vector[dis] += 1
-            error = th.sub(labels[i], out)
-            error_norm_pre = th.abs(th.div(error[i], labels[i])).detach().numpy()
-            mask = np.isinf(error_norm_pre)
-            error_norm_pre[mask] = 0
-            normal_error =  np.sum( error_norm_pre* 100)/len(labels[i])
+    distances = []
+    if hetero:
+        distances = get_distance_from_slack_hetero(data)
+    else:
+        distances = get_distance_from_generator(data)
+    for key in distances.keys():
+        for i, dis in enumerate(distances[key]):
+            if dis != -1:
+                if dis > len(res)-1:
+                    res = res + [0]*(dis-len(res) +1)
+                    normalization_vector = normalization_vector + [0]*(dis-len(normalization_vector) +1)
+                normalization_vector[dis] += 1
+                error = th.sub(labels[key][i], out[key])
+                error_norm_pre = th.abs(th.div(error[i], labels[key][i])).detach().numpy()
+                mask = np.isinf(error_norm_pre)
+                error_norm_pre[mask] = 0
+                normal_error =  np.sum( error_norm_pre* 100)/len(labels[key][i])
 
 
-            res[dis] += normal_error.item()
+                res[dis] += normal_error.item()
+    # for i, dis in enumerate(distances):
+    #     if dis != -1:
+    #         if dis > len(res)-1:
+    #             res = res + [0]*(dis-len(res) +1)
+    #             normalization_vector = normalization_vector + [0]*(dis-len(normalization_vector) +1)
+    #         normalization_vector[dis] += 1
+    #         error = th.sub(labels[i], out)
+    #         error_norm_pre = th.abs(th.div(error[i], labels[i])).detach().numpy()
+    #         mask = np.isinf(error_norm_pre)
+    #         error_norm_pre[mask] = 0
+    #         normal_error =  np.sum( error_norm_pre* 100)/len(labels[i])
+
+
+    #         res[dis] += normal_error.item()
 
             
     for i in range(len(res)):
@@ -124,6 +131,54 @@ def get_distance_loss(out, labels, data):
             res[i] = res[i]/normalization_vector[i]
     return res, len(res)
 
+def get_distance_from_slack_hetero(data):
+    """
+    Calculates the distance of each node in the graph from the nearest generator node.
+
+    Args:
+        data (torch_geometric.data.Data): The graph data.
+
+    Returns:
+        list: A list of distances of each node from the nearest generator node. Each element in the list is a list at index i is i away from a generator
+    """
+    
+    slack_bus = data.x_dict['ext']
+    # distances = {
+    #     'ext': [],
+    #     'gen': [],
+    #     'load': [],
+    #     'load_gen': []
+    # }
+    distance = [[]]
+    # slack bus is always index 0 of 'ext' key
+    dfs_hetero(set(), data.edge_index_dict, ('ext', 0), 0, distance)
+
+    # result = [-1]*len(data.x_dict.keys())
+    result = {
+        'ext': [-1]*len(data.x_dict['ext']),
+        'gen': [-1]*len(data.x_dict['gen']),
+        'load': [-1]*len(data.x_dict['load']),
+        'load_gen': [-1]*len(data.x_dict['load_gen'])
+    }
+    # result[0] = [-1]*len(data.x_dict['ext'])
+    # result[1] = [-1]*len(data.x_dict['gen'])
+    # result[2] = [-1]*len(data.x_dict['load'])
+    # result[3] = [-1]*len(data.x_dict['load_gen'])
+    for key in result.keys():
+        for el in range(0, len(result[key])):
+            max_distance = 999999999
+            for dis in distance:
+                for node in dis:
+                    if node == (key, el) and max_distance > distance.index(dis):
+                        max_distance = distance.index(dis)
+            if max_distance != 999999999:
+                result[key][el] = max_distance
+            # for node_index in distance:
+            #     if el in node_index and max_distance > distance.index(node_index):
+            #         max_distance = distance.index(node_index)
+            # if max_distance != 999999999:
+            #     result[el] = max_distance
+    return result
 
 def get_distance_from_generator(data):
     """
@@ -144,6 +199,7 @@ def get_distance_from_generator(data):
             dis = [[]]
             dfs(set(), data, node_index, 0, dis)
             distances.append(dis)
+    slack_bus = data.x_dict['ext']
 
     result = [-1]*len(data.x)
     for el in range(0, len(result)):
@@ -178,6 +234,57 @@ def get_neighbors(data, node):
     
     return neighbors
 
+def get_neighbors_hetero(edges, node):
+    """
+    Given a PyTorch Geometric `Data` object and a node index, returns a set of the indices of all neighboring nodes.
+    
+    Args:
+        data (torch_geometric.data.Data): A PyTorch Geometric `Data` object representing a graph.
+        node (int): The index of the node whose neighbors are to be found.
+    
+    Returns:
+        set: A set of integers representing the indices of all neighboring nodes.
+    """
+    neighbors = set()
+    edge_keys = edges.keys()
+    relevant_keys =  [key for key in edge_keys if key[0] == node[0]]
+    for key in relevant_keys:
+        for edge_idex,node_at_other_end in enumerate(edges[key][0,:]):
+            if (key[0] ,node_at_other_end.item()) == node:
+                neighbors.add((key[2], edges[key][1,edge_idex].item()))        
+    
+    return neighbors
+
+def dfs_hetero(visited, edge_dict, node, depth, ret_array):
+    """
+    Perform a depth-first search on a graph starting from a given source node.
+
+    Args:
+        visited (set): A set of visited nodes.
+        graph (Graph): The graph to search.
+        node (int): The index of the current node.
+        depth (int): The current depth of the search.
+        ret_array (list): A list of lists, where each inner list contains the indices of nodes at a given depth
+                          from the source node. The outer list contains all the inner lists in order of increasing depth.
+
+    Returns:
+        None
+    """
+    this_path_is_shorter = True
+    if node in visited:
+        for dep in range(0,depth):
+            for i in range(len(ret_array[dep])):
+                if ret_array[dep][i] == node:
+                    this_path_is_shorter = False
+                    break
+
+    if node not in visited or this_path_is_shorter:
+        if len(ret_array) <= depth:
+            ret_array.append([])
+        ret_array[depth].append(node)
+        visited.add(node)
+        for node_connected in get_neighbors_hetero(edge_dict, node):
+            dfs_hetero(visited, edge_dict, node_connected, depth + 1, ret_array)
 
 def dfs(visited, graph, node, depth, ret_array):
     """

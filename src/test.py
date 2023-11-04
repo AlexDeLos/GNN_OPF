@@ -12,6 +12,7 @@ import sys
 # local imports
 # add parent directory to sys.path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from utils.utils_plot import distance_plot
 from utils.utils import load_model, load_model_hetero, read_from_pkl
 from utils.utils_homo import normalize_data
 from utils.utils_hetero import normalize_data_hetero, power_from_voltages_hetero
@@ -37,7 +38,9 @@ def main():
         model = load_model(args.gnn_type, args.model_path, data_model_loading)
     model.eval()
     if "HeteroGNN" in args.gnn_type:
-        test_hetero(model, data, calc_power_vals=args.model_load_data_path is not None, save=args.no_save, path=args.save_path, name=args.save_name)
+        _, distance_losses = test_hetero(model, data, calc_power_vals=args.model_load_data_path is not None, save=args.no_save, path=args.save_path, name=args.save_name, plot_node_error=args.plot_node_error)
+        if args.plot_node_error:
+            plot_distance_losses(distance_losses, model=model)
     else:
         test(model, data, calc_power_vals=args.model_load_data_path is not None)
 
@@ -58,6 +61,7 @@ def parse_args():
     parser.add_argument("--no_save", action="store_false", default=True)
     parser.add_argument("--save_path", default='./Data/results')
     parser.add_argument("--save_name", default="results")
+    parser.add_argument("--plot_node_error", action="store_true", default=False)
     args = parser.parse_args()
     return args
 
@@ -81,6 +85,7 @@ def test(model, data, calc_power_vals=False):
     errors = []
     p_errors = []
     output_shape = None
+
     for g in loader:
         out = model(g)
 
@@ -121,7 +126,7 @@ def test(model, data, calc_power_vals=False):
     return errors, p_errors
 
   
-def test_hetero(model, data, calc_power_vals, save, path, name):
+def test_hetero(model, data, calc_power_vals, save, path, name, plot_node_error=False):
     """
     Test the given model on the provided data and calculate the error between the predicted and actual values.
     
@@ -145,7 +150,10 @@ def test_hetero(model, data, calc_power_vals, save, path, name):
         'ext': []
     }
     dims_dict = None
-
+    count = 0
+    max_distance = 0
+    min_distance = 100
+    distance_losses = []
     for g in loader:
         # Get output dims of test set
         if dims_dict is None:
@@ -153,6 +161,19 @@ def test_hetero(model, data, calc_power_vals, save, path, name):
 
         # Outputs only voltage mag/degree predictions (when required depending o node type)
         out = model(g.x_dict, g.edge_index_dict, g.edge_attr_dict)
+
+
+        if plot_node_error and count < 10:
+            count += 1  
+            distance_loss,l = distance_plot(model, g, hetero=True)
+            if max_distance < l:
+                max_distance = l
+            if min_distance > l:
+                min_distance = l
+            # print(l)
+            distance_losses.append(distance_loss)
+        
+
 
         # Calculate power values from fixed and predicted voltages. Dict of tensors([p_mw, q_mvar]) per node type.
         if calc_power_vals:
@@ -164,14 +185,19 @@ def test_hetero(model, data, calc_power_vals, save, path, name):
                 # We only add the missing act or reactive power which should be predicted:
                 #   gens miss reactive power, ext miss both
                 if node_type == 'gen' or node_type == 'load_gen':
-                    # print(power_values[node_type])
-                    # print(out[node_type])
                     out[node_type] = th.cat((power_values[node_type][:, 1].reshape(-1, 1), out[node_type].reshape(-1, 1)), 1)
                 elif node_type == 'ext':
                     out[node_type] = power_values[node_type]
             error = th.abs(th.sub(out[node_type], y))
             p_error = th.div(error, y) * 100
             error_dict[node_type].append(p_error.detach().numpy())
+
+    #make all arrays the same shape
+    for dis in distance_losses:
+        while len(dis) > min_distance:
+            dis.pop()
+
+    distance_losses = np.mean(distance_losses,0)
 
     df_data = {}
     va_arr = []
@@ -216,8 +242,26 @@ def test_hetero(model, data, calc_power_vals, save, path, name):
         Path(f"{path}/").mkdir(parents=True, exist_ok=True)
         df.to_csv(f'{path}/{name}.csv')
 
+    return error_dict, distance_losses
 
-    return error_dict
+def plot_distance_losses(distance_losses, model):
+        plt.plot(list(range(0,len(distance_losses))), distance_losses, color ='maroon')
+        plt.title("Error with distance from the Slack line")
+        plt.ylabel("Error")
+        plt.xticks(range(0,len(distance_losses)))
+        plt.xlabel("Nodes away from the Slack line the node was located")
+        
+        # if file is moved in another directory level relative to the root (currently in root/utils/src), this needs to be changed
+        root_directory = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        plot_directory = root_directory + "/plots"
+        if not os.path.exists(plot_directory):
+            os.mkdir(plot_directory)
+
+        timestamp = pd.Timestamp.now().strftime("%Y-%m-%d %H:%M")
+
+        model_name = "distance_plot" + "_" + model.class_name + "_" + str(timestamp)
+        plt.savefig(f"{plot_directory}/{model_name}.png", format="png")
+        plt.show()
 
 def plot_within(data, title):
     plt.plot(range(1, 101), data, color='red')
