@@ -52,15 +52,15 @@ from utils_plot import plot_percent_curve
 # hetero_aggr='sum',
 
 
-COLS = ['load_vm_pu','load_va_deg','gen_va_deg','load_gen_va_deg']
+COLS = ['load_vm_pu','load_va_deg','gen_va_deg','load_gen_va_deg', 'va_degree', 'q_mvar']
 
 # Edge Features
 print("Edge Features")
 d_edge_feat = {
-    'GINE': './Data/results/edge_features/gine_edge.csv',
-    'GINE no feat': './Data/results/edge_features/gine_no_edge.csv',
-    'GraphSAGE': './Data/results/edge_features/sage_edge.csv',
-    'GraphSAGE no feat': './Data/results/edge_features/sage_no_edge.csv',
+    'GINE': './results/edge_features/GINE-edge-attrs.csv',
+    'GINE no feat': './results/edge_features/GINE_no_edge_attrs.csv',
+    'GraphSAGE': './results/edge_features/SAGE-edge-attrs.csv',
+    'GraphSAGE no feat': './results/edge_features/SAGE-no_edge_attrs.csv',
 }
 
 for c in COLS:

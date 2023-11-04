@@ -318,6 +318,7 @@ def dfs(visited, graph, node, depth, ret_array):
             dfs(visited, graph, node_connected, depth + 1, ret_array)
 
 
+# compare two models performance 
 def plot_percent_curve(csv_dict, col_name='load_vm_pu', colors=['red', 'blue', 'green'], x_cutoff=100):
     """
     Plots a curve showing the percentage of nodes within a certain percent error threshold for a given column.
@@ -326,6 +327,7 @@ def plot_percent_curve(csv_dict, col_name='load_vm_pu', colors=['red', 'blue', '
         csv_dict (dict): A dictionary containing the names and file paths of the CSV files to read.
         col_name (str): The name of the column to plot.
         colors (list): A list of colors to use for each curve.
+        x_cutoff (int): X-axis cutoff point to show only error threshold from 0 to x
 
     Returns:
         None
@@ -354,13 +356,14 @@ def plot_percent_curve(csv_dict, col_name='load_vm_pu', colors=['red', 'blue', '
         'load_va_deg': 'Voltage Angle Error Load Busses',
         'gen_va_deg': 'Voltage Angle Error Generator Busses',
         'load_gen_va_deg': 'Voltage Angle Error Load-Generator Busses',
-        'va_degree': 'Voltage Angle Error All Busses'
+        'va_degree': 'Voltage Angle Error All Busses',
+        'q_mvar': 'Reactive Power Error All Busses'
     }
 
     plt.title(f"{cols_to_title_dict[col_name]}", fontsize=14)
     plt.xlabel("Error threshold in %", fontsize=12)
     plt.ylabel("Percentage of nodes within error threshold", fontsize=12)
     plt.yticks(np.arange(0, 101, 10), fontsize=12)
-    plt.xticks(np.arange(0, x_cutoff+1, 10), fontsize=12)
+    plt.xticks(np.arange(0, x_cutoff + 1, 10), fontsize=12)
     plt.legend(names, loc='lower right', fontsize=14)
     plt.show()

@@ -58,6 +58,7 @@ def parse_args():
     parser.add_argument("--lin_hidden_dim", default=32, type=int)
     parser.add_argument("--normalize", action='store_true', default=False)
     parser.add_argument("--no_linear", action="store_true", default=False)
+    parser.add_argument("--calc_power", action="store_true", default=False)
     parser.add_argument("--no_save", action="store_false", default=True)
     parser.add_argument("--save_path", default='./Data/results')
     parser.add_argument("--save_name", default="results")
@@ -177,6 +178,11 @@ def test_hetero(model, data, calc_power_vals, save, path, name, plot_node_error=
 
         # Calculate power values from fixed and predicted voltages. Dict of tensors([p_mw, q_mvar]) per node type.
         if calc_power_vals:
+            # If using physics model, then need to remove power predictions when passing to power_from_voltages_hetero
+            if out['gen'].shape[1] > 1:
+                out['gen'] = out['gen'][:, 1].reshape((-1, 1))
+                out['load_gen'] = out['load_gen'][:, 1].reshape((-1, 1))
+
             power_values = power_from_voltages_hetero(g, out)
 
         # y should contain the missing 2 values per node type (which depends on node type)
@@ -201,6 +207,7 @@ def test_hetero(model, data, calc_power_vals, save, path, name, plot_node_error=
 
     df_data = {}
     va_arr = []
+    q_mvar_arr = []
     for k in dims_dict.keys():
         v = np.concatenate(error_dict[k]).reshape((-1, dims_dict[k]))
 
@@ -229,11 +236,15 @@ def test_hetero(model, data, calc_power_vals, save, path, name, plot_node_error=
                 va_degree_within = within[:, 1]
                 df_data[f'{k}_va_deg'] = va_degree_within
                 va_arr.append(v[:, 1])
+                q_mvar_arr.append(v[:, 0])
     if save:
         va = np.concatenate(va_arr)
+        q_mvar = np.concatenate(q_mvar_arr)
         length = len(va)
-        within = np.array([np.sum(abs(va) < i, axis=0) / length for i in range(1, 101)])
-        df_data['va_degree'] = within
+        va_within = np.array([np.sum(abs(va) < i, axis=0) / length for i in range(1, 101)])
+        q_mvar_within = np.array([np.sum(abs(q_mvar) < i, axis=0) / length for i in range(1, 101)])
+        df_data['va_degree'] = va_within
+        df_data['q_mvar'] = q_mvar_within
 
         
 
