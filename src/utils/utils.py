@@ -198,9 +198,13 @@ def load_model_hetero(gnn_type, path, data):
     gnn_class = get_gnn(gnn_type)
     gnn = gnn_class(output_dim_dict=output_dims, edge_types=data[0].edge_index_dict.keys())
     gnn.eval()
-    data_loader = pyg_DataLoader(data[:1], batch_size=1, shuffle=False)
+    new_data = []
+    for d in data[:1]:
+        d = d.to_homogeneous()
+        new_data.append(d)
+    data_loader = pyg_DataLoader(new_data, batch_size=1, shuffle=False)
     for batch in data_loader:
-        gnn(batch.x_dict, batch.edge_index_dict, batch.edge_attr_dict)
+        gnn(batch)
     gnn.load_state_dict(th.load(path))
 
     return gnn

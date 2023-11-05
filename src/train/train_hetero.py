@@ -12,13 +12,22 @@ from utils.utils_hetero import physics_loss_hetero
 
 def train_model_hetero(arguments, train, val):
     output_dims = {node_type: train[0].y_dict[node_type].shape[1] for node_type in train[0].y_dict.keys()}
+    edge_types=train[0].edge_index_dict.keys()
+
+    # transform each element in train and val to homogeneous graph
+    for i in range(len(train)):
+        train[i] = train[i].to_homogeneous()
+        
+        # 0 is load, 1 is gen, 2 is load_gen, 3 is ext
+    for i in range(len(val)):
+        val[i] = val[i].to_homogeneous()
 
     batch_size = arguments.batch_size
     train_dataloader = pyg_DataLoader(train, batch_size=batch_size, shuffle=True)
     val_dataloader = pyg_DataLoader(val, batch_size=batch_size, shuffle=False)
     
     gnn_class = get_gnn(arguments.gnn)
-    gnn = gnn_class(output_dim_dict=output_dims, edge_types=train[0].edge_index_dict.keys())
+    gnn = gnn_class(output_dim_dict=output_dims, edge_types=edge_types)
     epoch_saved = 0
     if arguments.from_checkpoint != None:
         epoch_saved = int(arguments.from_checkpoint.split("_")[-1].split(".")[0])
@@ -81,16 +90,39 @@ def train_model_hetero(arguments, train, val):
 #! change the default so that it is easy to change from vector loss to standard loss
 def train_batch_hetero(data, model, optimizer, criterion, device='cpu', vector = True, loss_type='standard'):
     data = data.to(device)
+    x_dict = {}
+    x_load = data.x[data.node_type == 0]
+    x_gen = data.x[data.node_type == 1]
+    x_load_gen = data.x[data.node_type == 2]
+    x_ext = data.x[data.node_type == 3]
+    x_dict['load'] = x_load
+    x_dict['gen'] = x_gen
+    x_dict['load_gen'] = x_load_gen
+    x_dict['ext'] = x_ext
+
+    y_dict = {}
+    # create mask for each node type
+    y_load = data.y[data.node_type == 0]
+    y_gen = data.y[data.node_type == 1]
+    y_load_gen = data.y[data.node_type == 2]
+    y_ext = data.y[data.node_type == 3]
+    y_dict['load'] = y_load
+    y_dict['gen'] = y_gen
+    y_dict['load_gen'] = y_load_gen
+    y_dict['ext'] = y_ext
+
+
     optimizer.zero_grad()
-    out_dict = model(data.x_dict, data.edge_index_dict, data.edge_attr_dict)
+    out_dict = model(data)
+
     loss = 0
     if loss_type == 'standard':
-        for node_type, y in data.y_dict.items():
+        for node_type, y in y_dict.items():
             # prevent nan loss
             if y.shape[0] == 0:
                 continue
             if vector:
-                loss += vector_loss(out_dict[node_type], y, x=data.x_dict[node_type], node_type=node_type, device=device)
+                loss += vector_loss(out_dict[node_type], y, x=x_dict[node_type], node_type=node_type, device=device)
             else:
                 loss += criterion(out_dict[node_type], y)
     else:
@@ -109,7 +141,7 @@ def vector_loss(out, y, x, node_type, device='cpu'):
         vec_mag_and_vec_angle = th.stack((out[:,0], x[:,1]), dim=1)
     if node_type == 'load_gen':
         # stack the output y and the third column of input x
-        vec_mag_and_vec_angle = th.stack((out[:,0], x[:,2]), dim=1)
+        vec_mag_and_vec_angle = th.stack((out[:,0], x[:,1]), dim=1)
     
     out_x = th.mul(th.cos(th.deg2rad(vec_mag_and_vec_angle[:,0])), vec_mag_and_vec_angle[:,1])
     out_y = th.mul(th.sin(th.deg2rad(vec_mag_and_vec_angle[:,0])), vec_mag_and_vec_angle[:,1])
@@ -120,7 +152,7 @@ def vector_loss(out, y, x, node_type, device='cpu'):
     if node_type == 'gen':
         data_mag_and_data_angle = th.stack((y[:,0], x[:,1]), dim=1)
     if node_type == 'load_gen':
-        data_mag_and_data_angle = th.stack((y[:,0], x[:,2]), dim=1)
+        data_mag_and_data_angle = th.stack((y[:,0], x[:,1]), dim=1)
         
     data_x = th.mul(data_mag_and_data_angle[:,1], th.cos(th.deg2rad(data_mag_and_data_angle[:,0])))
     data_y = th.mul(data_mag_and_data_angle[:,1], th.sin(th.deg2rad(data_mag_and_data_angle[:,0])))
@@ -140,16 +172,38 @@ def distance(a,b):
 #? what are the angle units???
 def evaluate_batch_hetero(data, model, criterion, device='cpu', vector = True, loss_type='standard'):
     data = data.to(device)
-    out_dict = model(data.x_dict, data.edge_index_dict, data.edge_attr_dict)
+    x_dict = {}
+    # create mask for each node type
+    x_load = data.x[data.node_type == 0]
+    x_gen = data.x[data.node_type == 1]
+    x_load_gen = data.x[data.node_type == 2]
+    x_ext = data.x[data.node_type == 3]
+    x_dict['load'] = x_load
+    x_dict['gen'] = x_gen
+    x_dict['load_gen'] = x_load_gen
+    x_dict['ext'] = x_ext
+
+    y_dict = {}
+    # create mask for each node type
+    y_load = data.y[data.node_type == 0]
+    y_gen = data.y[data.node_type == 1]
+    y_load_gen = data.y[data.node_type == 2]
+    y_ext = data.y[data.node_type == 3]
+    y_dict['load'] = y_load
+    y_dict['gen'] = y_gen
+    y_dict['load_gen'] = y_load_gen
+    y_dict['ext'] = y_ext
+
+    out_dict = model(data)
     loss = 0
     if loss_type == 'standard':
-        for node_type, y in data.y_dict.items():
+        for node_type, y in y_dict.items():
             # prevent nan loss
             if y.shape[0] == 0:
                 continue
             if vector:
                 y = th.nan_to_num(y)
-                ret= vector_loss(out_dict[node_type], y, data.x_dict[node_type], node_type=node_type, device=device)
+                ret= vector_loss(out_dict[node_type], y, x_dict[node_type], node_type=node_type, device=device)
                 if th.isnan(ret):
                     print("nan loss")
                 else:

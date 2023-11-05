@@ -112,6 +112,10 @@ def test(model, data, calc_power_vals=False):
   
 def test_hetero(model, data, calc_power_vals, save, path, name):
     np.set_printoptions(suppress=True)
+
+    for i in range(len(data)):
+        data[i] = data[i].to_homogeneous()
+
     loader = DataLoader(data)
     error_dict = {
         'load': [],
@@ -122,19 +126,30 @@ def test_hetero(model, data, calc_power_vals, save, path, name):
     dims_dict = None
 
     for g in loader:
+        y_dict = {}
+        # create mask for each node type
+        y_load = g.y[g.node_type == 0]
+        y_gen = g.y[g.node_type == 1]
+        y_load_gen = g.y[g.node_type == 2]
+        y_ext = g.y[g.node_type == 3]
+        y_dict['load'] = y_load
+        y_dict['gen'] = y_gen
+        y_dict['load_gen'] = y_load_gen
+        y_dict['ext'] = y_ext
+
         # Get output dims of test set
         if dims_dict is None:
-            dims_dict = {node_type: g.y_dict[node_type].shape[1] for node_type in g.y_dict.keys()}
+            dims_dict = {node_type: y_dict[node_type].shape[1] for node_type in y_dict.keys()}
 
         # Outputs only voltage mag/degree predictions (when required depending o node type)
-        out = model(g.x_dict, g.edge_index_dict, g.edge_attr_dict)
+        out = model(g)
 
         # Calculate power values from fixed and predicted voltages. Dict of tensors([p_mw, q_mvar]) per node type.
         if calc_power_vals:
             power_values = power_from_voltages_hetero(g, out)
 
         # y should contain the missing 2 values per node type (which depends on node type)
-        for node_type, y in g.y_dict.items():
+        for node_type, y in y_dict.items():
             if calc_power_vals:
                 # We only add the missing act or reactive power which should be predicted:
                 #   gens miss reactive power, ext miss both
