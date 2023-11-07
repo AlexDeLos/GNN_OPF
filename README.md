@@ -119,7 +119,3 @@ python src/test.py -g HeteroGNN -m ./trained_models/D5B723AI-HeteroGNN/D5B723AI-
 ```
 To test model trained with a `physics` loss or a `mixed` loss, use `test_physics.py` instead of `test.py` file.
 
-
-
-## Results
-
