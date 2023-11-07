@@ -176,7 +176,7 @@ Data
 trained_models/
 
 *.json
-*.csv
+# *.csv
 
 .idea/
 
